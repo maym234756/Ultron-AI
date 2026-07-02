@@ -1,0 +1,79 @@
+@import 'highlight.js/styles/github-dark-dimmed.css';
+
+:root {
+  --ink: #172026;
+  --muted: #5b6871;
+  --line: rgba(23, 32, 38, 0.14);
+  --bg: #f5f0e6;
+  --sans: 'Aptos', 'Avenir Next', 'Gill Sans', sans-serif;
+  --heading: 'Bahnschrift', 'Aptos Display', 'Avenir Next', sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  /* Component-level tokens (used throughout App.css) */
+  --accent: #155e75;
+  --accent-dim: rgba(21, 94, 117, 0.12);
+  --surface: #fffdf7;
+  --fg: #172026;
+  --border: rgba(23, 32, 38, 0.14);
+  --hover: rgba(15, 23, 42, 0.05);
+
+  /* Semantic tokens */
+  --sidebar-bg: rgba(250, 248, 240, 0.92);
+  --bubble-bg: rgba(255, 255, 255, 0.86);
+  --bubble-user-bg: #9a3412;
+  --bubble-user-fg: #fff7ed;
+  --composer-bg: rgba(255, 255, 255, 0.84);
+  --icon-btn-bg: #0f172a;
+
+  font: 16px/145% var(--sans);
+  letter-spacing: 0;
+  color: var(--muted);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Dark mode ── */
+html.dark {
+  color-scheme: dark;
+  --ink: #cdd9e5;
+  --muted: #768390;
+  --line: rgba(205, 217, 229, 0.1);
+  --bg: #0d1117;
+  --accent: #2f81f7;
+  --accent-dim: rgba(47, 129, 247, 0.12);
+  --surface: #161b22;
+  --fg: #cdd9e5;
+  --border: rgba(205, 217, 229, 0.1);
+  --hover: rgba(205, 217, 229, 0.06);
+  --sidebar-bg: rgba(22, 27, 34, 0.97);
+  --bubble-bg: rgba(33, 38, 45, 0.95);
+  --bubble-user-bg: #1f4788;
+  --bubble-user-fg: #cdd9e5;
+  --composer-bg: rgba(22, 27, 34, 0.92);
+  --icon-btn-bg: #21262d;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+select,
+textarea,
+input {
+  font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--heading);
+  font-weight: 800;
+}

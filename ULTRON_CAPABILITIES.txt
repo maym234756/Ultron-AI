@@ -1,0 +1,642 @@
+================================================================================
+                         ULTRON - FULL CAPABILITIES
+================================================================================
+
+Ultron is a local AI assistant running on your Windows machine with full tool
+access. Primary model: qwen2.5:14b. Vision: llava. Fast model: llama3.2:3b.
+Embeddings: nomic-embed-text. Playwright-controlled Chromium for full browser
+automation (headless:false). Passive screen observer runs in the background,
+injecting live context. Real-time token streaming. Parallel tool execution.
+
+--------------------------------------------------------------------------------
+MODELS
+--------------------------------------------------------------------------------
+- qwen2.5:14b      — Primary reasoning model (8.4 GB) — critical thinking,
+                     code, planning, writing, analysis
+- llava:latest     — Vision AI (4.4 GB) — image analysis, screenshots, vision
+                     queries; auto-selected when images are attached
+- llama3.2:3b      — Fast lightweight model (1.9 GB) — auto-used for simple
+                     one-shot commands (file ops, quick lookups)
+- nomic-embed-text — Text embeddings (0.3 GB) — RAG semantic search + long-
+                     term semantic memory
+
+--------------------------------------------------------------------------------
+AI INTELLIGENCE
+--------------------------------------------------------------------------------
+Ultron's reasoning uses a structured multi-step protocol:
+  UNDERSTAND → DECOMPOSE → PLAN → ACT → VERIFY
+
+Critical Thinking:
+- Challenges assumptions; verifies claims with tools before acting
+- Calibrated confidence: states "I know" vs "I believe" vs "I'm guessing"
+- Shows reasoning chains: Because X → therefore Y → conclusion Z
+- Self-checks before final answers: accurate? complete? best approach?
+- Never confabulates — if unsure, says so and looks it up
+
+Response Quality:
+- Calibrates length to question complexity (no padding, no fluff)
+- No sycophantic openers ("Certainly!", "Great question!", etc.)
+- No hollow closers ("I hope this helps!", "Let me know if…")
+- Uses markdown only when genuinely helpful
+- Cites sources when using retrieved knowledge
+
+Parallel Tool Execution:
+- Can call multiple independent tools simultaneously in a single step
+- Runs them with Promise.all for maximum speed
+- E.g., search_web + read_file execute in parallel, not sequentially
+
+Context Management:
+- Context window: 8,192 tokens default (user-configurable 2,048–32,768)
+- Auto-compresses long conversations (>18 turns) into a rolling summary
+- Screen observer context injected into every request (configurable)
+- RAG knowledge + long-term memories auto-recalled per query
+
+--------------------------------------------------------------------------------
+TERMINAL & SCRIPTING
+--------------------------------------------------------------------------------
+- Run any PowerShell command or script (run_terminal)
+- Run arbitrary system commands (sys_run)
+- Install software (winget, pip, npm, choco, etc.)
+- Automate Windows tasks via the command line
+- Check system info, processes, services, disk usage
+
+--------------------------------------------------------------------------------
+FILE SYSTEM (WORKSPACE)
+--------------------------------------------------------------------------------
+- Create, write, and overwrite any file within the project workspace
+- Read file contents (up to 16,000 characters)
+- Extract text from PDF files
+- List directory contents
+- Write and run code files immediately
+
+--------------------------------------------------------------------------------
+FILE SYSTEM (HOME DIRECTORY — FULL ACCESS)
+--------------------------------------------------------------------------------
+- Read any file on the system: ~/Desktop, ~/Documents, ~/Downloads, etc.
+- Write / create files anywhere in the home directory (with append support)
+- Create folders anywhere, optionally open in Explorer immediately
+- Delete and copy folders recursively
+- List any directory (recursive optional)
+- Move or rename files and folders
+- Delete files (always confirms with user first)
+- Search for text content across files (grep-style, with extension filter)
+- Get file metadata: size, created/modified dates, type
+- Open any folder or file in Windows Explorer
+
+--------------------------------------------------------------------------------
+SYSTEM MONITOR
+--------------------------------------------------------------------------------
+- Real-time CPU model, core count, RAM usage, disk space, uptime (sys_stats)
+- List running processes sorted by CPU or memory (sys_processes)
+- Kill a process by name or PID (sys_kill)
+- Run any PowerShell for system admin tasks (sys_run)
+- Get or set Windows environment variables (sys_env)
+
+--------------------------------------------------------------------------------
+DESKTOP AUTOMATION (ANY APP)
+--------------------------------------------------------------------------------
+- Click at any screen coordinates — works in ANY Windows application
+- Double-click and right-click support
+- Type text into any focused window (SendKeys)
+- Send keyboard shortcuts: Ctrl+C, Ctrl+V, Alt+F4, Enter, Tab, etc.
+- Find and focus any window by partial title match
+- List all open windows with PID and title
+- Get current cursor position (for coordinate calibration)
+- Scroll at screen coordinates (any app)
+- Combined with take_screenshot: see → coordinate → click → automate anything
+
+--------------------------------------------------------------------------------
+WEB & SEARCH
+--------------------------------------------------------------------------------
+- Open any URL in the default browser
+- Fetch and read full text of any web page
+- Search the web via DuckDuckGo (instant answers + related topics)
+- Make raw HTTP requests with custom headers, body, auth (bearer/basic)
+- Call REST APIs, webhooks, and private services
+- List ALL open browser tabs across Chrome/Edge/Firefox/Brave (UI Automation)
+- Switch focus to any open tab by title in the real browser
+
+--------------------------------------------------------------------------------
+PLAYWRIGHT BROWSER AUTOMATION (37 tools)
+--------------------------------------------------------------------------------
+REAL CHROME (with your logins):
+- Connect to your actual Chrome/Edge session — preserves Gmail, banking, etc.
+- After connecting, all browser_* tools use your real authenticated sessions
+
+NAVIGATION:
+- Navigate to any URL in Playwright's Chromium
+- Wait for elements, network idle, specific states
+
+INTERACTION:
+- Click elements by CSS selector or visible text
+- Type text character-by-character like a human (for rich editors, Gmail)
+- Fill plain input fields instantly
+- Press any keyboard shortcut: Enter, Ctrl+A, Escape, Tab, ArrowDown, etc.
+- Hover over elements to reveal tooltips and dropdown menus
+- Scroll page: up/down/to-top/to-bottom/to element
+- Check and uncheck checkboxes and radio buttons
+- Select dropdown options by value or label
+
+READING & EXTRACTING:
+- Read full page: title, URL, text content, form fields, all links
+- Get inner text of any element by CSS selector
+- Get any HTML attribute (href, src, value, data-*)
+- Find text on page and return surrounding context
+- Extract entire HTML tables as structured row data
+
+ADVANCED:
+- Take browser screenshots (saved to Desktop)
+- Run JavaScript directly in the page
+- Upload files to file input elements
+- Handle JS dialogs: alert, confirm, prompt
+- Save current page as PDF to Desktop
+
+GMAIL & WEB EMAIL:
+- Read Gmail inbox: sender, subject, snippet, time, unread status
+- Open and read full email body by position in inbox
+- Reply to open email (type reply, optionally send)
+
+TABS:
+- Open new tabs, list tabs, switch tabs, close tabs
+
+SECURITY & STEALTH:
+- Save encrypted credentials to a local vault (browser_vault_save/list)
+- Auto-login to any site using saved credentials (browser_login)
+- Enable anti-bot-detection stealth mode (browser_stealth)
+
+MONITORING & RECORDING:
+- Watch any element for changes at an interval (browser_watch)
+- Record user interactions and export as tool call scripts (browser_record)
+- Capture XHR/API network responses from any page (browser_network_capture)
+
+--------------------------------------------------------------------------------
+WEB SCRAPING (6 tools)
+--------------------------------------------------------------------------------
+- Extract structured data from any page via CSS selectors (web_scrape)
+- Follow pagination and scrape across multiple pages (web_scrape_pages)
+- Bulk scrape a list of URLs to JSON or CSV (web_scrape_list)
+- Set up continuous change alerts on any URL/element (web_monitor)
+- Check monitor status manually (web_check_monitor)
+- List all active monitors (web_list_monitors)
+
+--------------------------------------------------------------------------------
+GIT & SOURCE CONTROL
+--------------------------------------------------------------------------------
+- Working tree status, file diffs (staged / unstaged)
+- View commit history with hashes, authors, dates
+- Stage all changes and commit with message
+- Push to any remote branch
+- Switch or create branches
+- Clone any remote repository
+
+--------------------------------------------------------------------------------
+GITHUB API
+--------------------------------------------------------------------------------
+- Save a Personal Access Token for authenticated access (gh_set_token)
+- List your repositories with language, stars, description (gh_repos)
+- List issues by state (open/closed/all) for any repo (gh_issues)
+- List pull requests for any repo (gh_prs)
+- Create new issues with labels (gh_create_issue)
+- Get detailed repo info: stats, topics, default branch, size (gh_repo_info)
+- Search GitHub for repositories, issues, or code (gh_search)
+
+--------------------------------------------------------------------------------
+DATABASE
+--------------------------------------------------------------------------------
+- Run SELECT queries on SQLite files (returns JSON rows)
+- Execute INSERT, UPDATE, DELETE, CREATE TABLE on SQLite files
+- Create databases from scratch and populate them
+
+--------------------------------------------------------------------------------
+LOCAL KNOWLEDGE BASE (RAG)
+--------------------------------------------------------------------------------
+- Index any file or entire directory for semantic search (rag_index)
+- Index a web URL directly into the knowledge base (rag_index_url)
+- Search indexed content by meaning (not just keywords) (rag_search)
+- Filter search by file type, see what's indexed, clear index
+- Uses nomic-embed-text embeddings + cosine similarity
+- Backed by .rag-store.jsonl — survives restarts
+- Auto-injected context: relevant memories recalled on every agent request
+
+--------------------------------------------------------------------------------
+LONG-TERM SEMANTIC MEMORY
+--------------------------------------------------------------------------------
+- Save any fact, preference, or context to permanent memory (mem_save)
+- Recall memories by meaning — "what does the user prefer for X?" (mem_recall)
+- List all memories with optional tag filter (mem_list)
+- Delete specific memories by ID (mem_forget)
+- Embeddings stored in .long-memory.jsonl — survives all restarts
+- Tagged memories for organized recall (e.g. "user", "project", "preference")
+- Auto-injected: top-3 relevant memories added to every agent request
+
+--------------------------------------------------------------------------------
+SCHEDULING (BACKGROUND AGENTS)
+--------------------------------------------------------------------------------
+- Schedule any task on a cron expression (schedule_task)
+- Agent runs headlessly on schedule with full tool access
+- View all scheduled tasks (list_schedules)
+- Cancel by ID or name (cancel_schedule)
+- Trigger any schedule immediately (run_schedule_now)
+- Logs saved to .schedule-logs/
+
+--------------------------------------------------------------------------------
+MULTI-AGENT
+--------------------------------------------------------------------------------
+- Spawn an independent sub-agent to complete a complex task (agent_run)
+- Sub-agent has its own ReAct reasoning loop and full tool access
+- Run multiple sub-agents in parallel on different tasks (agent_parallel)
+- Combine results when all finish
+- Override model, system prompt, and max iterations per sub-agent
+
+--------------------------------------------------------------------------------
+PREVIEW PANEL (SAFE EDITS)
+--------------------------------------------------------------------------------
+- Queue file changes for user review with a diff before writing (preview_write)
+- Queue shell commands for user approval before executing (preview_exec)
+- Shows unified diff: green additions, red deletions
+- Apply or discard from the UI — nothing happens without your sign-off
+- Multiple pending changes stacked and managed together
+
+--------------------------------------------------------------------------------
+TASKS & DAILY PLANNING
+--------------------------------------------------------------------------------
+- Add tasks with due dates, priorities, tags, and notes (task_add)
+- List tasks filtered by status, tag, or priority (task_list)
+- Mark tasks complete, update fields, delete tasks
+- Morning briefing: overdue, today, and upcoming tasks (daily_briefing)
+- Due dates: "today", "tomorrow", "next week", or YYYY-MM-DD
+
+--------------------------------------------------------------------------------
+PLUGIN SYSTEM
+--------------------------------------------------------------------------------
+- Drop a .ts or .js file in the plugins/ folder
+- Ultron auto-discovers and registers its tools on startup
+- No changes to registry.ts or agent.ts needed
+- Example plugin template provided in plugins/_example.ts.disabled
+- Each plugin exports: definitions[] + handlers{}
+
+--------------------------------------------------------------------------------
+EMAIL & CALENDAR
+--------------------------------------------------------------------------------
+- Detect what email client the user has (Gmail, Outlook Web, Yahoo, desktop)
+- Open compose window pre-filled with to/subject/body in any web email
+- Send email via Outlook desktop COM (when installed)
+- Read inbox, search emails, read calendar events (Outlook desktop)
+- Create calendar events with subject, time, location, body
+
+--------------------------------------------------------------------------------
+PYTHON REPL
+--------------------------------------------------------------------------------
+- Persistent Python subprocess — state survives between calls
+- Import libraries, define functions, build on previous results
+- Set timeout per execution
+- Reset state when needed
+
+--------------------------------------------------------------------------------
+AUDIO TRANSCRIPTION (WHISPER)
+--------------------------------------------------------------------------------
+- Transcribe any audio file using local Whisper (no cloud)
+- Auto-detects openai-whisper or faster-whisper
+- Choose model size: tiny, base, small, medium, large
+- Language detection or force a specific language
+- /api/transcribe endpoint for browser-recorded audio (webm/mp4/ogg)
+
+--------------------------------------------------------------------------------
+VISION & SCREEN AWARENESS
+--------------------------------------------------------------------------------
+- Take a full screenshot (saved to Desktop)
+- Analyze any image with llava vision AI (analyze_image)
+- "Read" the screen — screenshot + AI description (screen_read)
+- Multimodal chat: attach images to any message, auto-routes to llava
+- PASSIVE SCREEN OBSERVER: auto-captures window titles, active app, and browser
+  tabs every 45 seconds (configurable). Context injected into every agent call.
+  Toggle and configure via the Settings panel in the UI.
+
+--------------------------------------------------------------------------------
+CODING
+--------------------------------------------------------------------------------
+- Write code in any language (Python, JS, TS, C#, Bash, Go, Ruby, etc.)
+- Execute code files directly (.py, .ts, .js, .ps1, .sh, .rb, .go)
+- Type-check and lint (tsc --noEmit, ESLint, pylint)
+- Open any file in VS Code at a specific line/column
+- Search patterns/regex across an entire codebase (code_search)
+- Show unified diff between any two files (diff_files)
+- Apply a diff/patch to a file (auto .bak backup) (patch_file)
+- Find all TODO/FIXME/HACK/BUG comments in a codebase (code_todos)
+- Count lines and files by language (code_stats)
+
+--------------------------------------------------------------------------------
+IMAGE GENERATION
+--------------------------------------------------------------------------------
+- Generate AI images from text prompts (Pollinations.ai — free, no key)
+- Custom width/height
+- Saved to Desktop and opened automatically
+
+--------------------------------------------------------------------------------
+MEDIA
+--------------------------------------------------------------------------------
+- Create video slideshows from image folders (ffmpeg)
+- Record the screen to MP4
+- Convert, trim, or re-encode any video file
+- Export clips with start/duration params
+
+--------------------------------------------------------------------------------
+WINDOWS APPS & NOTIFICATIONS
+--------------------------------------------------------------------------------
+- Open: CMD, PowerShell, Windows Terminal, Notepad, VS Code
+- Open: Paint, Calculator, File Explorer, Task Manager
+- Open: Chrome, Edge, Firefox, or any installed app by name or .exe path
+- Send Windows balloon-tip desktop notifications (notify)
+
+--------------------------------------------------------------------------------
+CLIPBOARD
+--------------------------------------------------------------------------------
+- Read the current clipboard contents
+- Write any text to the clipboard
+- Bridge between Ultron and other apps
+
+--------------------------------------------------------------------------------
+AUDIO (TEXT-TO-SPEECH)
+--------------------------------------------------------------------------------
+- Speak any text aloud using Windows built-in TTS (no install needed)
+- Adjustable speech rate (-10 to +10)
+
+--------------------------------------------------------------------------------
+INTERACTION & UI FEATURES
+--------------------------------------------------------------------------------
+AI INTELLIGENCE:
+- Ask clarifying questions mid-task and wait for your answer (ask_user)
+- Follow-up suggestion chips: 3 AI-generated follow-ups after each response
+- Smart conversation auto-title: LLM generates 4-6 word titles automatically
+- Context auto-compression: conversations >18 turns are summarized intelligently
+- RAG + long-term memory auto-injected into BOTH chat and agent modes
+- Parallel tool execution: multiple independent tools run simultaneously
+- Auto-retry: one automatic retry on transient Ollama connection errors
+
+CHAT INTERFACE:
+- Real-time token streaming (tokens appear as generated, not after)
+- Streaming typing cursor while generating
+- Typing indicator (animated dots) while waiting for first token
+- First-token latency displayed in metrics footer (ftt: 0.4s)
+- Message timestamps (relative: "2 min ago")
+- Message metrics footer: model name · tokens · tok/s · steps · % ctx · words
+- Read Aloud button: browser TTS for any response (click to stop)
+- Copy button: copies raw response text to clipboard
+- Edit button: restore any sent message to the composer for editing
+- Regenerate button: re-run the last response with one click
+- Feedback buttons: 👍/👎 to rate responses
+- Message actions appear on hover to keep the UI clean
+
+COMPOSER:
+- Auto-resize: textarea grows as you type (up to 300px)
+- File & image attachments: drag-drop, Ctrl+V paste, or file picker
+- Templates button: open prompt library from composer
+- Token estimate: shows ~N tok while typing (>40 chars)
+- Prompt history: ↑/↓ arrows navigate through last 50 sent messages
+- Voice input: mic button for speech-to-text (Web Speech API)
+- Images auto-routed to llava with thumbnail shown in message
+- Slash commands: type / to open a quick-pick menu of 15 prompt shortcuts
+  · /debug, /review, /test, /explain, /refactor, /fix
+  · /summarize, /compare, /improve, /email
+  · /search, /status, /brief, /image, /memo
+  · Filter by typing, navigate with ↑/↓, confirm with Enter
+
+CODE BLOCKS:
+- Language badge in every code block toolbar
+- ▶ Run button: execute Python/JS/TS/Bash/PowerShell inline with output below
+- Copy output button: copy execution results to clipboard with one click
+- # Line numbers toggle: show/hide line number gutter per code block
+- Live preview button: HTML/CSS/JS/SVG renders in an inline iframe
+- "↗ open" link to pop preview out in a new tab
+- Copy button copies raw code (not highlighted HTML)
+
+ARTIFACTS PANEL:
+- Auto-detects HTML/CSS/JS code blocks in responses
+- "Artifact" button in header opens a full-height side panel
+- Renders the generated code live in a sandboxed iframe
+- Has Copy, Open-in-tab, and Close buttons
+- Slides in from the right, can be dismissed
+
+RENDERING:
+- Full markdown rendering for both user and assistant messages
+- KaTeX math: inline $x^2$ and display $$E=mc^2$$ render as equations
+- Syntax highlighting for 100+ languages (highlight.js)
+- Tables, blockquotes, task lists, strikethrough (remark-gfm)
+- <think> tag support: reasoning models show collapsible "Reasoning" panel
+
+PROMPT TEMPLATES:
+- 16 built-in templates across 5 categories (Code, Analysis, Writing, System, Research)
+- Save any current draft as a custom template (stored in browser localStorage)
+- Search templates by name or content
+- Filter by category
+- Delete custom templates
+- Access from sidebar "Templates" button or from composer toolbar
+- Click any template to populate the composer instantly
+
+MEMORY MANAGER:
+- "Memory" button in sidebar opens a full memory management panel
+- View all long-term memories Ultron has saved
+- Add new memories manually with optional tags
+- Delete individual memories ("forget this")
+- Memories are embedding-indexed and recalled semantically on every request
+
+NAVIGATION & HISTORY:
+- Recent conversations shown on welcome screen for instant continuation
+- Rename conversations: click the ✏ pencil icon in the History panel to rename inline
+- Conversation search: Ctrl+F highlights matching messages
+- Scroll-to-bottom FAB: floating button when scrolled up
+- Smart scroll lock: doesn't interrupt reading when new tokens arrive
+- Chat history: every conversation auto-saved, browse and restore
+- History panel: date-grouped (Today/Yesterday/This week) + search + rename
+- Export chat: downloads conversation as .md Markdown file
+
+SETTINGS:
+- Temperature slider (0–1.5)
+- Max agent iterations (1–30)
+- Context window size (2,048–32,768 tokens)
+- Fast model field (auto-used for simple commands)
+- Domain expertise field (injected into every request)
+- Custom system prompt (appended to Ultron's base prompt)
+- Passive screen observation toggle, mode (fast/deep), interval
+- Reset to defaults button
+
+APPEARANCE:
+- Dark / light mode toggle (persisted across sessions)
+- Collapsible sidebar (Ctrl+B) — maximize chat space
+- Time-based greeting on welcome screen (Good morning/afternoon/evening)
+- Theme: warm light or GitHub-dark dark mode
+- Image lightbox: click any image (attachment, tool result, or inline) to zoom full-screen
+- Context usage progress bar: colour-coded bar (green/amber/red) shows context fill level
+- Model capability tags in selector: [14B], [3B], [embed], 👁 vision badge
+- Keyboard shortcuts: Ctrl+N, Esc, Ctrl+F, Ctrl+K, Ctrl+B, ?, /
+  ↑/↓ (prompt history navigation)
+
+AGENT TOOLS PANEL:
+- Collapsible "Reasoning" section for <think> blocks
+- Collapsible tool call trace with input/output panels
+- Thinking events shown as collapsible blocks with line count
+- Inline image preview: screenshots and generated images appear directly in trace
+  · Supports Windows/Unix file paths AND remote image URLs
+  · Tools: generate_image, take_screenshot, browser_screenshot, analyze_image
+- Agent step counter in trace
+
+OTHER:
+- Toast notifications (success/error/info, auto-dismiss 4s)
+- Observer bar: shows active app + open browser tabs in real time
+- Model selector: change Ollama model live from the UI
+  · Vision models marked with 👁 badge
+  · Hint shown when image attached to non-vision model
+- Keyboard shortcuts help modal: press ? to see all shortcuts
+- Electron tray app: Ctrl+Shift+U global hotkey, hides to tray (npm run tray)
+
+--------------------------------------------------------------------------------
+API ENDPOINTS: 38+
+--------------------------------------------------------------------------------
+/api/health           — Ollama status + best available model
+/api/models           — List models with vision capability flag
+/api/agent            — Agent stream (SSE): tool calls, thinking, metrics
+/api/chat             — Chat stream (SSE) with RAG + memory injection
+/api/run-code         — Execute Python/JS/TS/Bash/PS code, return output
+/api/local-file       — Securely serve local image files (screenshots, generated)
+/api/memories         — List / add long-term memories
+/api/memories/:id     — Delete a specific memory
+/api/title            — AI-generate conversation title
+/api/followups        — Generate 3 follow-up suggestions
+/api/history          — CRUD for saved conversations (create, list, get, rename, delete)
+/api/observer/*       — Screen observer control
+/api/previews/*       — File/exec change queue
+/api/pull-model       — Pull new Ollama model with progress
+/api/transcribe       — Whisper audio transcription
+
+── OpenAI-Compatible API (drop-in replacement) ──────────────────────────────
+GET  /v1/models              — List available models (OpenAI format)
+GET  /v1/models/:id          — Single model info
+POST /v1/chat/completions    — Chat completions — streaming + non-streaming
+POST /v1/completions         — Legacy completions endpoint (redirects to chat)
+
+Connect any OpenAI client to http://localhost:8787:
+  Python:   openai.base_url = "http://localhost:8787/v1"
+  Node.js:  baseURL: "http://localhost:8787/v1"
+  VS Code:  Continue.dev, Cursor custom endpoint
+  Tools:    LangChain, LlamaIndex, n8n, Zapier "OpenAI" node
+  curl:     curl http://localhost:8787/v1/chat/completions -d '{...}'
+
+Supports: streaming (SSE delta format), non-streaming, system prompts,
+          temperature, any Ollama model, usage token counts.
+Accepts any Authorization: Bearer <key> header (ignored — local server).
+
+── Self-Healer API ───────────────────────────────────────────────────────────
+GET  /api/healer/status      — Current scan status, issues, audit log
+POST /api/healer/scan        — Scan codebase for TypeScript errors (tsc --noEmit)
+POST /api/healer/analyze     — Stream SSE: run restricted healing agent on one issue
+
+--------------------------------------------------------------------------------
+SELF-HEALING SYSTEM
+--------------------------------------------------------------------------------
+Ultron can detect and propose fixes for its own code errors — with strict
+guardrails so nothing ever changes without your explicit approval.
+
+HOW IT WORKS:
+1. Click "Heal" in the sidebar to open the Self-Healer panel
+2. Click "Scan" — runs tsc --noEmit against the codebase (TypeScript errors only)
+3. Each detected error shows with file, line, error code, and message
+4. Click "Fix" on any issue to launch the Healing Agent
+5. The agent reads the file, diagnoses the error, and proposes a minimal fix
+6. The fix appears in the Preview panel (diff view) for your review
+7. Click "Apply" to write it, or "Discard" to skip — nothing changes without you
+
+GUARDRAILS:
+• Healing agent is RESTRICTED: only read_file, code_search, lint_code, preview_write
+• write_file is BLOCKED — all changes route through the preview/approval flow
+• Rate limited: 1 scan per minute, 1 heal per 5 minutes (prevents loops)
+• Max 6 reasoning steps per heal attempt
+• Temperature 0.1: conservative, deterministic fixes
+• Full audit log of every attempt (last 20 stored in memory)
+• Agent will reply "CANNOT_HEAL: reason" if it can't fix safely
+
+WHAT IT DETECTS:
+• TypeScript compilation errors (TS2345, TS2322, TS2304, etc.)
+• Type mismatches, missing properties, wrong function signatures
+• Import errors, undefined variables, unused variables (warnings)
+
+--------------------------------------------------------------------------------
+TOOL COUNT: 151 tools  |  API ENDPOINTS: 41+
+--------------------------------------------------------------------------------
+SYSTEM:       run_terminal, open_app, take_screenshot, clipboard_read,
+              clipboard_write, speak, notify
+
+FILES (ws):   write_file, read_file, read_pdf, list_directory,
+              memory_write, memory_read
+
+FILES (home): file_read, file_write, file_list, file_move, file_delete,
+              file_search, file_info, folder_create, folder_delete,
+              folder_copy, open_in_explorer
+
+SYS MONITOR:  sys_stats, sys_processes, sys_kill, sys_run, sys_env
+
+DESKTOP:      desktop_click, desktop_type, desktop_send_keys,
+              desktop_find_window, desktop_list_windows,
+              desktop_get_cursor_pos, desktop_scroll
+
+WEB:          open_browser, fetch_webpage, list_tabs, focus_tab,
+              search_web, http_request
+
+WEB SCRAPING: web_scrape, web_scrape_pages, web_scrape_list,
+              web_monitor, web_check_monitor, web_list_monitors
+
+GIT:          git_status, git_diff, git_log, git_commit, git_push,
+              git_checkout, git_branch, git_clone
+
+GITHUB:       gh_set_token, gh_repos, gh_issues, gh_prs,
+              gh_create_issue, gh_repo_info, gh_search
+
+DATABASE:     db_query, db_execute
+
+PLAYWRIGHT:   browser_connect_chrome, browser_go, browser_click,
+              browser_fill, browser_type, browser_key, browser_hover,
+              browser_scroll, browser_check, browser_select,
+              browser_read, browser_get_text, browser_get_attr,
+              browser_find_text, browser_extract_table,
+              browser_screenshot, browser_eval, browser_wait,
+              browser_upload, browser_dialog, browser_pdf,
+              browser_read_emails, browser_click_email,
+              browser_compose_reply, browser_new_tab, browser_tabs,
+              browser_switch_tab, browser_close_tab, browser_close
+
+PLAYWRIGHT+:  browser_vault_save, browser_vault_list, browser_login,
+              browser_stealth, browser_watch, browser_record_start,
+              browser_record_stop, browser_network_capture
+
+CODING:       run_code, lint_code, open_in_editor, code_search,
+              diff_files, patch_file, code_todos, code_stats
+
+VISION:       screen_read, analyze_image
+
+MEDIA:        generate_image, create_slideshow, record_screen,
+              convert_video
+
+RAG:          rag_index, rag_index_url, rag_search, rag_status,
+              rag_clear
+
+LONG MEM:     mem_save, mem_recall, mem_list, mem_forget
+
+SCHEDULER:    schedule_task, list_schedules, cancel_schedule,
+              run_schedule_now
+
+EMAIL:        compose_email, detect_email_provider, email_send,
+              email_read, email_search, calendar_read, calendar_create
+
+PYTHON:       python_exec, python_reset
+
+WHISPER:      transcribe_audio, install_whisper
+
+MULTI-AGENT:  agent_run, agent_parallel
+
+PREVIEW:      preview_write, preview_exec
+
+TASKS:        task_add, task_list, task_done, task_delete,
+              task_update, daily_briefing
+
+INTERACT:     ask_user
+
+================================================================================

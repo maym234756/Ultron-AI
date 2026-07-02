@@ -1,0 +1,27 @@
+/**
+ * Example Ultron plugin — drop this file in the plugins/ folder and restart.
+ * Must export: definitions (ToolDefinition[]) and handlers (Record<string, ToolHandler>)
+ */
+import type { ToolDefinition, ToolHandler } from '../server/tools/types.js'
+
+export const definitions: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'hello_plugin',
+      description: 'Example plugin tool — says hello.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name to greet.' },
+        },
+      },
+    },
+  },
+]
+
+export const handlers: Record<string, ToolHandler> = {
+  hello_plugin: async (args) => {
+    return `Hello from plugin, ${args.name ?? 'world'}!`
+  },
+}

@@ -1,0 +1,82 @@
+{
+  "timestamp": 1783029150094,
+  "activeApp": "msedge",
+  "windowTitles": [
+    {
+      "process": "msedge",
+      "title": "Inbox (3,588) - mmay@premierboatingcenters.com - Premier Yamaha Boating Centers Mail and 2 more pages - Personal - Microsoft? Edge"
+    },
+    {
+      "process": "code",
+      "title": "ULTRON_VALUATION.txt - Ultron - Visual Studio Code"
+    },
+    {
+      "process": "lightspeed_x64",
+      "title": "Lightspeed 2026.03.38870 - Premier Boating Center - Conroe - Miles May"
+    },
+    {
+      "process": "textinputhost",
+      "title": "Windows Input Experience"
+    },
+    {
+      "process": "applicationframehost",
+      "title": "Settings"
+    },
+    {
+      "process": "systemsettings",
+      "title": "Settings"
+    }
+  ],
+  "browserTabs": [
+    {
+      "browser": "Edge",
+      "title": "Calendar"
+    },
+    {
+      "browser": "Edge",
+      "title": "Keep"
+    },
+    {
+      "browser": "Edge",
+      "title": "Tasks"
+    },
+    {
+      "browser": "Edge",
+      "title": "Contacts"
+    },
+    {
+      "browser": "Edge",
+      "title": "Sheetgo"
+    },
+    {
+      "browser": "Edge",
+      "title": "Mailsuite"
+    },
+    {
+      "browser": "Edge",
+      "title": "Mailmeteor"
+    },
+    {
+      "browser": "Edge",
+      "title": "Reclaim"
+    },
+    {
+      "browser": "Edge",
+      "title": "Get Add-ons"
+    },
+    {
+      "browser": "Edge",
+      "title": "Inbox (3,588) - mmay@premierboatingcenters.com - Premier Yamaha Boating Centers Mail - High memory usage - 1.5 GB"
+    },
+    {
+      "browser": "Edge",
+      "title": "Sale Price Drop | Salesforce - High memory usage - 937 MB"
+    },
+    {
+      "browser": "Edge",
+      "title": "maym234756/Ultron-AI"
+    }
+  ],
+  "visionSummary": null,
+  "mode": "fast"
+}

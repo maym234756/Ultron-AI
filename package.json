@@ -1,0 +1,51 @@
+{
+  "name": "ultron",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,green \"npm:server:dev\" \"npm:web:dev\"",
+    "web:dev": "vite",
+    "server:dev": "tsx watch server/index.ts",
+    "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "start": "node dist-server/index.js",
+    "tray": "electron electron/main.ts",
+    "tray:dev": "concurrently -k -n api,web,tray -c cyan,green,yellow \"npm:server:dev\" \"npm:web:dev\" \"sleep 4 && electron electron/main.ts\""
+  },
+  "dependencies": {
+    "@types/katex": "^0.16.8",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
+    "lucide-react": "^1.22.0",
+    "node-cron": "^4.5.0",
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.61.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.2",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "electron": "^43.0.0",
+    "oxlint": "^1.71.0",
+    "tsx": "^4.22.4",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1"
+  }
+}
