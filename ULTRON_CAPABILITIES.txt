@@ -134,10 +134,10 @@ Template-driven programming project creation with approval-first local actions:
 - Every Project Builder scaffold includes ULTRON_PROJECT_PLAN.md with template
   context, commands, next implementation ideas, and a recommended check/fix/dev
   loop so Ultron can keep building from a concrete project brief
-- Remembered projects can be opened in File Explorer, opened in VS Code,
-  installed later when dependencies were skipped, checked/built again, repaired
-  with a check-fix-check loop, started as a dev server, or stopped from the
-  Builder panel
+- Remembered projects can be opened in File Explorer, opened in VS Code, opened
+  in a PowerShell terminal at the project folder, installed later when
+  dependencies were skipped, checked/built again, repaired with a check-fix-check
+  loop, started as a dev server, or stopped from the Builder panel
 - Fix action runs the project check, reads the error output and editable source
   files, asks the local model for minimal full-file repairs, applies them only
   inside the remembered project folder, then runs the check again

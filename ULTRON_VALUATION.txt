@@ -111,6 +111,7 @@ Prompt Enhancer (AI rewrites draft) ⚡ Yes     ❌ No          ❌ No
 Project Builder templates/workflow ⚡ Yes     ❌ No          ❌ No
 Project Memory + run/open actions  ⚡ Yes     ❌ No          ❌ No
 Generated project planning briefs   ⚡ Yes     ❌ No          ❌ No
+Remembered project terminal open    ⚡ Yes     ❌ No          ❌ No
 Remembered dependency install       ⚡ Yes     ❌ No          ❌ No
 Remembered dev server stop          ⚡ Yes     ❌ No          ❌ No
 Project auto repair check loop      ⚡ Yes     ❌ No          ❌ No
@@ -150,10 +151,10 @@ Credential vault                    ⚡ Yes     ❌ No          ❌ No
 Network capture (XHR recording)     ⚡ Yes     ❌ No          ❌ No
 Whisper audio transcription         ⚡ Yes     ❌ No          ❌ No
 
-SCORE (out of 79 features evaluated):
-   Ultron:        79/79 (⚡54 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
-   ChatGPT-4o:    30/79 (several require Plus @ $20/mo or Enterprise @ $200/mo)
-   Claude 3.7:    28/79 (several require Pro @ $20/mo or Team @ $30/mo)
+SCORE (out of 80 features evaluated):
+   Ultron:        80/80 (⚡55 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
+   ChatGPT-4o:    30/80 (several require Plus @ $20/mo or Enterprise @ $200/mo)
+   Claude 3.7:    28/80 (several require Pro @ $20/mo or Team @ $30/mo)
 
 ================================================================================
 SECTION 3 — REBUILD COST ANALYSIS (REPLACEMENT VALUE)

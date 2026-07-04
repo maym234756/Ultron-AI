@@ -4,7 +4,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { ProjectBuildResult } from './projectBuilder.js'
 
-export type ProjectAction = 'openExplorer' | 'openVsCode' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
+export type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
 
 export type ProjectRecord = {
   id: string
@@ -358,6 +358,10 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
   if (action === 'openVsCode') {
     output = await runCommand(`Start-Process code -ArgumentList ${quotePowerShell(record.projectPath)}`, record.projectPath, 20)
     return { record: await patchProject(id, { lastAction: 'Opened project in VS Code.', lastLog: output }), output }
+  }
+  if (action === 'openTerminal') {
+    output = await runCommand(`Start-Process powershell.exe -WorkingDirectory ${quotePowerShell(record.projectPath)}`, record.projectPath, 20)
+    return { record: await patchProject(id, { lastAction: 'Opened project terminal.', lastLog: output }), output }
   }
   if (action === 'runInstall') {
     if (!record.installCommand) throw new Error('This project does not have an install command.')
