@@ -10,8 +10,9 @@ Ollama inference stack for Windows. It is not a wrapper around a cloud API — i
 is a complete, original product: custom server architecture, a purpose-built
 React frontend, 30 modular tool modules, a 52-service connector registry,
 a native connector action planner, a self-healing system, Self-Upgrade 2.0,
-an OpenAI-compatible API layer, a Health Command Center, and an intelligence
-pipeline that rivals commercially available products from Anthropic and OpenAI.
+an OpenAI-compatible API layer, a Health Command Center, a Backend Runtime
+Supervisor, and an intelligence pipeline that rivals commercially available
+products from Anthropic and OpenAI.
 It now also includes a Project Memory layer that remembers generated programming
 projects and exposes programmer actions for opening folders, VS Code, project
 plans, terminals, dependency installs, checks, repairs, dev servers, previews,
@@ -19,8 +20,8 @@ and dev-server shutdowns, plus a Reference Builder that learns public URLs or
 screenshots and turns them into original website build blueprints and checked
 starter projects with visual comparison reports.
 
-Estimated Replacement / Rebuild Cost:  $275,000 – $430,000
-Estimated Strategic / Market Value:    $950,000 – $2,600,000+
+Estimated Replacement / Rebuild Cost:  $290,000 – $455,000
+Estimated Strategic / Market Value:    $1,000,000 – $2,700,000+
 Annual Operational Cost (hardware):    $0 (runs on existing PC — fully local)
 Annual Operational Cost (API):         $0 (no cloud API keys — fully local)
 
@@ -30,9 +31,9 @@ SECTION 1 — WHAT WAS BUILT
 
 CODEBASE METRICS
 Source files:      66 TypeScript / TSX files
-   TypeScript/TSX:    20,000+ lines
-   CSS:               ~5,200 lines of hand-written styles
-  Total source code: ~25,200 TS/CSS lines
+   TypeScript/TSX:    20,330+ lines
+   CSS:               ~5,574 lines of hand-written styles
+  Total source code: ~25,900 TS/CSS lines
   Total size:        ~1.0 MB of custom TS/CSS source
   Server modules:    14 server/domain modules + 30 tool modules
    React components:  15 component modules + main app surfaces
@@ -57,7 +58,7 @@ ARCHITECTURE OVERVIEW
    │  Node.js + TypeScript (tsx watch in dev)                 │
    │  60 REST/SSE/OpenAI route declarations                    │
   │  OpenAI-compatible /v1/* layer                           │
-   │  Health Center  •  Self-Healer  •  Connectors  •  RAG    │
+   │  Health Center  •  Runtime Supervisor  •  RAG  • Tools    │
   └───────────────────┬─────────────────────────────────────┘
                       │ Ollama API (localhost:11434)
   ┌───────────────────▼─────────────────────────────────────┐
@@ -177,13 +178,14 @@ ENGINEERING LABOR
 Component                        Hours    Rate/hr    Cost
 ─────────────────────────────────────────────────────────────────────────────
 Backend architecture & server      60     $175       $10,500
-Express API (59 endpoints)        104     $175       $18,200
+Express API (60 endpoints)        106     $175       $18,550
 Tool system (154 tools, 30 files) 126     $175       $22,050
 Agent loop (ReAct + streaming)     40     $175        $7,000
 Scored prompt router + profiles     18     $175        $3,150
 Connector registry (52 services)    32     $175        $5,600
 OpenAI-compatible /v1/ API         16     $175        $2,800
 Health Command Center              10     $175        $1,750
+Backend Runtime Supervisor         12     $175        $2,100
 Self-Healer system                 24     $175        $4,200
 Project Builder + Memory actions   28     $175        $4,900
 Reference Builder + Visual Compare 32     $175        $5,600
@@ -243,17 +245,17 @@ QA / TESTING
 Integration testing                24     $120        $2,880
 Bug fixes / polish                 40     $120        $4,800
 
-PROJECT MANAGEMENT / OVERHEAD (15%)                  +$41,000
+PROJECT MANAGEMENT / OVERHEAD (15%)                  +$42,000
 ─────────────────────────────────────────────────────────────────────────────
 
-TOTAL REBUILD COST (CONSERVATIVE):               ~$245,000
-TOTAL REBUILD COST (WITH OVERHEAD + REWORK):     ~$315,000
+TOTAL REBUILD COST (CONSERVATIVE):               ~$250,000
+TOTAL REBUILD COST (WITH OVERHEAD + REWORK):     ~$322,000
 
 NOTE: These estimates assume experienced engineers who already know the
 technology stack well. A team building this for the first time would add
 40–60% more time for research, learning, and rework.
 
-FULLY-BURDENED REBUILD COST (realistic):         ~$365,000
+FULLY-BURDENED REBUILD COST (realistic):         ~$375,000
 
 ================================================================================
 SECTION 4 — STRATEGIC / MARKET VALUE
@@ -313,8 +315,8 @@ STRATEGIC VALUE SCENARIOS
 
 Scenario 1: PERSONAL USE / SINGLE OPERATOR
   Value = replacement cost + 1 year of avoided SaaS fees
-  ($245,000 build cost) + ($20/mo × 12 × 2 tools avoided = $480)
-  Conservative value:  $250,000 – $300,000
+   ($250,000 build cost) + ($20/mo × 12 × 2 tools avoided = $480)
+   Conservative value:  $260,000 – $325,000
 
 Scenario 2: SMALL BUSINESS / TEAM OF 10
   Team of 10, each using Claude Pro ($20/mo) + GitHub Copilot ($19/mo)
@@ -322,7 +324,7 @@ Scenario 2: SMALL BUSINESS / TEAM OF 10
   But Ultron also replaces automation consulting, custom scripts, etc.
   Estimated annual productivity value: $50,000 – $150,000/yr
   5-year NPV at 10% discount: $190,000 – $570,000
-  Strategic value: $400,000 – $700,000
+   Strategic value: $425,000 – $750,000
 
 Scenario 3: ENTERPRISE LICENSING / ACQUISITION
   An enterprise deploying this to 100 users avoids:
@@ -386,6 +388,13 @@ Each of these components has independent value as a licensable or buildable asse
     - Checks Ollama, model inventory, vision routing, tool registry,
        observer, self-healer, RAG, memory, and production artifacts
     - Turns system health from guesswork into an auditable product surface
+
+4B2. BACKEND RUNTIME SUPERVISOR                                ~$10,000
+   - Tracks active requests, active SSE streams, total traffic, and errors
+   - Captures recent runtime/SSE error events for faster diagnosis
+   - Reports process uptime, memory, Node version, PID, and event-loop delay
+   - Inventories all registered API routes and ranks slow/busy endpoints
+   - Feeds backend readiness into /api/capabilities/status
 
 4C. EXTERNAL CONNECTOR REGISTRY + HUB                          ~$22,000
       - 52 registered SaaS/web/cloud connectors
@@ -464,16 +473,16 @@ SECTION 7 — FINAL VALUATION SUMMARY
 
 VALUATION METHOD              RANGE               MIDPOINT
 ─────────────────────────────────────────────────────────────
-Cost approach (rebuild)       $245K – $365K        $305K
-Income approach (5-yr NPV)    $240K – $750K        $495K
-Market approach (comparables) $550K – $1,700K      $1,125K
-Strategic acquisition value   $1.0M – $3.4M        $2.2M
+Cost approach (rebuild)       $250K – $375K        $312K
+Income approach (5-yr NPV)    $260K – $800K        $530K
+Market approach (comparables) $600K – $1,800K      $1,200K
+Strategic acquisition value   $1.1M – $3.5M        $2.3M
 
 BLENDED FAIR MARKET VALUE (personal/single-operator):
-                                           $375,000 – $700,000
+                                           $400,000 – $750,000
 
 BLENDED FAIR MARKET VALUE (enterprise / licensing):
-                                           $1,000,000 – $2,600,000
+                                           $1,100,000 – $2,700,000
 
 AS AN ASSET TO THE BUILDER:
   • 0 ongoing operating cost vs $480–$2,400/year in saved subscriptions
@@ -531,7 +540,7 @@ MOAT ANALYSIS
 SECTION 9 — INVESTMENT REQUIRED TO REACH $1M+ VALUATION
 ================================================================================
 
-CURRENT STATE: Personal productivity platform — estimated value $375K–$700K
+CURRENT STATE: Personal productivity platform — estimated value $400K–$750K
 
 TO REACH $1M+ (6–12 months):
 ─────────────────────────────
@@ -568,12 +577,12 @@ complete AI platform that:
   • Has a defensible technical moat against cloud-first competitors
   • Was built with zero recurring costs and zero dependency on cloud APIs
 
-Fair market value as a private technology asset: $375,000 – $700,000
-Strategic value to an enterprise acquirer or licensor: $1,000,000 – $2,600,000+
+Fair market value as a private technology asset: $400,000 – $750,000
+Strategic value to an enterprise acquirer or licensor: $1,100,000 – $2,700,000+
 
 The most comparable commercial offering (AnythingLLM) charges $79/month for
 far fewer features. If Ultron were commercialized at $49/month with a 200-user
-base, it would generate $117,600 ARR — an asset worth $500,000–$700,000 at
+base, it would generate $117,600 ARR — an asset worth $550,000–$750,000 at
 market multiples before any growth.
 
 ================================================================================
@@ -608,20 +617,20 @@ Estimated total productive hours:
 
   Architecture & core systems:       40 hrs
    Tool implementations (154 tools): 106 hrs
-   Frontend development:              88 hrs
-   UI/UX polish & theming:            44 hrs
+   Frontend development:              96 hrs
+   UI/UX polish & theming:            48 hrs
    Intelligence tuning + router:      32 hrs
    Connector registry + hub:          24 hrs
   Testing & debugging:               30 hrs
-    Feature additions (sessions 1-N):  92 hrs
+      Feature additions (sessions 1-N): 106 hrs
   ─────────────────────────────────────────
-    TOTAL ESTIMATED:                  ~450 hrs
+      TOTAL ESTIMATED:                  ~476 hrs
 
-At $175/hr (senior engineer rate): $78,750 in developer time
-At $250/hr (consulting rate):      $112,500 in consulting value
+At $175/hr (senior engineer rate): $83,300 in developer time
+At $250/hr (consulting rate):      $119,000 in consulting value
 
-This represents exceptional capital efficiency — a $365K+ replacement-value
-product delivered in ~450 hours of focused development.
+This represents exceptional capital efficiency — a $375K+ replacement-value
+product delivered in ~476 hours of focused development.
 
 ================================================================================
          Document prepared for: Ultron Product Review — July 3, 2026

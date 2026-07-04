@@ -10,7 +10,9 @@ injecting live context. Real-time token streaming. Parallel tool execution.
 Scored prompt router chooses Chat vs Agent and Instant/Balanced/Deep/Research.
 Answer style controls tune output as Concise, Detailed, Technical, or Executive.
 External Connector Hub tracks 52 supported services with typed native action
-schemas and dry-run planning.
+schemas and dry-run planning. Backend Runtime Supervisor monitors active
+requests, active SSE streams, event-loop delay, memory, route inventory, and
+recent runtime/SSE errors.
 
 --------------------------------------------------------------------------------
 MODELS
@@ -746,6 +748,25 @@ OTHER:
 - Downloadable Windows desktop installer: npm run desktop:dist builds
   desktop-release/Ultron-Setup-<version>.exe, and the GitHub Desktop Release
   workflow publishes installer artifacts and tagged public GitHub Releases
+
+--------------------------------------------------------------------------------
+BACKEND RUNTIME SUPERVISOR
+--------------------------------------------------------------------------------
+Ultron now has a server-side runtime supervisor in addition to basic health checks:
+- Middleware tracks every backend request by normalized method/path
+- Counts active requests and active SSE streams for long-running chat, agent,
+  compare, model-pull, self-upgrade, and OpenAI-compatible streams
+- Records total requests, total errors, recent error events, and SSE error events
+- Measures endpoint latency: average, max, last duration, last status, and last
+  seen timestamp for busy/slow endpoint ranking
+- Reports process uptime, PID, Node version, platform, RSS/heap/external memory,
+  and event-loop delay mean/max
+- Inventories registered Express routes so route count can be verified live
+- Exposes GET /api/backend/status for direct diagnostics
+- Feeds runtime readiness into GET /api/capabilities/status as
+  "Backend runtime supervisor"
+- Helps diagnose stalls, broken streams, slow endpoints, plugin errors, and
+  warmup problems without opening logs first
 
 --------------------------------------------------------------------------------
 API ENDPOINTS: 60 route declarations
