@@ -32,7 +32,7 @@ await fs.rm(finalOut, { recursive: true, force: true })
 await fs.mkdir(finalOut, { recursive: true })
 
 run('npm', ['run', 'desktop:build'])
-run('npx', ['electron-builder', '--win', 'nsis', '--x64', `--config.directories.output=${tempOut}`])
+run('npx', ['electron-builder', '--win', 'nsis', '--x64', '--publish', 'never', `--config.directories.output=${tempOut}`])
 
 const entries = await fs.readdir(tempOut)
 for (const entry of entries) {
