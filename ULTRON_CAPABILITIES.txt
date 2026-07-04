@@ -693,6 +693,9 @@ SETTINGS:
 
 APPEARANCE:
 - Dark / light mode toggle (persisted across sessions)
+- Quiet UI mode (persisted, default-on): hides sidebar noise, observer details,
+  route diagnostics, agent traces, prediction cards, shortcut hints, and non-ASK
+  follow-up chips while keeping Tools / Full UI one click away
 - Collapsible sidebar (Ctrl+B) — maximize chat space
 - Time-based greeting on welcome screen (Good morning/afternoon/evening)
 - Theme: warm light or GitHub-dark dark mode

@@ -121,6 +121,7 @@ Project auto repair check loop      ⚡ Yes     ❌ No          ❌ No
 Reference Builder website learner   ⚡ Yes     ❌ No          ❌ No
 One-click reference-to-project build ⚡ Yes     ❌ No          ❌ No
 Visual Compare reference QA          ⚡ Yes     ❌ No          ❌ No
+Quiet UI reduced-noise mode          ⚡ Yes     ❌ No          ❌ No
 Task Dashboard + REST API           ⚡ Yes     ❌ No          ❌ No
 Self-Upgrade 2.0 backlog/packs       ⚡ Yes     ❌ No          ❌ No
 Rollback-aware preview history       ⚡ Yes     ❌ No          ❌ No
@@ -154,10 +155,10 @@ Credential vault                    ⚡ Yes     ❌ No          ❌ No
 Network capture (XHR recording)     ⚡ Yes     ❌ No          ❌ No
 Whisper audio transcription         ⚡ Yes     ❌ No          ❌ No
 
-SCORE (out of 81 features evaluated):
-   Ultron:        81/81 (⚡56 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
-   ChatGPT-4o:    30/81 (several require Plus @ $20/mo or Enterprise @ $200/mo)
-   Claude 3.7:    28/81 (several require Pro @ $20/mo or Team @ $30/mo)
+SCORE (out of 82 features evaluated):
+   Ultron:        82/82 (⚡57 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
+   ChatGPT-4o:    30/82 (several require Plus @ $20/mo or Enterprise @ $200/mo)
+   Claude 3.7:    28/82 (several require Pro @ $20/mo or Team @ $30/mo)
 
 ================================================================================
 SECTION 3 — REBUILD COST ANALYSIS (REPLACEMENT VALUE)
@@ -553,7 +554,7 @@ CONCLUSION
 Ultron is not a prototype or a demo. It is a production-quality, feature-
 complete AI platform that:
 
-   • Matches or exceeds ChatGPT and Claude on 81 evaluated features
+   • Matches or exceeds ChatGPT and Claude on 82 evaluated features
   • Uniquely beats both on OS automation, privacy, and cost
   • Contains genuinely novel capabilities (self-healer, screen observer,
       154-tool agent loop, 52-connector registry, scored auto-router,

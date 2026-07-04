@@ -117,6 +117,10 @@ function loadDarkMode(): boolean {
   try { return localStorage.getItem('ultron-dark') === '1' } catch { return false }
 }
 
+function loadQuietMode(): boolean {
+  try { return localStorage.getItem('ultron-quiet-ui') !== '0' } catch { return true }
+}
+
 function buildArtifactSrcDoc(lang: string, code: string): string {
   if (lang === 'html' || lang === 'htm') {
     return code.includes('<html') ? code
@@ -217,6 +221,7 @@ function App() {
   const [visionModels, setVisionModels] = useState<Set<string>>(new Set())
   const [observerStatus, setObserverStatus] = useState<ObserverStatus | null>(null)
   const [darkMode, setDarkMode] = useState<boolean>(loadDarkMode)
+  const [quietMode, setQuietMode] = useState<boolean>(loadQuietMode)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -225,7 +230,7 @@ function App() {
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'info' }>>([])
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [messageImages, setMessageImages] = useState<Map<string, string[]>>(new Map())
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadQuietMode)
   const [artifact, setArtifact] = useState<{ lang: string; code: string; srcDoc: string } | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showMemory, setShowMemory] = useState(false)
@@ -1226,6 +1231,15 @@ function App() {
     })
   }
 
+  function toggleQuietMode() {
+    setQuietMode(current => {
+      const next = !current
+      try { localStorage.setItem('ultron-quiet-ui', next ? '1' : '0') } catch { /* ignore */ }
+      if (next) setSidebarCollapsed(true)
+      return next
+    })
+  }
+
   function stopStreaming() {
     abortRef.current?.abort()
     setIsStreaming(false)
@@ -1250,7 +1264,7 @@ function App() {
 
   return (
   <>
-    <main className="app-shell">
+    <main className={`app-shell${quietMode ? ' quiet-ui' : ''}`}>
       <section className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`} aria-label="Assistant controls">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">
@@ -1422,7 +1436,7 @@ function App() {
       </section>
 
       <section className="chat-panel" aria-label="Chat with Ultron">
-        {observerStatus?.enabled && observerStatus.context && (
+        {!quietMode && observerStatus?.enabled && observerStatus.context && (
           <div className="observer-bar">
             <Eye size={11} />
             <span>
@@ -1445,6 +1459,7 @@ function App() {
             {sidebarCollapsed && (
               <button type="button" className="export-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar (Ctrl+B)">
                 <ChevronRight size={14} />
+                {quietMode && <span>Tools</span>}
               </button>
             )}
             {artifact && (
@@ -1453,18 +1468,18 @@ function App() {
                 Artifact ✕
               </button>
             )}
-            {messages.length > 0 && (
+            {!quietMode && messages.length > 0 && (
               <button type="button" className="export-btn" onClick={() => setShowSearch(s => !s)} title="Search (Ctrl+F)">
                 <Search size={14} />
               </button>
             )}
-            {messages.length > 0 && (
+            {!quietMode && messages.length > 0 && (
               <button type="button" className="export-btn" onClick={exportChat} title="Export as Markdown">
                 <Download size={14} />
                 Export
               </button>
             )}
-            {availableModels.filter(m => !m.includes('embed')).length > 1 && (
+            {!quietMode && availableModels.filter(m => !m.includes('embed')).length > 1 && (
               <button
                 type="button"
                 className={`export-btn compare-trigger-btn ${showCompare ? 'active' : ''}`}
@@ -1475,6 +1490,10 @@ function App() {
                 Compare
               </button>
             )}
+            <button type="button" className={`export-btn quiet-toggle-btn ${quietMode ? 'active' : ''}`} onClick={toggleQuietMode} title={quietMode ? 'Show full interface detail' : 'Hide secondary interface detail'}>
+              {quietMode ? <EyeOff size={14} /> : <Eye size={14} />}
+              {quietMode ? 'Quiet' : 'Full'}
+            </button>
             <button type="button" className="ghost-button" onClick={resetChat}>
               New chat
             </button>
@@ -1571,8 +1590,8 @@ function App() {
                 </div>
                 <div className="message-bubble">
                   <span>{message.role === 'assistant' ? 'Ultron' : 'You'}</span>
-                  {message.agentEvents.length > 0 && <AgentTrace events={message.agentEvents} />}
-                  {message.role === 'assistant' && message.route && (
+                  {!quietMode && message.agentEvents.length > 0 && <AgentTrace events={message.agentEvents} />}
+                  {!quietMode && message.role === 'assistant' && message.route && (
                     <details className="route-decision" title="Why Ultron chose this mode">
                       <summary className="route-decision-summary">
                         <span className={`route-mode ${message.route.useAgent ? 'agent' : 'chat'}`}>{message.route.useAgent ? 'Agent' : 'Chat'}</span>
@@ -1650,9 +1669,9 @@ function App() {
                   ) : null}
 
                   {/* Follow-up suggestions + Ultron's clarifying questions */}
-                  {message.role === 'assistant' && message.followups && message.followups.length > 0 && (
+                  {message.role === 'assistant' && message.followups && message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).length > 0 && (
                     <div className="followup-chips">
-                      {message.followups.map((q) => {
+                      {message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).map((q) => {
                         const isAsk = q.startsWith('ASK: ')
                         const label = isAsk ? q.slice(5) : q
                         return isAsk ? (
@@ -1676,7 +1695,7 @@ function App() {
                   )}
 
                   {/* Predictive action cards — what Ultron can proactively do next */}
-                  {message.role === 'assistant' && message.predictions && message.predictions.length > 0 && (
+                  {!quietMode && message.role === 'assistant' && message.predictions && message.predictions.length > 0 && (
                     <div className="prediction-cards">
                       <span className="prediction-header">What I can do next</span>
                       {message.predictions.map(p => (
@@ -2009,10 +2028,12 @@ function App() {
             </button>
           )}
         </form>
-        <p className="kbd-hint">
-          <kbd>Enter</kbd> send &nbsp;·&nbsp; <kbd>/</kbd> slash &nbsp;·&nbsp; <kbd>↑/↓</kbd> history &nbsp;·&nbsp; <kbd>Ctrl+N</kbd> new &nbsp;·&nbsp; <kbd>Ctrl+B</kbd> sidebar &nbsp;·&nbsp; <kbd>?</kbd> help
-          {draft.length > 40 && <>&nbsp;·&nbsp;<span className="token-est">~{Math.ceil(draft.length / 4)} tok</span></>}
-        </p>
+        {!quietMode && (
+          <p className="kbd-hint">
+            <kbd>Enter</kbd> send &nbsp;·&nbsp; <kbd>/</kbd> slash &nbsp;·&nbsp; <kbd>↑/↓</kbd> history &nbsp;·&nbsp; <kbd>Ctrl+N</kbd> new &nbsp;·&nbsp; <kbd>Ctrl+B</kbd> sidebar &nbsp;·&nbsp; <kbd>?</kbd> help
+            {draft.length > 40 && <>&nbsp;·&nbsp;<span className="token-est">~{Math.ceil(draft.length / 4)} tok</span></>}
+          </p>
+        )}
         </div>
       </section>
     </main>
