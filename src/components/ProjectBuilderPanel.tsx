@@ -21,7 +21,7 @@ type ProjectBuildResult = {
   nextCommands: string[]
 }
 
-type ProjectAction = 'openExplorer' | 'openVsCode' | 'runBuild' | 'runDevServer' | 'runRepair'
+type ProjectAction = 'openExplorer' | 'openVsCode' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
 
 type ProjectRecord = {
   id: string
@@ -29,6 +29,7 @@ type ProjectRecord = {
   projectPath: string
   templateLabel: string
   stack: string
+  installCommand?: string
   buildCommand?: string
   devCommand?: string
   previewUrl?: string
@@ -270,9 +271,11 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
                 <div className="project-builder-actions">
                   <button type="button" onClick={() => void runProjectAction(project, 'openExplorer')} disabled={Boolean(actionBusy)}><FolderOpen size={13} /> Folder</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openVsCode')} disabled={Boolean(actionBusy)}><Code2 size={13} /> Code</button>
+                  <button type="button" onClick={() => void runProjectAction(project, 'runInstall')} disabled={Boolean(actionBusy) || !project.installCommand}><Terminal size={13} /> Install</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runBuild')} disabled={Boolean(actionBusy) || !project.buildCommand}><Terminal size={13} /> Check</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runRepair')} disabled={Boolean(actionBusy) || !project.buildCommand}><RefreshCw size={13} /> Fix</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runDevServer')} disabled={Boolean(actionBusy) || !project.devCommand}><Play size={13} /> Dev</button>
+                  <button type="button" onClick={() => void runProjectAction(project, 'stopDevServer')} disabled={Boolean(actionBusy) || !project.devCommand}>Stop</button>
                   {project.previewUrl && <a href={project.previewUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Preview</a>}
                 </div>
               </article>

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { ProjectBuildResult } from './projectBuilder.js'
 
-export type ProjectAction = 'openExplorer' | 'openVsCode' | 'runBuild' | 'runDevServer' | 'runRepair'
+export type ProjectAction = 'openExplorer' | 'openVsCode' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
 
 export type ProjectRecord = {
   id: string
@@ -164,6 +164,34 @@ function startDevServer(record: ProjectRecord): Promise<string> {
       settle(output || `Dev server stopped${typeof code === 'number' ? ` with exit code ${code}` : ''}.`)
     })
     setTimeout(() => settle(output || 'Dev server is starting.'), 2500)
+  })
+}
+
+function stopDevServer(record: ProjectRecord): Promise<string> {
+  const existing = devServers.get(record.id)
+  if (!existing || existing.killed) return Promise.resolve('No tracked dev server is running for this project.')
+  if (process.platform !== 'win32' || !existing.pid) {
+    existing.kill('SIGTERM')
+    devServers.delete(record.id)
+    return Promise.resolve('Dev server stop requested.')
+  }
+  return new Promise(resolve => {
+    const killer = spawn('taskkill.exe', ['/PID', String(existing.pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'pipe',
+    })
+    let output = ''
+    killer.stdout?.on('data', chunk => { output += chunk.toString() })
+    killer.stderr?.on('data', chunk => { output += chunk.toString() })
+    killer.on('close', code => {
+      devServers.delete(record.id)
+      resolve(code === 0 ? 'Dev server stop requested.' : (output.trim() || `Dev server stop returned exit code ${code ?? '?'}.`))
+    })
+    killer.on('error', err => {
+      existing.kill('SIGTERM')
+      devServers.delete(record.id)
+      resolve(`Dev server stop fallback used: ${err.message}`)
+    })
   })
 }
 
@@ -331,6 +359,17 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
     output = await runCommand(`Start-Process code -ArgumentList ${quotePowerShell(record.projectPath)}`, record.projectPath, 20)
     return { record: await patchProject(id, { lastAction: 'Opened project in VS Code.', lastLog: output }), output }
   }
+  if (action === 'runInstall') {
+    if (!record.installCommand) throw new Error('This project does not have an install command.')
+    output = await runCommand(record.installCommand, record.projectPath, 300)
+    return {
+      record: await patchProject(id, {
+        lastAction: `Ran ${record.installCommand}.`,
+        lastLog: output.slice(-6000),
+      }),
+      output,
+    }
+  }
   if (action === 'runBuild') {
     if (!record.buildCommand) throw new Error('This project does not have a build or check command.')
     output = await runCommand(record.buildCommand, record.projectPath, 240)
@@ -362,6 +401,16 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
         previewUrl: nextPreviewUrl,
         lastAction: 'Started dev server.',
         lastLog: output.slice(-6000),
+      }),
+      output,
+    }
+  }
+  if (action === 'stopDevServer') {
+    output = await stopDevServer(record)
+    return {
+      record: await patchProject(id, {
+        lastAction: 'Stopped dev server.',
+        lastLog: output,
       }),
       output,
     }
