@@ -131,6 +131,9 @@ Template-driven programming project creation with approval-first local actions:
   VS Code open, and File Explorer open
 - Project Memory remembers generated projects, paths, stacks, commands, last
   check status, last action, and preview URL when available
+- Every Project Builder scaffold includes ULTRON_PROJECT_PLAN.md with template
+  context, commands, next implementation ideas, and a recommended check/fix/dev
+  loop so Ultron can keep building from a concrete project brief
 - Remembered projects can be opened in File Explorer, opened in VS Code,
   checked/built again, repaired with a check-fix-check loop, or started as a
   dev server from the Builder panel
