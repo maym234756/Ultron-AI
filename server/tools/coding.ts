@@ -16,6 +16,7 @@ export const runCodeDefinition: ToolDefinition = {
         file: { type: 'string', description: 'Absolute or relative path to the code file to run' },
         args: { type: 'string', description: 'Optional command-line arguments to pass to the script' },
         cwd: { type: 'string', description: 'Working directory to run from (defaults to file directory)' },
+        timeout_sec: { type: 'string', description: 'Execution timeout in seconds, from 1 to 600 (default 120).' },
       },
       required: ['file'],
     },
@@ -61,7 +62,7 @@ export const runCode: ToolHandler = async (args) => {
       return `Unsupported file type: ${ext}. Supported: .py .ts .tsx .js .mjs .ps1 .sh .rb .go`
   }
 
-  return runTerminal({ command, cwd })
+  return runTerminal({ command, cwd, timeout_sec: args.timeout_sec })
 }
 
 // ── lint_code ─────────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export const lintCodeDefinition: ToolDefinition = {
           description: 'Linter to use: "typescript" (tsc), "eslint", "python" (pylint), or "auto" (default, detects from extension)',
         },
         fix: { type: 'string', description: 'Set to "true" to auto-fix issues where possible' },
+        timeout_sec: { type: 'string', description: 'Lint/type-check timeout in seconds, from 1 to 600 (default 120).' },
       },
       required: ['path'],
     },
@@ -110,7 +112,7 @@ export const lintCode: ToolHandler = async (args) => {
     command = `npx tsc --noEmit 2>&1`
   }
 
-  const result = await runTerminal({ command, cwd: process.cwd() })
+  const result = await runTerminal({ command, cwd: process.cwd(), timeout_sec: args.timeout_sec })
   return result || 'No issues found.'
 }
 

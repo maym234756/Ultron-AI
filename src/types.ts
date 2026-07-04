@@ -8,14 +8,29 @@ export type AttachedFile = {
 }
 
 export type AgentStepEvent = { type: 'agent_step'; step: number; maxSteps: number }
+export type AgentTaskStatus = 'planning' | 'using_tools' | 'verifying' | 'done' | 'needs_user_input'
+export type AgentPlan = {
+  goal: string
+  assumptions: string[]
+  steps: string[]
+  toolsNeeded: string[]
+  verificationMethod: string
+  doneCondition: string
+  taskSize: 'simple' | 'normal' | 'deep'
+  toolBudget: number
+}
+export type AgentPlanEvent = { type: 'agent_plan'; plan: AgentPlan }
+export type AgentTaskStateEvent = { type: 'agent_task_state'; status: AgentTaskStatus; detail: string }
+export type StreamStatusEvent = { type: 'stream_status'; status: string; detail?: string; elapsedMs?: number; firstTokenMs?: number; totalMs?: number }
 export type ThinkingEvent = { type: 'thinking'; content: string }
 export type ToolCallEvent = { type: 'tool_call'; id: string; name: string; args: Record<string, unknown> }
 export type ToolResultEvent = { type: 'tool_result'; id: string; name: string; result: string }
-export type UserQuestionEvent = { type: 'user_question'; id: string; question: string; context: string }
+export type UserQuestionEvent = { type: 'user_question'; id: string; question: string; context: string; kind?: 'question' | 'permission' }
 
-export type AgentEvent = AgentStepEvent | ThinkingEvent | ToolCallEvent | ToolResultEvent | UserQuestionEvent
+export type AgentEvent = AgentStepEvent | AgentPlanEvent | AgentTaskStateEvent | StreamStatusEvent | ThinkingEvent | ToolCallEvent | ToolResultEvent | UserQuestionEvent
 
 export type Role = 'user' | 'assistant'
+export type AnswerStyle = 'concise' | 'detailed' | 'technical' | 'executive'
 
 export type Message = {
   id: string
@@ -23,6 +38,7 @@ export type Message = {
   content: string
   agentEvents: AgentEvent[]
   timestamp: number
+  route?: PromptRoute
   firstTokenMs?: number
   metrics?: {
     model: string
@@ -32,12 +48,36 @@ export type Message = {
     tokensPerSec?: number
   }
   followups?: string[]
+  predictions?: Prediction[]
+}
+
+export type Prediction = {
+  emoji: string
+  label: string
+  prompt: string
 }
 
 export type PendingQuestion = {
   id: string
   question: string
   context: string
+  kind?: 'question' | 'permission'
+}
+
+export type IntelligenceMode = 'instant' | 'balanced' | 'deep' | 'research'
+
+export type PromptRoute = {
+  useAgent: boolean
+  intelligenceMode: IntelligenceMode
+  reason: string
+  confidence: number
+  signals: string[]
+  scores: {
+    agent: number
+    chat: number
+    complexity: number
+    freshness: number
+  }
 }
 
 export type HistoryMeta = {
@@ -52,11 +92,15 @@ export type AppSettings = {
   maxIterations: number
   systemPrompt: string
   fastModel: string
+  intelligenceMode: IntelligenceMode
+  autoRoute: boolean
+  autoIntelligence: boolean
   observationEnabled: boolean
   observationMode: 'fast' | 'deep'
   observationIntervalSec: number
   domainExpertise: string
   numCtx: number
+  answerStyle: AnswerStyle
 }
 
 export type PendingPreview = {
@@ -83,6 +127,140 @@ export type ObserverStatus = {
     visionSummary: string | null
     mode: string
   } | null
+}
+
+export type CapabilityStatusRow = {
+  id: string
+  label: string
+  ok: boolean
+  detail: string
+}
+
+export type CapabilityStatus = {
+  healthy: boolean
+  checkedAt: number
+  summary: string
+  models: string[]
+  defaultModel: string
+  toolCount: number
+  statuses: CapabilityStatusRow[]
+}
+
+export type ConnectorStatus = {
+  id: string
+  label: string
+  category: 'crm' | 'email' | 'spreadsheet' | 'video' | 'productivity' | 'commerce' | 'support' | 'developer' | 'database' | 'storage' | 'communications' | 'social' | 'marketing' | 'finance' | 'design' | 'cloud' | 'automation' | 'documents' | 'generic'
+  aliases: string[]
+  homeUrl: string
+  authModes: Array<'browser' | 'api' | 'oauth'>
+  capabilities: string[]
+  sensitiveActions: string[]
+  requiredTools: string[]
+  apiEnvVars: string[]
+  apiConfigured: boolean
+  browserSupported: boolean
+  missingTools: string[]
+  status: 'api-ready' | 'browser-ready' | 'setup-needed'
+  detail: string
+}
+
+export type ConnectorPermissionLevel = 'read-only' | 'draft-changes' | 'apply-with-approval' | 'safe-auto'
+
+export type ConnectorSetupState = {
+  connectorId: string
+  preferredAuth: 'browser' | 'api' | 'oauth'
+  permissionLevel: ConnectorPermissionLevel
+  auditLogEnabled: boolean
+  browserSessionReady: boolean
+  apiTokenConfigured: boolean
+  lastTestAt: number | null
+  lastTestOk: boolean | null
+  lastTestDetail: string
+  updatedAt: number
+}
+
+export type ConnectorAuditEntry = {
+  id: string
+  connectorId: string
+  action: 'setup_updated' | 'connection_test' | 'native_action_dry_run'
+  summary: string
+  approvalRequired: boolean
+  at: number
+}
+
+export type ConnectorActionSchema = {
+  connectorId: string
+  actionId: string
+  name: string
+  label: string
+  description: string
+  mode: 'read' | 'draft' | 'write' | 'send' | 'financial'
+  approvalRequired: boolean
+  dryRunAvailable: boolean
+  inputSchema: {
+    required: string[]
+    properties: Record<string, { type: string; description: string }>
+  }
+}
+
+export type ConnectorActionPlan = {
+  ok: boolean
+  dryRun: true
+  action: ConnectorActionSchema
+  approvalRequired: boolean
+  approvalReason: string
+  permissionLevel: string
+  readiness: ConnectorStatus['status']
+  input: Record<string, unknown>
+  missingInputs: string[]
+  prerequisites: string[]
+  planSteps: string[]
+  warnings: string[]
+  createdAt: number
+}
+
+export type ConnectorStatusSnapshot = {
+  checkedAt: number
+  total: number
+  apiReady: number
+  browserReady: number
+  setupNeeded: number
+  connectors: ConnectorStatus[]
+  setupStates: Record<string, ConnectorSetupState>
+  auditLog: ConnectorAuditEntry[]
+  nativeActions: ConnectorActionSchema[]
+}
+
+export type Task = {
+  id: string
+  title: string
+  done: boolean
+  priority: 'low' | 'medium' | 'high'
+  due?: string
+  tags: string[]
+  notes?: string
+  createdAt: string
+  completedAt?: string
+}
+
+export type MemoryScope = 'user' | 'project' | 'temporary'
+
+export type LongMemoryEntry = {
+  id: string
+  timestamp: string
+  content: string
+  tags: string[]
+  confidence: number
+  source: string
+  scope: MemoryScope
+  expiresAt: string | null
+  promotedFrom: string | null
+}
+
+export type MemoryConflict = {
+  id: string
+  content: string
+  reason: string
 }
 
 // ── Self-Healer types ──────────────────────────────────────────────────────────

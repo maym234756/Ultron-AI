@@ -20,6 +20,26 @@ npm run dev
 
 Open http://localhost:5173. The React app proxies `/api` requests to the assistant server on http://localhost:8787.
 
+## Desktop App
+
+Ultron can be packaged as a Windows desktop app with Electron. The desktop app starts the bundled local server, opens the Ultron window, and keeps a tray icon with the `Ctrl+Shift+U` show/hide shortcut.
+
+Local desktop build:
+
+```powershell
+npm ci
+npm run desktop:dist
+```
+
+The Windows installer is written to `desktop-release/Ultron-Setup-<version>.exe`.
+
+GitHub downloads are produced by `.github/workflows/desktop-release.yml`:
+
+- Run the **Desktop Release** workflow manually to create a downloadable installer artifact.
+- Push a tag like `v0.1.0` to create a draft GitHub Release with the installer attached.
+
+Users still need Ollama installed and running locally, with at least one model pulled, because Ultron stays fully local and does not call cloud model APIs.
+
 ## Configuration
 
 Copy `.env.example` to `.env` or set environment variables in your shell:

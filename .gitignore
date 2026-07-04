@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 dist-server
+dist-electron
+desktop-release
+release
 *.local
 
 # Editor directories and files

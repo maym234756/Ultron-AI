@@ -2,46 +2,54 @@
  * Ultron Electron tray app
  * - Lives in the system tray
  * - Global shortcut Ctrl+Shift+U to show/hide
- * - Loads localhost:5173 (dev) or built files (prod)
+ * - Loads localhost:5173 (dev) or bundled production server (prod)
  * - Auto-starts the backend server
  *
  * Usage:
  *   npm run tray          (dev — requires npm run dev running)
- *   npm run tray:build    (build + package — see package.json scripts)
+ *   npm run desktop:dist  (build + package Windows installer)
  */
-import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, shell } from 'electron'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { existsSync } from 'node:fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
-const WEB_URL = isDev ? 'http://localhost:5173' : `file://${join(__dirname, '../dist/index.html')}`
 const API_PORT = 8787
+const SERVER_URL = `http://127.0.0.1:${API_PORT}`
+const WEB_URL = isDev ? 'http://localhost:5173' : SERVER_URL
 const HOTKEY = 'Ctrl+Shift+U'
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
-let serverProc: ChildProcess | null = null
 let isQuitting = false
 
 // ── Start backend server (production mode only) ────────────────────────────────
 
-function startServer(): void {
+async function startServer(): Promise<void> {
   if (isDev) return // dev mode: user runs npm run dev manually
   const serverEntry = join(__dirname, '../dist-server/index.js')
   if (!existsSync(serverEntry)) {
     console.error('[electron] Server bundle not found:', serverEntry)
     return
   }
-  serverProc = spawn(process.execPath, [serverEntry], {
-    stdio: 'inherit',
-    env: { ...process.env, PORT: String(API_PORT) },
-  })
-  serverProc.on('exit', (code) => {
-    if (!isQuitting) console.error('[electron] Server exited with code', code)
-  })
+  process.env.PORT = process.env.PORT || String(API_PORT)
+  await import(pathToFileURL(serverEntry).href)
+  await waitForServer()
+}
+
+async function waitForServer(): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const response = await fetch(`${SERVER_URL}/api/health`, { signal: AbortSignal.timeout(1_000) })
+      if (response.ok) return
+    } catch {
+      // Server is still starting.
+    }
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  console.warn('[electron] Server did not answer health checks before window load.')
 }
 
 // ── Create main window ─────────────────────────────────────────────────────────
@@ -150,14 +158,14 @@ function getTrayIconDataURL(): string {
 
 // ── App lifecycle ──────────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Single instance lock
   if (!app.requestSingleInstanceLock()) {
     app.quit()
     return
   }
 
-  startServer()
+  await startServer()
 
   tray = createTray()
   win = createWindow()
@@ -183,5 +191,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true
   globalShortcut.unregisterAll()
-  if (serverProc) serverProc.kill()
+  tray?.destroy()
+  tray = null
 })

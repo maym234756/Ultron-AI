@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { ToolDefinition, ToolHandler } from './types.js'
-import type { Browser, Page } from 'playwright'
+import fs from 'node:fs'
+import type { Browser, Locator, Page } from 'playwright'
 
 // ── singleton browser session (multi-tab) ─────────────────────────────────────
 
@@ -34,6 +35,66 @@ export async function closeBrowserSession(): Promise<void> {
     _pages = []
     _currentTab = 0
   }
+}
+
+type TargetArgs = {
+  selector?: string
+  text?: string
+  label?: string
+  placeholder?: string
+  role?: string
+  name?: string
+  test_id?: string
+}
+
+type ResolvedTarget = {
+  locator: Locator
+  description: string
+}
+
+const TARGET_TIMEOUT = 10_000
+
+function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
+  if (args.selector) return { locator: page.locator(args.selector).first(), description: `selector "${args.selector}"` }
+  if (args.test_id) return { locator: page.getByTestId(args.test_id).first(), description: `test id "${args.test_id}"` }
+  if (args.role && args.name) return { locator: page.getByRole(args.role as any, { name: args.name, exact: false }).first(), description: `role "${args.role}" named "${args.name}"` }
+  if (args.label) return { locator: page.getByLabel(args.label, { exact: false }).first(), description: `label "${args.label}"` }
+  if (args.placeholder) return { locator: page.getByPlaceholder(args.placeholder, { exact: false }).first(), description: `placeholder "${args.placeholder}"` }
+  if (args.text) return { locator: page.getByText(args.text, { exact: false }).first(), description: `text "${args.text}"` }
+  return null
+}
+
+async function visibleTargetHints(page: Page): Promise<string> {
+  const hints = await page.evaluate(() => {
+    const doc = (globalThis as any).document
+    return Array.from(doc.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [role="link"], [aria-label]'))
+      .slice(0, 12)
+      .map((el: any) => {
+        const tag = el.tagName.toLowerCase()
+        const role = el.getAttribute('role') ?? ''
+        const label = el.getAttribute('aria-label') ?? ''
+        const text = (el.innerText ?? el.value ?? el.placeholder ?? '').trim().replace(/\s+/g, ' ').slice(0, 80)
+        const id = el.id ? `#${el.id}` : ''
+        const name = el.name ? `[name="${el.name}"]` : ''
+        return [tag + id + name, role && `role=${role}`, label && `aria-label="${label}"`, text && `text="${text}"`]
+          .filter(Boolean)
+          .join(' ')
+      })
+      .filter(Boolean)
+  }).catch(() => [])
+  return hints.length ? hints.map((hint, i) => `  ${i + 1}. ${hint}`).join('\n') : '  (no common clickable/input targets found)'
+}
+
+async function browserTargetError(page: Page, action: string, target: ResolvedTarget | null, err: unknown): Promise<string> {
+  const message = err instanceof Error ? err.message : String(err)
+  return [
+    `Error: Could not ${action}${target ? ` ${target.description}` : ''}.`,
+    `Reason: ${message}`,
+    `URL: ${page.url()}`,
+    `Title: ${await page.title().catch(() => '(unknown)')}`,
+    'Visible targets:',
+    await visibleTargetHints(page),
+  ].join('\n')
 }
 
 // ── browser_go ────────────────────────────────────────────────────────────────
@@ -73,24 +134,32 @@ export const browserClickDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_click',
-    description: 'Click an element by CSS selector or visible text.',
+    description: 'Click an element by CSS selector, text, label, placeholder, ARIA role/name, or test id. Returns visible target hints when the click fails.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector.' },
         text: { type: 'string', description: 'Visible text of element.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as button, link, checkbox, textbox, tab, menuitem.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
       },
     },
   },
 }
 
 export const browserClick: ToolHandler = async (args) => {
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.selector) { await page.click(args.selector, { timeout: 10_000 }); return `Clicked: ${args.selector}` }
-    if (args.text) { await page.getByText(args.text, { exact: false }).first().click({ timeout: 10_000 }); return `Clicked text: "${args.text}"` }
-    return 'Error: provide selector or text'
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, text, label, placeholder, role + name, or test_id'
+    await target.locator.click({ timeout: TARGET_TIMEOUT })
+    return `Clicked ${target.description}`
+  } catch (err) { return page ? browserTargetError(page, 'click', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_fill ──────────────────────────────────────────────────────────────
@@ -99,13 +168,17 @@ export const browserFillDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_fill',
-    description: 'Fill a text input. Target by CSS selector, label text, or placeholder.',
+    description: 'Fill a text input. Target by CSS selector, label, placeholder, ARIA role/name, test id, or visible text.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector.' },
         label: { type: 'string', description: 'Label text.' },
         placeholder: { type: 'string', description: 'Placeholder text.' },
+        text: { type: 'string', description: 'Visible text near or inside the field.' },
+        role: { type: 'string', description: 'ARIA role, usually textbox, searchbox, combobox, or spinbutton.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
         value: { type: 'string', description: 'Text to type.' },
       },
       required: ['value'],
@@ -115,13 +188,15 @@ export const browserFillDefinition: ToolDefinition = {
 
 export const browserFill: ToolHandler = async (args) => {
   const value = args.value ?? ''
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.selector) { await page.fill(args.selector, value, { timeout: 10_000 }); return `Filled "${args.selector}"` }
-    if (args.label) { await page.getByLabel(args.label, { exact: false }).first().fill(value, { timeout: 10_000 }); return `Filled label "${args.label}"` }
-    if (args.placeholder) { await page.getByPlaceholder(args.placeholder, { exact: false }).first().fill(value, { timeout: 10_000 }); return `Filled placeholder "${args.placeholder}"` }
-    return 'Error: provide selector, label, or placeholder'
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, label, placeholder, text, role + name, or test_id'
+    await target.locator.fill(value, { timeout: TARGET_TIMEOUT })
+    return `Filled ${target.description}`
+  } catch (err) { return page ? browserTargetError(page, 'fill', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_read ──────────────────────────────────────────────────────────────
@@ -171,6 +246,151 @@ export const browserRead: ToolHandler = async (args) => {
     const fieldList = fields.map((f) => `  [${f.tag}] name="${f.name}" id="${f.id}" type="${f.type}" placeholder="${f.placeholder}" label="${f.label}"`).join('\n') || '  (none)'
     const linkList = links.map((l) => `  ${l.text} → ${l.href}`).join('\n') || '  (none)'
     return `URL: ${page.url()}\nTitle: ${await page.title()}\n\nText:\n${text.replace(/\s{3,}/g, '\n').trim().slice(0, 4000)}\n\nFields:\n${fieldList}\n\nLinks:\n${linkList}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── browser_assert ───────────────────────────────────────────────────────────
+
+export const browserAssertDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_assert',
+    description: 'Assert browser page state for automation verification. Supports URL/title checks, text visibility, selector visibility/count, and attribute equality.',
+    parameters: {
+      type: 'object',
+      properties: {
+        assertion: {
+          type: 'string',
+          description: 'Assertion type.',
+          enum: ['url_contains', 'url_equals', 'title_contains', 'text_visible', 'text_absent', 'selector_visible', 'selector_hidden', 'selector_count', 'attr_equals'],
+        },
+        value: { type: 'string', description: 'Expected URL/title/text fragment depending on assertion.' },
+        selector: { type: 'string', description: 'CSS selector for selector_* and attr_equals assertions.' },
+        attr: { type: 'string', description: 'Attribute name for attr_equals.' },
+        expected: { type: 'string', description: 'Expected attribute value for attr_equals.' },
+        count: { type: 'string', description: 'Expected element count for selector_count.' },
+        timeout: { type: 'string', description: 'Timeout in seconds for visibility checks (default 8).' },
+      },
+      required: ['assertion'],
+    },
+  },
+}
+
+async function assertionFailure(page: Page, message: string): Promise<string> {
+  return [
+    `FAIL: ${message}`,
+    `URL: ${page.url()}`,
+    `Title: ${await page.title().catch(() => '(unknown)')}`,
+    'Visible targets:',
+    await visibleTargetHints(page),
+  ].join('\n')
+}
+
+export const browserAssert: ToolHandler = async (args) => {
+  const assertion = args.assertion ?? ''
+  const timeout = (parseInt(args.timeout ?? '8', 10) || 8) * 1000
+  try {
+    const page = await getPage()
+    const title = await page.title().catch(() => '')
+    const url = page.url()
+
+    if (assertion === 'url_contains') {
+      if (!args.value) return 'Error: value required for url_contains'
+      return url.includes(args.value) ? `PASS: URL contains "${args.value}"` : assertionFailure(page, `URL did not contain "${args.value}"`)
+    }
+    if (assertion === 'url_equals') {
+      if (!args.value) return 'Error: value required for url_equals'
+      return url === args.value ? `PASS: URL equals "${args.value}"` : assertionFailure(page, `URL was "${url}" instead of "${args.value}"`)
+    }
+    if (assertion === 'title_contains') {
+      if (!args.value) return 'Error: value required for title_contains'
+      return title.includes(args.value) ? `PASS: title contains "${args.value}"` : assertionFailure(page, `Title did not contain "${args.value}"`)
+    }
+    if (assertion === 'text_visible') {
+      if (!args.value) return 'Error: value required for text_visible'
+      const visible = await page.getByText(args.value, { exact: false }).first().isVisible({ timeout }).catch(() => false)
+      return visible ? `PASS: text visible "${args.value}"` : assertionFailure(page, `Text was not visible: "${args.value}"`)
+    }
+    if (assertion === 'text_absent') {
+      if (!args.value) return 'Error: value required for text_absent'
+      const visible = await page.getByText(args.value, { exact: false }).first().isVisible({ timeout: Math.min(timeout, 1500) }).catch(() => false)
+      return !visible ? `PASS: text absent "${args.value}"` : assertionFailure(page, `Text was visible but expected absent: "${args.value}"`)
+    }
+    if (assertion === 'selector_visible') {
+      if (!args.selector) return 'Error: selector required for selector_visible'
+      const visible = await page.locator(args.selector).first().isVisible({ timeout }).catch(() => false)
+      return visible ? `PASS: selector visible "${args.selector}"` : assertionFailure(page, `Selector was not visible: "${args.selector}"`)
+    }
+    if (assertion === 'selector_hidden') {
+      if (!args.selector) return 'Error: selector required for selector_hidden'
+      const hidden = await page.locator(args.selector).first().isHidden({ timeout }).catch(() => false)
+      return hidden ? `PASS: selector hidden "${args.selector}"` : assertionFailure(page, `Selector was visible but expected hidden: "${args.selector}"`)
+    }
+    if (assertion === 'selector_count') {
+      if (!args.selector || !args.count) return 'Error: selector and count required for selector_count'
+      const actual = await page.locator(args.selector).count()
+      const expected = parseInt(args.count, 10)
+      if (!Number.isFinite(expected)) return 'Error: count must be a number'
+      return actual === expected ? `PASS: selector "${args.selector}" count is ${expected}` : assertionFailure(page, `Selector "${args.selector}" count was ${actual}, expected ${expected}`)
+    }
+    if (assertion === 'attr_equals') {
+      if (!args.selector || !args.attr || args.expected == null) return 'Error: selector, attr, and expected required for attr_equals'
+      const actual = await page.locator(args.selector).first().getAttribute(args.attr, { timeout }).catch(() => null)
+      return actual === args.expected ? `PASS: ${args.selector} ${args.attr} equals "${args.expected}"` : assertionFailure(page, `${args.selector} ${args.attr} was "${actual ?? '(missing)'}", expected "${args.expected}"`)
+    }
+
+    return 'Error: assertion must be one of url_contains, url_equals, title_contains, text_visible, text_absent, selector_visible, selector_hidden, selector_count, attr_equals'
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── browser_snapshot ─────────────────────────────────────────────────────────
+
+export const browserSnapshotDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_snapshot',
+    description: 'Return a structured snapshot of the current page: URL, title, headings, fields, buttons, links, and landmark-like regions. Useful before deciding the next browser action.',
+    parameters: {
+      type: 'object',
+      properties: {
+        selector: { type: 'string', description: 'Optional CSS selector to scope the snapshot.' },
+        limit: { type: 'string', description: 'Maximum items per category (default 20).' },
+        include_text: { type: 'string', description: 'Set to "true" to include a compact text excerpt.' },
+      },
+    },
+  },
+}
+
+export const browserSnapshot: ToolHandler = async (args) => {
+  const limit = Math.min(60, Math.max(1, parseInt(args.limit ?? '20', 10) || 20))
+  try {
+    const page = await getPage()
+    const snapshot = await page.evaluate(({ selector, limit, includeText }) => {
+      const doc = (globalThis as any).document
+      const root = selector ? doc.querySelector(selector) : doc.body
+      if (!root) return { error: `No element matched selector: ${selector}` }
+      const clean = (value: string | null | undefined) => (value ?? '').replace(/\s+/g, ' ').trim()
+      const summarize = (el: any) => ({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || undefined,
+        name: el.name || undefined,
+        role: el.getAttribute('role') || undefined,
+        label: el.getAttribute('aria-label') || el.getAttribute('title') || undefined,
+        text: clean(el.innerText || el.value || el.placeholder).slice(0, 120) || undefined,
+        href: el.href || undefined,
+      })
+      const query = (sel: string) => Array.from(root.querySelectorAll(sel)).slice(0, limit).map(summarize)
+      return {
+        headings: query('h1,h2,h3,[role="heading"]'),
+        fields: query('input,textarea,select,[contenteditable="true"],[role="textbox"],[role="combobox"],[role="searchbox"]'),
+        buttons: query('button,[role="button"],input[type="button"],input[type="submit"]'),
+        links: query('a[href],[role="link"]'),
+        regions: query('main,nav,aside,section,form,[role="main"],[role="navigation"],[role="dialog"],[role="form"]'),
+        text: includeText ? clean(root.innerText || root.textContent).slice(0, 1500) : undefined,
+      }
+    }, { selector: args.selector, limit, includeText: args.include_text === 'true' })
+    if ('error' in snapshot) return `Error: ${snapshot.error}`
+    return JSON.stringify({ url: page.url(), title: await page.title(), ...snapshot }, null, 2)
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -416,14 +636,27 @@ export const browserConnectChrome: ToolHandler = async (args) => {
     ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
     : 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
+  if (!fs.existsSync(exePath)) {
+    return `${useEdge ? 'Edge' : 'Chrome'} was not found at ${exePath}. Install it at the default path or retry with the other browser option.`
+  }
+
   // Close existing instance
   try { execSync(`taskkill /F /IM ${procName}.exe 2>nul`, { stdio: 'ignore' }) } catch { /* ok */ }
   await new Promise(r => setTimeout(r, 1200))
 
   // Relaunch with debugging port
-  spawn(exePath, ['--remote-debugging-port=9222', '--restore-last-session'], {
+  const child = spawn(exePath, ['--remote-debugging-port=9222', '--restore-last-session'], {
     detached: true, stdio: 'ignore',
-  }).unref()
+  })
+  const launchError = await new Promise<string | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), 800)
+    child.once('error', (err) => {
+      clearTimeout(timer)
+      resolve(err instanceof Error ? err.message : String(err))
+    })
+  })
+  if (launchError) return `Could not launch ${useEdge ? 'Edge' : 'Chrome'}: ${launchError}`
+  child.unref()
   await new Promise(r => setTimeout(r, 2500))
 
   // Connect Playwright
@@ -455,6 +688,11 @@ export const browserTypeDefinition: ToolDefinition = {
       properties: {
         text: { type: 'string', description: 'Text to type.' },
         selector: { type: 'string', description: 'CSS selector of element to type into (clicks it first).' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as textbox, searchbox, combobox, or editor.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
         delay_ms: { type: 'string', description: 'Delay between keystrokes in ms (default 30).' },
       },
       required: ['text'],
@@ -465,12 +703,15 @@ export const browserTypeDefinition: ToolDefinition = {
 export const browserType: ToolHandler = async (args) => {
   const text = args.text ?? ''
   const delay = parseInt(args.delay_ms ?? '30', 10) || 30
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.selector) await page.click(args.selector, { timeout: 8_000 })
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (target) await target.locator.click({ timeout: TARGET_TIMEOUT })
     await page.keyboard.type(text, { delay })
-    return `Typed ${text.length} characters.`
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    return `Typed ${text.length} characters${target ? ` into ${target.description}` : ''}.`
+  } catch (err) { return page ? browserTargetError(page, 'type into', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_key ───────────────────────────────────────────────────────────────
@@ -505,24 +746,32 @@ export const browserHoverDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_hover',
-    description: 'Hover the mouse over an element to reveal tooltips, dropdowns, or hover menus.',
+    description: 'Hover over an element by CSS selector, text, label, placeholder, ARIA role/name, or test id to reveal tooltips, dropdowns, or hover menus.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector.' },
         text: { type: 'string', description: 'Visible text of element.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as button, link, tab, menuitem.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
       },
     },
   },
 }
 
 export const browserHover: ToolHandler = async (args) => {
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.selector) { await page.hover(args.selector, { timeout: 8_000 }); return `Hovered: ${args.selector}` }
-    if (args.text) { await page.getByText(args.text, { exact: false }).first().hover({ timeout: 8_000 }); return `Hovered text: "${args.text}"` }
-    return 'Error: provide selector or text'
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, text, label, placeholder, role + name, or test_id'
+    await target.locator.hover({ timeout: TARGET_TIMEOUT })
+    return `Hovered ${target.description}`
+  } catch (err) { return page ? browserTargetError(page, 'hover over', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_scroll ────────────────────────────────────────────────────────────
@@ -531,24 +780,33 @@ export const browserScrollDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_scroll',
-    description: 'Scroll the page up, down, to the top, to the bottom, or to a specific element.',
+    description: 'Scroll the page up, down, to the top, to the bottom, or to a target found by CSS selector, text, label, placeholder, ARIA role/name, or test id.',
     parameters: {
       type: 'object',
       properties: {
         direction: { type: 'string', description: 'up, down, top, bottom (default: down).' },
         amount: { type: 'string', description: 'Pixels to scroll (default 600).' },
         selector: { type: 'string', description: 'Scroll to bring this CSS selector into view.' },
+        text: { type: 'string', description: 'Visible text of target element.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as button, link, heading, textbox.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
       },
     },
   },
 }
 
 export const browserScroll: ToolHandler = async (args) => {
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.selector) {
-      await page.locator(args.selector).first().scrollIntoViewIfNeeded({ timeout: 8_000 })
-      return `Scrolled to: ${args.selector}`
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (target) {
+      await target.locator.scrollIntoViewIfNeeded({ timeout: TARGET_TIMEOUT })
+      return `Scrolled to ${target.description}`
     }
     const amt = parseInt(args.amount ?? '600', 10) || 600
     const dir = args.direction ?? 'down'
@@ -557,7 +815,7 @@ export const browserScroll: ToolHandler = async (args) => {
     const delta = dir === 'up' ? -amt : amt
     await page.evaluate((dy: number) => (globalThis as any).window.scrollBy(0, dy), delta)
     return `Scrolled ${dir} ${amt}px`
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+  } catch (err) { return page ? browserTargetError(page, 'scroll to', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_check ─────────────────────────────────────────────────────────────
@@ -566,27 +824,34 @@ export const browserCheckDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_check',
-    description: 'Check or uncheck a checkbox or radio button.',
+    description: 'Check or uncheck a checkbox or radio button by CSS selector, label, text, ARIA role/name, or test id.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector of the checkbox.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        text: { type: 'string', description: 'Visible text of checkbox/radio label.' },
+        role: { type: 'string', description: 'ARIA role, usually checkbox, radio, or switch.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
         checked: { type: 'string', description: 'true to check, false to uncheck (default true).' },
       },
-      required: ['selector'],
     },
   },
 }
 
 export const browserCheck: ToolHandler = async (args) => {
-  if (!args.selector) return 'Error: selector required'
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, label, text, role + name, or test_id'
     const shouldCheck = args.checked !== 'false'
-    if (shouldCheck) { await page.check(args.selector, { timeout: 8_000 }) }
-    else { await page.uncheck(args.selector, { timeout: 8_000 }) }
-    return `${shouldCheck ? 'Checked' : 'Unchecked'}: ${args.selector}`
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    if (shouldCheck) { await target.locator.check({ timeout: TARGET_TIMEOUT }) }
+    else { await target.locator.uncheck({ timeout: TARGET_TIMEOUT }) }
+    return `${shouldCheck ? 'Checked' : 'Unchecked'} ${target.description}`
+  } catch (err) { return page ? browserTargetError(page, 'toggle', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_get_text ──────────────────────────────────────────────────────────
@@ -595,28 +860,36 @@ export const browserGetTextDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_get_text',
-    description: 'Get the inner text or value of a specific element by CSS selector.',
+    description: 'Get the inner text or value of a target by CSS selector, text, label, placeholder, ARIA role/name, or test id.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector.' },
+        text: { type: 'string', description: 'Visible text of target element.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as button, link, heading, textbox.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
         all: { type: 'string', description: 'Set to "true" to get text from all matching elements.' },
       },
-      required: ['selector'],
     },
   },
 }
 
 export const browserGetText: ToolHandler = async (args) => {
-  if (!args.selector) return 'Error: selector required'
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    if (args.all === 'true') {
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, text, label, placeholder, role + name, or test_id'
+    if (args.all === 'true' && args.selector) {
       const texts = await page.locator(args.selector).allInnerTexts()
       return texts.join('\n')
     }
-    return await page.locator(args.selector).first().innerText({ timeout: 8_000 })
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+    return await target.locator.innerText({ timeout: TARGET_TIMEOUT })
+  } catch (err) { return page ? browserTargetError(page, 'read text from', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_get_attr ──────────────────────────────────────────────────────────
@@ -625,25 +898,35 @@ export const browserGetAttrDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_get_attr',
-    description: 'Get an HTML attribute value from an element (e.g. href, src, value, data-*).',
+    description: 'Get an HTML attribute value from a target found by CSS selector, text, label, placeholder, ARIA role/name, or test id.',
     parameters: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector.' },
+        text: { type: 'string', description: 'Visible text of target element.' },
+        label: { type: 'string', description: 'Accessible label text.' },
+        placeholder: { type: 'string', description: 'Placeholder text.' },
+        role: { type: 'string', description: 'ARIA role, such as button, link, textbox.' },
+        name: { type: 'string', description: 'Accessible name to use with role.' },
+        test_id: { type: 'string', description: 'data-testid value.' },
         attr: { type: 'string', description: 'Attribute name (e.g. "href", "value", "src").' },
       },
-      required: ['selector', 'attr'],
+      required: ['attr'],
     },
   },
 }
 
 export const browserGetAttr: ToolHandler = async (args) => {
-  if (!args.selector || !args.attr) return 'Error: selector and attr required'
+  if (!args.attr) return 'Error: attr required'
+  let page: Page | null = null
+  let target: ResolvedTarget | null = null
   try {
-    const page = await getPage()
-    const val = await page.locator(args.selector).first().getAttribute(args.attr, { timeout: 8_000 })
+    page = await getPage()
+    target = resolveTarget(page, args)
+    if (!target) return 'Error: provide selector, text, label, placeholder, role + name, or test_id'
+    const val = await target.locator.getAttribute(args.attr, { timeout: TARGET_TIMEOUT })
     return val ?? '(attribute not found)'
-  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+  } catch (err) { return page ? browserTargetError(page, 'read attribute from', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
 // ── browser_extract_table ─────────────────────────────────────────────────────

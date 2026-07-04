@@ -1,0 +1,361 @@
+ULTRON TOOL BUILD-DEPTH RANKING
+Generated: 2026-07-03
+Source inspected: server/tools/*.ts and server/tools/registry.ts
+
+Ranking basis:
+- "Strongest" means the most built-out implementation effort, not necessarily the safest or most production-ready tool.
+- I weighted source size, number of registered tools, state/persistence, orchestration complexity, external integrations, and feature completeness.
+- Tools that live in the same source module share the module's build-depth rank because their implementation work is tightly coupled.
+- Counted registered tool definitions: 153.
+
+================================================================================
+1. Playwright Browser Automation Core - score 100/100
+Source: server/tools/playwright.ts
+Build signal: 1203 source lines, 31 registered tools, persistent browser/page state, tab management, DOM inspection, assertions, structured page snapshots, forms, downloads/uploads, dialogs, PDFs, Gmail/webmail helpers, and direct JavaScript execution.
+Tools:
+- browser_go: Navigate the Playwright browser to a URL.
+- browser_click: Click an element by CSS selector or visible text.
+- browser_fill: Fill a text input by selector, label, or placeholder.
+- browser_read: Read the current page title, URL, visible text, form fields, and links.
+- browser_assert: Assert URL, title, text, selector, count, and attribute state for browser automation verification.
+- browser_snapshot: Return a structured page snapshot with headings, fields, buttons, links, regions, and optional text.
+- browser_screenshot: Screenshot the current Playwright page to the Desktop.
+- browser_eval: Execute JavaScript in the current page and return the result.
+- browser_wait: Wait for a CSS selector to appear or disappear.
+- browser_select: Select a dropdown option by value or label.
+- browser_close: Close the entire Playwright browser session.
+- browser_new_tab: Open a new browser tab and optionally navigate to a URL.
+- browser_tabs: List open browser tabs with index, title, URL, and active status.
+- browser_switch_tab: Switch to a browser tab by index.
+- browser_close_tab: Close a browser tab by index.
+- browser_connect_chrome: Connect automation to Chrome or Edge.
+- browser_type: Type text character by character.
+- browser_key: Press a keyboard shortcut or key.
+- browser_hover: Hover over an element.
+- browser_scroll: Scroll the page or an element into view.
+- browser_check: Check or uncheck a checkbox or radio button.
+- browser_get_text: Get inner text or value from a selected element.
+- browser_get_attr: Get an HTML attribute value from a selected element.
+- browser_extract_table: Extract HTML table rows as structured data.
+- browser_find_text: Search for text on the current page and return context.
+- browser_upload: Upload a local file through a file input.
+- browser_dialog: Handle the next browser alert, confirm, or prompt.
+- browser_pdf: Save the current page as a PDF.
+- browser_read_emails: Read emails from Gmail or webmail in the browser.
+- browser_click_email: Open a Gmail email by inbox position.
+- browser_compose_reply: Reply to the currently open Gmail email.
+
+================================================================================
+2. Local RAG / Knowledge Base - score 92/100
+Source: server/tools/rag.ts
+Build signal: 481 source lines, embeddings, paragraph-aware chunking, content-hash incremental indexing, local index persistence, semantic search with chunk citations, status/clear operations, URL indexing, and auto-context support.
+Tools:
+- rag_index: Index a file or directory into the local private knowledge base.
+- rag_search: Semantic search across the indexed knowledge base.
+- rag_status: Show statistics about indexed files and chunks.
+- rag_clear: Remove a file from the index or clear the full index.
+- rag_index_url: Fetch a web page and index its content for semantic search.
+
+================================================================================
+3. Advanced Browser Automation - score 90/100
+Source: server/tools/playwright_adv.ts
+Build signal: 462 source lines, encrypted credential vault, stealth patching, DOM watching, action recording, single-listener network capture, filtered API response capture, and JSON export.
+Tools:
+- browser_vault_save: Securely save login credentials for a site.
+- browser_vault_list: List saved sites and usernames without passwords.
+- browser_login: Auto-fill and submit login credentials from the vault.
+- browser_stealth: Enable browser stealth mode to reduce automation fingerprints.
+- browser_watch: Watch a CSS selector for changes.
+- browser_record_start: Start recording browser actions.
+- browser_record_stop: Stop recording and return captured browser tool calls.
+- browser_network_capture: Capture XHR/fetch API responses from the page.
+
+================================================================================
+4. Coding Toolkit - score 87/100
+Source: server/tools/coding.ts
+Build signal: 418 source lines, language-aware execution/linting with configurable timeouts, editor integration, search, diff, patching with backups, TODO scanning, and project stats.
+Tools:
+- run_code: Execute a code file and return output.
+- lint_code: Run type-checking or linting on a file or directory.
+- open_in_editor: Open a file or folder in VS Code.
+- code_search: Search for text or regex across files.
+- diff_files: Show a unified diff between two files.
+- patch_file: Apply a unified diff patch and save a backup.
+- code_todos: Scan code comments for TODO/FIXME/HACK/BUG/NOTE/XXX.
+- code_stats: Count lines, files, and file types in a directory.
+
+================================================================================
+5. Web Scraper and Monitor - score 85/100
+Source: server/tools/scraper.ts
+Build signal: 470 source lines, validated CSS selector maps, bounded multi-page crawling with page reports, parallel URL scraping, CSV/JSON export metadata, persistent monitor state, and increase/decrease-aware change detection.
+Tools:
+- web_scrape: Extract structured data from a web page using CSS selectors.
+- web_scrape_pages: Scrape multiple pages by following next-page links.
+- web_scrape_list: Scrape multiple URLs in parallel and aggregate results.
+- web_monitor: Monitor a web page selector for changes.
+- web_check_monitor: Manually check a web monitor and compare state.
+- web_list_monitors: List active web monitors.
+
+================================================================================
+6. User Files and Folders - score 78/100
+Source: server/tools/userfiles.ts
+Build signal: 399 source lines, broad file/folder operations outside the workspace, path expansion, dry-run previews, optional SHA-256 metadata, bounded reads/searches, recursive copy/delete, and Explorer integration.
+Tools:
+- file_read: Read a file anywhere on the user machine.
+- file_write: Write a file anywhere on the user machine.
+- file_list: List a directory.
+- file_move: Move or rename a file or folder.
+- file_delete: Delete a file.
+- file_search: Search text content across files in a directory.
+- file_info: Get file metadata.
+- folder_create: Create a folder, including parent folders.
+- folder_delete: Delete a folder recursively.
+- folder_copy: Copy a folder recursively.
+- open_in_explorer: Open a file or folder in Windows Explorer.
+
+================================================================================
+7. Outlook / Email / Calendar - score 76/100
+Source: server/tools/outlook.ts
+Build signal: 351 source lines, COM/browser email paths, provider detection, draft-first Outlook send flow, safer PowerShell escaping, bounded inbox/search reads, and conflict-aware calendar creation.
+Tools:
+- compose_email: Open a web email compose window with optional prefilled fields.
+- detect_email_provider: Use vision to detect the active email provider.
+- email_read: Read Outlook inbox emails.
+- email_send: Compose an Outlook email draft by default, with explicit send_now support.
+- email_search: Search Outlook emails by keyword.
+- calendar_read: Read upcoming Outlook calendar events.
+- calendar_create: Create an Outlook calendar event with default conflict detection.
+
+================================================================================
+8. Task Manager and Daily Briefing - score 72/100
+Source: server/tools/tasks.ts
+Build signal: 362 source lines, persistent task storage, short IDs, filters, search, sorting, recurring tasks, snooze, priorities, tags, natural-language due dates, and briefing generation.
+Tools:
+- task_add: Add a to-do item.
+- task_list: List and filter tasks.
+- task_done: Mark a task as complete.
+- task_delete: Delete a task.
+- task_update: Update task fields.
+- daily_briefing: Generate overdue/today/upcoming task briefing.
+
+================================================================================
+9. GitHub Integration - score 70/100
+Source: server/tools/github.ts
+Build signal: 332 source lines, token persistence, auth/rate-limit diagnostics, authenticated GitHub REST calls, bounded pagination, repository/issues/PRs/search workflows, and issue creation.
+Tools:
+- gh_set_token: Save a GitHub personal access token.
+- gh_auth_status: Check GitHub token health, scopes, authenticated user, and rate limit status.
+- gh_repos: List GitHub repositories.
+- gh_issues: List repository issues.
+- gh_prs: List repository pull requests.
+- gh_create_issue: Create a GitHub issue.
+- gh_repo_info: Get repository details.
+- gh_search: Search GitHub repositories, issues, or code.
+
+================================================================================
+10. Browser Discovery and Web Fetch - score 68/100
+Source: server/tools/browser.ts
+Build signal: 229 source lines, Windows browser tab discovery, URL opening, page text fetch, and tab focus across major browsers.
+Tools:
+- open_browser: Open a URL in the default browser.
+- fetch_webpage: Fetch visible text from a web page.
+- focus_tab: Focus a browser tab by partial title.
+- list_tabs: List open browser tabs across Chrome, Edge, Firefox, and Brave.
+
+================================================================================
+11. Windows System Tools - score 66/100
+Source: server/tools/system.ts
+Build signal: 248 source lines, app launching, screenshots, clipboard, speech, image generation, and native notifications.
+Tools:
+- open_app: Open a Windows application or file.
+- take_screenshot: Capture the full screen as a PNG.
+- clipboard_read: Read text from the clipboard.
+- clipboard_write: Write text to the clipboard.
+- speak: Speak text with Windows text-to-speech.
+- generate_image: Generate an image from a text prompt and save it.
+- notify: Send a Windows notification.
+
+================================================================================
+12. Desktop Automation - score 64/100
+Source: server/tools/desktop.ts
+Build signal: 233 source lines, coordinate clicks, text input, keyboard shortcuts, window discovery/focus, cursor position, and scrolling.
+Tools:
+- desktop_click: Click at screen coordinates.
+- desktop_type: Type text into the focused window.
+- desktop_send_keys: Send keyboard shortcuts to the focused window.
+- desktop_find_window: Find and focus a window by title.
+- desktop_list_windows: List open windows.
+- desktop_get_cursor_pos: Get current cursor coordinates.
+- desktop_scroll: Scroll at screen coordinates.
+
+================================================================================
+13. Scheduler - score 63/100
+Source: server/tools/scheduler.ts
+Build signal: 205 source lines, cron scheduling, persistent schedule storage, background task runner integration, cancellation, listing, and manual triggering.
+Tools:
+- schedule_task: Schedule an agent task on a cron expression.
+- list_schedules: List scheduled tasks and status.
+- cancel_schedule: Cancel and delete a scheduled task.
+- run_schedule_now: Trigger a scheduled task immediately.
+
+================================================================================
+14. Git Toolkit - score 60/100
+Source: server/tools/git.ts
+Build signal: 190 source lines, repository path handling and common git workflows around status, diff, log, commits, pushes, branches, checkout, and clone.
+Tools:
+- git_status: Show working tree status.
+- git_diff: Show unstaged/staged changes or a file diff.
+- git_log: Show recent commit history.
+- git_commit: Stage all changes and create a commit.
+- git_push: Push commits to a remote.
+- git_checkout: Switch to or create a branch.
+- git_branch: List local branches.
+- git_clone: Clone a remote repository.
+
+================================================================================
+15. Long-Term Semantic Memory - score 58/100
+Source: server/tools/longmem.ts
+Build signal: 183 source lines, persistent memory entries, semantic-style recall, listing, deletion, IDs, timestamps, and lightweight scoring.
+Tools:
+- mem_save: Save a fact to long-term memory.
+- mem_recall: Recall relevant stored memories by meaning.
+- mem_list: List stored memories.
+- mem_forget: Delete a memory by ID.
+
+================================================================================
+16. Media Tools - score 56/100
+Source: server/tools/media.ts
+Build signal: 150 source lines, ffmpeg-backed slideshow creation, screen recording, video conversion, trimming, resizing, and Desktop outputs.
+Tools:
+- create_slideshow: Create a video slideshow from images.
+- record_screen: Record the screen for a set duration.
+- convert_video: Convert, trim, or resize a video.
+
+================================================================================
+17. Preview / Approval Workflow - score 55/100
+Source: server/tools/preview.ts
+Build signal: 146 source lines, queued file edits/commands, diff preview, apply/discard state, and command approval flow.
+Tools:
+- preview_write: Queue a file change for user review before saving.
+- preview_exec: Queue a shell command for user approval before running.
+
+================================================================================
+18. Vision Tools - score 54/100
+Source: server/tools/vision.ts
+Build signal: 146 source lines, local vision model calls, screenshot capture, image analysis prompts, and OCR-like screen reading.
+Tools:
+- analyze_image: Analyze an image with a local vision AI model.
+- screen_read: Screenshot and analyze the current screen.
+
+================================================================================
+19. System Monitor - score 52/100
+Source: server/tools/sysmon.ts
+Build signal: 145 source lines, CPU/RAM/disk stats, process listing, process killing, PowerShell execution, and environment variable access.
+Tools:
+- sys_stats: Get real-time system stats.
+- sys_processes: List running processes.
+- sys_kill: Kill a process by name or PID.
+- sys_run: Run a PowerShell command and return output.
+- sys_env: Get or set Windows environment variables.
+
+================================================================================
+20. Persistent Python REPL - score 50/100
+Source: server/tools/python_repl.ts
+Build signal: 137 source lines, persistent Python subprocess/session state, execution, reset, and working-directory support.
+Tools:
+- python_exec: Execute Python code in a persistent REPL.
+- python_reset: Reset the Python REPL session.
+
+================================================================================
+21. Workspace Filesystem - score 47/100
+Source: server/tools/filesystem.ts
+Build signal: 128 source lines, workspace-root access control, file read/write/list, and PDF text extraction.
+Tools:
+- write_file: Create or overwrite a workspace file.
+- read_file: Read a workspace file.
+- list_directory: List a workspace directory.
+- read_pdf: Extract text from a PDF.
+
+================================================================================
+22. Multi-Agent Orchestration - score 45/100
+Source: server/tools/multiagent.ts
+Build signal: 102 source lines, runner initialization, single-agent task spawning, parallel agent execution, and combined result handling.
+Tools:
+- agent_run: Spawn an independent sub-agent for a task.
+- agent_parallel: Run multiple sub-agents in parallel.
+
+================================================================================
+23. Whisper Audio Transcription - score 43/100
+Source: server/tools/whisper.ts
+Build signal: 96 source lines, audio transcription through Python Whisper/faster-whisper and package installation helper.
+Tools:
+- transcribe_audio: Transcribe an audio file to text.
+- install_whisper: Install faster-whisper for transcription support.
+
+================================================================================
+24. HTTP Client - score 40/100
+Source: server/tools/http.ts
+Build signal: 98 source lines, arbitrary method support, headers/body/auth handling, response headers, status codes, and body output.
+Tools:
+- http_request: Make a raw HTTP request.
+
+================================================================================
+25. SQLite Database Tools - score 38/100
+Source: server/tools/database.ts
+Build signal: 81 source lines, SQLite command execution through CLI, query/execute separation, database path handling, and JSON row output.
+Tools:
+- db_query: Run a SELECT query on a SQLite database.
+- db_execute: Execute a SQLite statement.
+
+================================================================================
+26. Conversation Memory - score 35/100
+Source: server/tools/memory.ts
+Build signal: 86 source lines, named persisted memory, key lookup, listing, and turn-to-turn state support.
+Tools:
+- memory_write: Persist named information across conversation turns.
+- memory_read: Read stored conversation memories.
+
+================================================================================
+27. Terminal Tool - score 32/100
+Source: server/tools/terminal.ts
+Build signal: 86 source lines, PowerShell command execution, cwd handling, configurable timeout/output limits, truncation metadata, and shell access.
+Tools:
+- run_terminal: Execute a PowerShell command with optional cwd, timeout, and output-size controls.
+
+================================================================================
+28. Web Search - score 28/100
+Source: server/tools/search.ts
+Build signal: 59 source lines, DuckDuckGo-backed web search and result summarization. Useful, but the thinnest source implementation in the current tool set.
+Tools:
+- search_web: Search the web and return summarized results.
+
+================================================================================
+Summary by source module, strongest to weakest:
+1. playwright.ts - 31 tools - score 100
+2. rag.ts - 5 tools - score 92
+3. playwright_adv.ts - 8 tools - score 90
+4. coding.ts - 8 tools - score 87
+5. scraper.ts - 6 tools - score 85
+6. userfiles.ts - 11 tools - score 78
+7. outlook.ts - 7 tools - score 76
+8. tasks.ts - 6 tools - score 72
+9. github.ts - 8 tools - score 70
+10. browser.ts - 4 tools - score 68
+11. system.ts - 7 tools - score 66
+12. desktop.ts - 7 tools - score 64
+13. scheduler.ts - 4 tools - score 63
+14. git.ts - 8 tools - score 60
+15. longmem.ts - 4 tools - score 58
+16. media.ts - 3 tools - score 56
+17. preview.ts - 2 tools - score 55
+18. vision.ts - 2 tools - score 54
+19. sysmon.ts - 5 tools - score 52
+20. python_repl.ts - 2 tools - score 50
+21. filesystem.ts - 4 tools - score 47
+22. multiagent.ts - 2 tools - score 45
+23. whisper.ts - 2 tools - score 43
+24. http.ts - 1 tool - score 40
+25. database.ts - 2 tools - score 38
+26. memory.ts - 2 tools - score 35
+27. terminal.ts - 1 tool - score 32
+28. search.ts - 1 tool - score 28

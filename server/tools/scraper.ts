@@ -29,6 +29,44 @@ function stripHtml(html: string): string {
     .slice(0, 30000)
 }
 
+type ScrapeFields = Record<string, string>
+
+function parsePositiveInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = parseInt(value ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function safeDesktopFilename(name: string | undefined, fallback: string, ext: string): string {
+  const base = (name?.trim() || fallback).replace(/\.[a-z0-9]+$/i, '').replace(/[^\w-]/g, '_').slice(0, 80) || fallback
+  return join(homedir(), 'Desktop', `${base}.${ext}`)
+}
+
+function parseFields(raw: string | undefined, maxFields = 50): { fields?: ScrapeFields; error?: string } {
+  if (!raw) return { error: 'fields is required' }
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) }
+  catch { return { error: 'fields must be valid JSON object, e.g. {"title":"h1","price":".price"}' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: 'fields must be a JSON object mapping field names to CSS selectors' }
+  const entries = Object.entries(parsed as Record<string, unknown>)
+  if (!entries.length) return { error: 'fields must include at least one selector' }
+  if (entries.length > maxFields) return { error: `fields may include at most ${maxFields} selectors` }
+  const fields: ScrapeFields = {}
+  for (const [key, selector] of entries) {
+    const fieldName = key.trim()
+    if (!fieldName || fieldName.length > 80) return { error: `invalid field name: "${key}"` }
+    if (typeof selector !== 'string' || !selector.trim()) return { error: `selector for "${fieldName}" must be a non-empty string` }
+    if (selector.length > 500) return { error: `selector for "${fieldName}" is too long` }
+    fields[fieldName] = selector.trim()
+  }
+  return { fields }
+}
+
+function extractNumber(value: string | null | undefined): number | null {
+  const match = (value ?? '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/)
+  return match ? Number(match[0]) : null
+}
+
 // ── web_scrape ─────────────────────────────────────────────────────────────────
 
 export const webScrapeDefinition: ToolDefinition = {
@@ -52,9 +90,9 @@ export const webScrapeDefinition: ToolDefinition = {
 
 export const webScrape: ToolHandler = async (args) => {
   if (!args.url || !args.fields) return 'Error: url and fields required'
-  let fields: Record<string, string>
-  try { fields = JSON.parse(args.fields) as Record<string, string> }
-  catch { return 'Error: fields must be valid JSON object, e.g. {"title":"h1","price":".price"}' }
+  const parsedFields = parseFields(args.fields)
+  if (parsedFields.error) return `Error: ${parsedFields.error}`
+  const fields = parsedFields.fields!
 
   try {
     const page = await getPage()
@@ -87,7 +125,7 @@ export const webScrape: ToolHandler = async (args) => {
 
     const json = JSON.stringify(result, null, 2)
     if (args.output_file) {
-      const dest = join(homedir(), 'Desktop', `${args.output_file}.json`)
+      const dest = safeDesktopFilename(args.output_file, `scrape_${Date.now()}`, 'json')
       await writeFile(dest, json, 'utf-8')
       return `Scraped ${Object.keys(result as object).length} fields. Saved to ${dest}\n\n${json}`
     }
@@ -127,19 +165,27 @@ export const webScrapePagesDefinition: ToolDefinition = {
 
 export const webScrapePages: ToolHandler = async (args) => {
   if (!args.url || !args.fields || !args.next_selector) return 'Error: url, fields, and next_selector required'
-  let fields: Record<string, string>
-  try { fields = JSON.parse(args.fields) as Record<string, string> }
-  catch { return 'Error: fields must be valid JSON' }
+  const parsedFields = parseFields(args.fields)
+  if (parsedFields.error) return `Error: ${parsedFields.error}`
+  const fields = parsedFields.fields!
 
-  const maxPages = parseInt(args.max_pages ?? '5', 10) || 5
+  const maxPages = parsePositiveInt(args.max_pages, 5, 1, 100)
   const allResults: unknown[] = []
+  const pageReports: Array<{ page: number; url: string; results: number; next?: string; stopped?: string }> = []
+  const visitedUrls = new Set<string>()
 
   try {
     const page = await getPage()
     let currentUrl = args.url
     for (let p = 0; p < maxPages; p++) {
+      if (visitedUrls.has(currentUrl)) {
+        pageReports.push({ page: p + 1, url: currentUrl, results: 0, stopped: 'detected repeated URL' })
+        break
+      }
+      visitedUrls.add(currentUrl)
       await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 })
       await page.waitForTimeout(800)
+      const beforeCount = allResults.length
 
       if (args.row_selector) {
         // Row-based extraction
@@ -174,22 +220,29 @@ export const webScrapePages: ToolHandler = async (args) => {
       // Try to click Next
       const nextEl = await page.locator(args.next_selector).first()
       const visible = await nextEl.isVisible().catch(() => false)
-      if (!visible) { console.log(`[scraper] No next button on page ${p + 1}`); break }
+      if (!visible) {
+        pageReports.push({ page: p + 1, url: currentUrl, results: allResults.length - beforeCount, stopped: 'next selector not visible' })
+        break
+      }
       const nextUrl = await nextEl.getAttribute('href').catch(() => null)
       if (nextUrl) {
-        currentUrl = nextUrl.startsWith('http') ? nextUrl : new URL(nextUrl, currentUrl).toString()
+        const resolved = nextUrl.startsWith('http') ? nextUrl : new URL(nextUrl, currentUrl).toString()
+        pageReports.push({ page: p + 1, url: currentUrl, results: allResults.length - beforeCount, next: resolved })
+        currentUrl = resolved
       } else {
         await nextEl.click()
         await page.waitForTimeout(1500)
+        pageReports.push({ page: p + 1, url: currentUrl, results: allResults.length - beforeCount, next: page.url() })
         currentUrl = page.url()
       }
     }
 
-    const json = JSON.stringify(allResults, null, 2)
+    const payload = { meta: { started_url: args.url, max_pages: maxPages, scraped_at: new Date().toISOString(), page_reports: pageReports }, results: allResults }
+    const json = JSON.stringify(payload, null, 2)
     if (args.output_file) {
-      const dest = join(homedir(), 'Desktop', `${args.output_file}.json`)
+      const dest = safeDesktopFilename(args.output_file, `scrape_pages_${Date.now()}`, 'json')
       await writeFile(dest, json, 'utf-8')
-      return `Scraped ${allResults.length} results across up to ${maxPages} pages. Saved to ${dest}`
+      return `Scraped ${allResults.length} results across ${pageReports.length} page check(s). Saved to ${dest}`
     }
     return `${allResults.length} results:\n${json.slice(0, 8000)}`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
@@ -218,9 +271,12 @@ export const webScrapeListDefinition: ToolDefinition = {
 export const webScrapeList: ToolHandler = async (args) => {
   if (!args.urls || !args.fields) return 'Error: urls and fields required'
   let urls: string[]
-  let fields: Record<string, string>
-  try { urls = JSON.parse(args.urls) as string[]; fields = JSON.parse(args.fields) as Record<string, string> }
-  catch { return 'Error: urls and fields must be valid JSON' }
+  try { urls = JSON.parse(args.urls) as string[] }
+  catch { return 'Error: urls must be a valid JSON array' }
+  const parsedFields = parseFields(args.fields)
+  if (parsedFields.error) return `Error: ${parsedFields.error}`
+  const fields = parsedFields.fields!
+  if (!Array.isArray(urls) || !urls.every(url => typeof url === 'string' && /^https?:\/\//i.test(url))) return 'Error: urls must be a JSON array of http(s) URLs'
   if (!urls.length) return 'Error: urls array is empty'
 
   try {
@@ -251,14 +307,14 @@ export const webScrapeList: ToolHandler = async (args) => {
 
     const fmt = args.format === 'csv' ? 'csv' : 'json'
     const name = args.output_file ?? `scrape_${Date.now()}`
-    const dest = join(homedir(), 'Desktop', `${name}.${fmt}`)
+    const dest = safeDesktopFilename(name, `scrape_${Date.now()}`, fmt)
 
     if (fmt === 'csv') {
       const headers = ['_url', ...Object.keys(fields)]
       const rows = results.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))
       await writeFile(dest, [headers.join(','), ...rows].join('\n'), 'utf-8')
     } else {
-      await writeFile(dest, JSON.stringify(results, null, 2), 'utf-8')
+      await writeFile(dest, JSON.stringify({ meta: { urls: urls.length, fields: Object.keys(fields), scraped_at: new Date().toISOString() }, results }, null, 2), 'utf-8')
     }
 
     return `Scraped ${results.length} URLs. Saved to ${dest}`
@@ -315,7 +371,9 @@ async function saveMonitors(monitors: MonitorEntry[]): Promise<void> {
 
 export const webMonitor: ToolHandler = async (args) => {
   if (!args.url || !args.selector) return 'Error: url and selector required'
-  const intervalMins = parseInt(args.interval_mins ?? '30', 10) || 30
+  const intervalMins = parsePositiveInt(args.interval_mins, 30, 1, 1440)
+  const notifyOn = args.notify_on ?? 'any_change'
+  if (!['any_change', 'decrease', 'increase'].includes(notifyOn)) return 'Error: notify_on must be any_change, decrease, or increase'
   const monitors = await loadMonitors()
   const id = Date.now().toString(36)
   monitors.push({
@@ -324,7 +382,7 @@ export const webMonitor: ToolHandler = async (args) => {
     url: args.url,
     selector: args.selector,
     interval_mins: intervalMins,
-    notify_on: args.notify_on ?? 'any_change',
+    notify_on: notifyOn,
     last_value: null,
     last_checked: null,
     created: new Date().toISOString(),
@@ -375,7 +433,17 @@ export const webCheckMonitor: ToolHandler = async (args) => {
     if (prev === null) return `First check for "${mon.name}".\nCurrent value: ${current ?? '(not found)'}`
     if (current === prev) return `No change for "${mon.name}".\nValue: ${current}`
 
-    const changed = `⚠️ CHANGED: "${mon.name}"\nPrevious: ${prev}\nCurrent:  ${current}`
+    if (mon.notify_on === 'increase' || mon.notify_on === 'decrease') {
+      const previousNumber = extractNumber(prev)
+      const currentNumber = extractNumber(current)
+      if (previousNumber === null || currentNumber === null) {
+        return `Value changed for "${mon.name}", but numeric comparison was not possible.\nPrevious: ${prev}\nCurrent:  ${current}`
+      }
+      if (mon.notify_on === 'increase' && currentNumber <= previousNumber) return `Changed, but did not increase for "${mon.name}".\nPrevious: ${prev}\nCurrent:  ${current}`
+      if (mon.notify_on === 'decrease' && currentNumber >= previousNumber) return `Changed, but did not decrease for "${mon.name}".\nPrevious: ${prev}\nCurrent:  ${current}`
+    }
+
+    const changed = `CHANGED: "${mon.name}"\nPrevious: ${prev}\nCurrent:  ${current}\nRule: ${mon.notify_on}`
     // Attempt desktop notification
     await runTerminal({ command: `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${changed.replace(/'/g, "''")}','Ultron Web Monitor')` }).catch(() => {})
     return changed

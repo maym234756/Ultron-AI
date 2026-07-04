@@ -2,17 +2,59 @@
   "name": "ultron",
   "private": true,
   "version": "0.0.0",
+  "description": "A local AI desktop assistant powered by Ollama.",
+  "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:server:dev\" \"npm:web:dev\"",
     "web:dev": "vite",
     "server:dev": "tsx watch server/index.ts",
     "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "desktop:build": "npm run build && npm run build:electron",
+    "desktop:dist": "node scripts/build-desktop.mjs",
+    "desktop:pack": "npm run desktop:build && electron-builder --win dir --x64",
+    "test:router": "tsx scripts/router-eval.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node dist-server/index.js",
     "tray": "electron electron/main.ts",
     "tray:dev": "concurrently -k -n api,web,tray -c cyan,green,yellow \"npm:server:dev\" \"npm:web:dev\" \"sleep 4 && electron electron/main.ts\""
+  },
+  "build": {
+    "appId": "com.ultron.localassistant",
+    "productName": "Ultron",
+    "asar": true,
+    "directories": {
+      "output": "desktop-release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-server/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Ultron-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
     "@types/katex": "^0.16.8",
@@ -43,6 +85,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^10.0.3",
     "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "oxlint": "^1.71.0",
     "tsx": "^4.22.4",
     "typescript": "~6.0.2",

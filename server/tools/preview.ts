@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { unlink, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import type { ToolDefinition, ToolHandler } from './types.js'
@@ -18,7 +18,14 @@ export interface PendingPreview {
   createdAt: number
 }
 
+export interface AppliedPreview extends PendingPreview {
+  appliedAt: number
+  rolledBackAt?: number
+  rollbackAvailable: boolean
+}
+
 const _previews = new Map<string, PendingPreview>()
+const _appliedPreviews: AppliedPreview[] = []
 
 function detectLang(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
@@ -37,20 +44,28 @@ export function getPreviews(): PendingPreview[] {
   return [..._previews.values()].sort((a, b) => a.createdAt - b.createdAt)
 }
 
+/** Return applied previews newest-first so self-upgrade can offer rollback. */
+export function getAppliedPreviews(): AppliedPreview[] {
+  return _appliedPreviews.slice(0, 50)
+}
+
 /** Apply a preview: write the file or execute the command */
 export async function applyPreview(id: string): Promise<string> {
   const p = _previews.get(id)
   if (!p) return JSON.stringify({ error: 'Preview not found' })
-  _previews.delete(id)
 
   if (p.type === 'file' && p.path && p.newContent !== undefined) {
     await writeFile(p.path, p.newContent, 'utf-8')
+    _previews.delete(id)
+    _appliedPreviews.unshift({ ...p, appliedAt: Date.now(), rollbackAvailable: true })
     return JSON.stringify({ ok: true, message: `Written: ${p.path}` })
   }
 
   if (p.type === 'exec' && p.command) {
     try {
       const out = execSync(p.command, { encoding: 'utf-8', timeout: 30_000, shell: 'powershell.exe' })
+      _previews.delete(id)
+      _appliedPreviews.unshift({ ...p, appliedAt: Date.now(), rollbackAvailable: false })
       return JSON.stringify({ ok: true, output: out || '(no output)' })
     } catch (err) {
       return JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) })
@@ -58,6 +73,21 @@ export async function applyPreview(id: string): Promise<string> {
   }
 
   return JSON.stringify({ error: 'Nothing to apply' })
+}
+
+/** Roll back an applied file preview to the exact previous content. */
+export async function rollbackPreview(id: string): Promise<string> {
+  const idx = _appliedPreviews.findIndex(p => p.id === id)
+  const p = idx >= 0 ? _appliedPreviews[idx] : null
+  if (!p) return JSON.stringify({ ok: false, error: 'Applied preview not found' })
+  if (!p.rollbackAvailable || p.type !== 'file' || !p.path) return JSON.stringify({ ok: false, error: 'Preview cannot be rolled back automatically' })
+  if (p.rolledBackAt) return JSON.stringify({ ok: false, error: 'Preview was already rolled back' })
+
+  if (p.oldContent === null) await unlink(p.path).catch(() => undefined)
+  else await writeFile(p.path, p.oldContent ?? '', 'utf-8')
+
+  _appliedPreviews[idx] = { ...p, rolledBackAt: Date.now(), rollbackAvailable: false }
+  return JSON.stringify({ ok: true, message: p.oldContent === null ? `Deleted new file: ${p.path}` : `Restored previous content: ${p.path}` })
 }
 
 /** Discard a preview without applying */

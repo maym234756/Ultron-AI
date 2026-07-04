@@ -11,6 +11,14 @@ import {
   Download,
   Eye,
   EyeOff,
+  Activity,
+  Loader,
+  ListTodo,
+  PhoneCall,
+  PhoneOff,
+  Cpu,
+  Scale,
+  Wand2,
   Mic,
   MicOff,
   Moon,
@@ -34,17 +42,64 @@ import {
   Zap,
 } from 'lucide-react'
 import { AgentTrace } from './components/AgentTrace'
+import { ComparePanel } from './components/ComparePanel'
+import { ConnectorsPanel } from './components/ConnectorsPanel'
 import { HealerPanel } from './components/HealerPanel'
+import { SelfUpgradePanel } from './components/SelfUpgradePanel'
+import { TaskPanel } from './components/TaskPanel'
+import { HealthPanel } from './components/HealthPanel'
 import { MessageContent } from './components/MessageContent'
 import { HistoryPanel } from './components/HistoryPanel'
 import { MemoryPanel } from './components/MemoryPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { TemplatesPanel } from './components/TemplatesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
-import type { AgentEvent, AppSettings, AttachedFile, Message, ObserverStatus, PendingQuestion } from './types'
+import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
+import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
+import type { AgentEvent, AnswerStyle, AppSettings, AttachedFile, HistoryMeta, IntelligenceMode, Message, ObserverStatus, PendingQuestion, Prediction, PromptRoute, Task } from './types'
+import { routePrompt } from './lib/promptRouter'
+import { recordTelemetry } from './lib/telemetry'
+import type { PendingTelemetry } from './lib/telemetry'
 import './App.css'
 
 type EngineStatus = 'checking' | 'online' | 'offline'
+
+const DEFAULT_SETTINGS: AppSettings = {
+  temperature: 0.35,
+  maxIterations: 20,
+  systemPrompt: '',
+  fastModel: '',
+  intelligenceMode: 'balanced',
+  autoRoute: true,
+  autoIntelligence: true,
+  observationEnabled: true,
+  observationMode: 'fast',
+  observationIntervalSec: 45,
+  domainExpertise: '',
+  numCtx: 8192,
+  answerStyle: 'detailed',
+}
+
+const ANSWER_STYLE_LABEL: Record<AnswerStyle, string> = {
+  concise: 'Concise',
+  detailed: 'Detailed',
+  technical: 'Technical',
+  executive: 'Executive',
+}
+
+const INTELLIGENCE_LABEL: Record<IntelligenceMode, string> = {
+  instant: 'Instant',
+  balanced: 'Balanced',
+  deep: 'Deep',
+  research: 'Research',
+}
+
+const ROUTE_SCORE_LABELS: Array<[keyof PromptRoute['scores'], string]> = [
+  ['agent', 'Agent'],
+  ['chat', 'Chat'],
+  ['complexity', 'Complexity'],
+  ['freshness', 'Freshness'],
+]
 
 function loadSettings(): AppSettings {
   try {
@@ -52,10 +107,10 @@ function loadSettings(): AppSettings {
     if (raw) {
       const parsed = JSON.parse(raw) as AppSettings
       // Back-fill defaults for fields added after initial save
-      return { temperature: 0.35, maxIterations: 20, systemPrompt: '', fastModel: '', observationEnabled: true, observationMode: 'fast', observationIntervalSec: 45, domainExpertise: '', numCtx: 8192, ...parsed }
+      return { ...DEFAULT_SETTINGS, ...parsed }
     }
   } catch { /* ignore */ }
-  return { temperature: 0.35, maxIterations: 20, systemPrompt: '', fastModel: '', observationEnabled: true, observationMode: 'fast', observationIntervalSec: 45, domainExpertise: '', numCtx: 8192 }
+  return DEFAULT_SETTINGS
 }
 
 function loadDarkMode(): boolean {
@@ -107,6 +162,7 @@ const KEYBOARD_SHORTCUTS = [
   { key: 'Ctrl+B',      desc: 'Toggle sidebar' },
   { key: 'Ctrl+F',      desc: 'Search in conversation' },
   { key: 'Ctrl+K',      desc: 'Focus composer' },
+  { key: 'Ctrl+M',      desc: 'Open Model Compare' },
   { key: 'Esc',         desc: 'Stop streaming' },
   { key: '?',           desc: 'Show this help' },
   { key: '/',           desc: 'Open slash command menu' },
@@ -122,25 +178,22 @@ function relativeTime(ts: number): string {
 }
 
 const QUICK_ACTIONS = [
-  { emoji: '💻', label: 'Review my code', prompt: 'Review the code I\'m working on and suggest improvements.' },
-  { emoji: '🔍', label: 'Search the web', prompt: 'Search the web for: ' },
-  { emoji: '🐛', label: 'Debug an error', prompt: 'Help me debug this error:\n\n' },
-  { emoji: '📝', label: 'Explain this', prompt: 'Explain this clearly:\n\n' },
-  { emoji: '⚙️', label: 'System stats', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
-  { emoji: '🌐', label: 'Summarize URL', prompt: 'Fetch and summarize the content of: ' },
+  { emoji: '💻', label: 'Review my code', desc: 'Find bugs, suggestions, and best practices', prompt: 'Review the code I\'m working on and suggest improvements.' },
+  { emoji: '🔍', label: 'Search the web', desc: 'Find up-to-date information online', prompt: 'Search the web for: ' },
+  { emoji: '🐛', label: 'Debug an error', desc: 'Diagnose and fix errors in your code', prompt: 'Help me debug this error:\n\n' },
+  { emoji: '📝', label: 'Explain this', desc: 'Clear explanations on any topic', prompt: 'Explain this clearly:\n\n' },
+  { emoji: '⚙️', label: 'System stats', desc: 'CPU, RAM, disk, and running processes', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
+  { emoji: '🌐', label: 'Summarize URL', desc: 'Fetch and summarize any web page', prompt: 'Fetch and summarize the content of: ' },
 ]
 
 const AGENT_QUICK_ACTIONS = [
-  { emoji: '📂', label: 'Explore project', prompt: 'List this project\'s files and summarise what each top-level folder does.' },
-  { emoji: '🔨', label: 'Build & fix errors', prompt: 'Run the build, find any errors, and fix them.' },
-  { emoji: '🌐', label: 'Latest Ollama news', prompt: 'Search the web for the latest Ollama model releases and tell me which ones to pull.' },
-  { emoji: '📊', label: 'System monitor', prompt: 'Show my system stats and top CPU/RAM processes.' },
-  { emoji: '🧠', label: 'Recall memories', prompt: 'List everything you remember about me and my projects.' },
-  { emoji: '📋', label: 'Daily briefing', prompt: 'Give me my daily briefing — tasks, schedule, and anything I should know.' },
+  { emoji: '📂', label: 'Explore project', desc: 'Map folder structure and purpose of each module', prompt: 'List this project\'s files and summarise what each top-level folder does.' },
+  { emoji: '🔨', label: 'Build & fix errors', desc: 'Run the build, catch errors, auto-fix', prompt: 'Run the build, find any errors, and fix them.' },
+  { emoji: '🌐', label: 'Latest Ollama news', desc: 'Find new models worth pulling locally', prompt: 'Search the web for the latest Ollama model releases and tell me which ones to pull.' },
+  { emoji: '📊', label: 'System monitor', desc: 'Live CPU, RAM, and top processes', prompt: 'Show my system stats and top CPU/RAM processes.' },
+  { emoji: '🧠', label: 'Recall memories', desc: 'Review everything Ultron remembers about you', prompt: 'List everything you remember about me and my projects.' },
+  { emoji: '📋', label: 'Daily briefing', desc: 'Tasks, schedule, and system health', prompt: 'Give me my daily briefing — tasks, schedule, and anything I should know.' },
 ]
-
-const starterPrompts: string[] = [] // kept for reference; welcome screen uses QUICK_ACTIONS
-const agentStarterPrompts: string[] = []
 
 // In dev, call Express directly (bypasses Vite proxy which drops SSE connections on idle).
 // CORS is open on the Express server so this works fine.
@@ -177,14 +230,31 @@ function App() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [showMemory, setShowMemory] = useState(false)
   const [showHealer, setShowHealer] = useState(false)
+  const [showHealth, setShowHealth] = useState(false)
+  const [showCompare, setShowCompare] = useState(false)
+  const [showTasks, setShowTasks] = useState(false)
+  const [showConnectors, setShowConnectors] = useState(false)
+  const [showReferenceBuilder, setShowReferenceBuilder] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [showProjectBuilder, setShowProjectBuilder] = useState(false)
+  const [voiceConvMode, setVoiceConvMode] = useState(false)
+  const [taskOverdueCount, setTaskOverdueCount] = useState(0)
+  const voiceConvRef = useRef(false)
+  const draftRef = useRef('')
+  const isStreamingRef = useRef(false)
+  const voiceTranscriptRef = useRef(false)
+  const [enhancing, setEnhancing] = useState(false)
+  const [preEnhanceDraft, setPreEnhanceDraft] = useState<string | null>(null)
   const [recentChats, setRecentChats] = useState<HistoryMeta[]>([])
   const [feedback, setFeedback] = useState<Map<string, 'up' | 'down'>>(new Map())
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set())
   const [slashMenu, setSlashMenu] = useState<string | null>(null)
   const [slashIdx, setSlashIdx] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const sendTimeRef = useRef<number | null>(null)
+  const telemetryRef = useRef<Map<string, PendingTelemetry>>(new Map())
   const sentHistoryRef = useRef<string[]>([])
   const historyIdxRef = useRef(-1)
   const currentSessionId = useRef<string | null>(null)
@@ -267,11 +337,25 @@ function App() {
       })
       .catch(() => {})
 
+    // Load overdue task count for sidebar badge
+    fetch(`${API_BASE}/api/tasks`)
+      .then(r => r.ok ? r.json() : { tasks: [] })
+      .then((d: { tasks?: Task[] }) => {
+        const today = new Date().toISOString().split('T')[0]
+        setTaskOverdueCount((d.tasks ?? []).filter(t => !t.done && !!t.due && t.due < today).length)
+      })
+      .catch(() => {})
+
     return () => {
       isMounted = false
       clearInterval(obsTimer)
     }
   }, [])
+
+  // Keep refs in sync with state (avoids stale closures inside recognition callbacks)
+  useEffect(() => { draftRef.current = draft }, [draft])
+  useEffect(() => { isStreamingRef.current = isStreaming }, [isStreaming])
+  useEffect(() => { voiceConvRef.current = voiceConvMode }, [voiceConvMode])
 
   useEffect(() => {
     if (atBottomRef.current) {
@@ -290,9 +374,31 @@ function App() {
     const lastMsg = messages[messages.length - 1]
     if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.content) return
 
-    // Generate follow-up suggestions (chat mode only, background)
-    if (!agentMode) {
-      const forFollowups = messages.slice(-4).map(m => ({ role: m.role as string, content: m.content.slice(0, 600) }))
+    // Auto-speak in voice conversation mode
+    if (voiceConvRef.current) {
+      const stripped = lastMsg.content
+        .replace(/```[\s\S]*?```/g, 'code block')
+        .replace(/[#*_`~>]/g, '')
+        .trim()
+        .slice(0, 2500)
+      window.speechSynthesis.cancel()
+      const utter = new SpeechSynthesisUtterance(stripped)
+      utter.rate = 1.05
+      setSpeakingId(lastMsg.id)
+      const afterSpeak = () => {
+        setSpeakingId(null)
+        if (voiceConvRef.current && !isStreamingRef.current) {
+          setTimeout(() => _startVoiceListen(), 600)
+        }
+      }
+      utter.onend = afterSpeak
+      utter.onerror = afterSpeak
+      window.speechSynthesis.speak(utter)
+    }
+
+    // Generate follow-up suggestions + predictive actions (chat and agent mode)
+    {
+      const forFollowups = messages.slice(-4).map(m => ({ role: m.role as string, content: m.content.slice(0, 800) }))
       const assistantId = lastMsg.id
       void fetch(`${API_BASE}/api/followups`, {
         method: 'POST',
@@ -300,11 +406,35 @@ function App() {
         body: JSON.stringify({ messages: forFollowups }),
       }).then(r => r.ok ? r.json() : null)
         .then((data: { suggestions?: string[] } | null) => {
-          if (data?.suggestions?.length) {
-            setMessages(prev => prev.map(m =>
-              m.id === assistantId ? { ...m, followups: data.suggestions } : m,
-            ))
+          if (!data?.suggestions?.length) return
+          const raw = data.suggestions
+          const followupLines: string[] = []
+          const predictionItems: Prediction[] = []
+
+          for (const line of raw) {
+            if (line.startsWith('PREDICT: ')) {
+              const rest = line.slice(9)
+              const pipeIdx = rest.indexOf(' | ')
+              if (pipeIdx > 0) {
+                const emojiLabel = rest.slice(0, pipeIdx).trim()
+                const prompt = rest.slice(pipeIdx + 3).trim()
+                const spaceIdx = emojiLabel.indexOf(' ')
+                const emoji = spaceIdx > 0 ? emojiLabel.slice(0, spaceIdx) : '▶'
+                const label = spaceIdx > 0 ? emojiLabel.slice(spaceIdx + 1).trim() : emojiLabel
+                if (prompt && label) predictionItems.push({ emoji, label, prompt })
+              }
+            } else {
+              followupLines.push(line)
+            }
           }
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId ? {
+              ...m,
+              followups: followupLines.length ? followupLines : undefined,
+              predictions: predictionItems.length ? predictionItems : undefined,
+            } : m,
+          ))
         }).catch(() => {})
     }
 
@@ -389,6 +519,11 @@ function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'b' && !inInput) {
         e.preventDefault()
         setSidebarCollapsed(c => !c)
+      }
+      // Ctrl/Cmd+M → model compare
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm' && !inInput) {
+        e.preventDefault()
+        setShowCompare(c => !c)
       }
       // ? → keyboard help modal
       if (e.key === '?' && !inInput && !e.ctrlKey && !e.metaKey) {
@@ -501,6 +636,7 @@ function App() {
     const isText = file.type.startsWith('text/') ||
       /\.(ts|tsx|js|jsx|py|md|json|yaml|yml|css|html|sh|ps1|go|rb|rs|java|c|cpp|h|sql|xml|txt|toml|env|gitignore|dockerfile)$/i.test(file.name)
 
+    if (!isImage && !isText) return null
     if (file.size > 500_000 && !isImage) return null // skip very large non-image files
 
     return new Promise<AttachedFile | null>((resolve) => {
@@ -584,7 +720,8 @@ function App() {
     } catch { /* silent */ }
   }, [])
 
-  function toggleVoice() {
+  // Internal single-shot voice toggle (used in normal mic mode)
+  function _doToggleVoice() {
     type SpeechRecAny = new () => {
       continuous: boolean; interimResults: boolean; lang: string
       start(): void; stop(): void
@@ -616,7 +753,123 @@ function App() {
     setIsListening(true)
   }
 
-  async function sendMessage(event?: FormEvent<HTMLFormElement>, promptOverride?: string, conversationOverride?: Message[]) {
+  // Start a single voice capture in conversation mode
+  function _startVoiceListen() {
+    if (!voiceConvRef.current || isStreamingRef.current) return
+    type SpeechRecAny = new () => {
+      continuous: boolean; interimResults: boolean; lang: string
+      start(): void; stop(): void
+      onresult: ((e: { results: Array<Array<{ transcript: string }>> }) => void) | null
+      onend: (() => void) | null
+    }
+    const Win = window as unknown as { SpeechRecognition?: SpeechRecAny; webkitSpeechRecognition?: SpeechRecAny }
+    const SpeechRec = Win.SpeechRecognition ?? Win.webkitSpeechRecognition
+    if (!SpeechRec) return
+
+    const recognition = new SpeechRec()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map((r) => r[0].transcript).join('')
+      setDraft(transcript)
+      draftRef.current = transcript
+      voiceTranscriptRef.current = true
+    }
+    recognition.onend = () => {
+      setIsListening(false)
+      if (voiceConvRef.current && voiceTranscriptRef.current && draftRef.current.trim() && !isStreamingRef.current) {
+        voiceTranscriptRef.current = false
+        // Submit the form — lets sendMessage pick up the current draft state
+        setTimeout(() => {
+          const form = textareaRef.current?.closest('form')
+          form?.requestSubmit()
+        }, 150)
+      } else if (voiceConvRef.current && !isStreamingRef.current) {
+        voiceTranscriptRef.current = false
+        setTimeout(() => _startVoiceListen(), 400)
+      }
+    }
+    recognition.start()
+    recognitionRef.current = recognition
+    setIsListening(true)
+  }
+
+  // Toggle hands-free conversation mode
+  function startConversation() {
+    if (voiceConvRef.current) {
+      voiceConvRef.current = false
+      setVoiceConvMode(false)
+      window.speechSynthesis.cancel()
+      const rec = recognitionRef.current as { stop(): void } | null
+      rec?.stop()
+      setIsListening(false)
+      return
+    }
+    voiceConvRef.current = true
+    setVoiceConvMode(true)
+    window.speechSynthesis.cancel()
+    setTimeout(() => _startVoiceListen(), 200)
+  }
+
+  function updateSettings(next: AppSettings) {
+    setSettings(next)
+    try { localStorage.setItem('ultron-settings', JSON.stringify(next)) } catch { /* ignore */ }
+  }
+
+  function setIntelligenceMode(mode: IntelligenceMode) {
+    updateSettings({ ...settings, intelligenceMode: mode })
+  }
+
+  function setAnswerStyle(answerStyle: AnswerStyle) {
+    updateSettings({ ...settings, answerStyle })
+  }
+
+  function reloadTaskCount() {
+    fetch(`${API_BASE}/api/tasks`)
+      .then(r => r.ok ? r.json() : { tasks: [] })
+      .then((d: { tasks?: Task[] }) => {
+        const today = new Date().toISOString().split('T')[0]
+        setTaskOverdueCount((d.tasks ?? []).filter(t => !t.done && !!t.due && t.due < today).length)
+      })
+      .catch(() => {})
+  }
+
+  async function enhancePrompt() {
+    if (!draft.trim() || enhancing || isStreaming) return
+    setEnhancing(true)
+    const original = draft
+    setPreEnhanceDraft(original)
+    try {
+      const res = await fetch(`${API_BASE}/api/enhance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: draft, model: selectedModel }),
+      })
+      if (!res.ok) throw new Error('Enhancement failed')
+      const data = await res.json() as { enhanced?: string }
+      if (data.enhanced) {
+        setDraft(data.enhanced)
+        setTimeout(() => autoResizeTextarea(), 0)
+      } else {
+        setPreEnhanceDraft(null)
+      }
+    } catch {
+      setPreEnhanceDraft(null)
+    } finally {
+      setEnhancing(false)
+    }
+  }
+
+  function undoEnhance() {
+    if (preEnhanceDraft !== null) {
+      setDraft(preEnhanceDraft)
+      setPreEnhanceDraft(null)
+      setTimeout(() => autoResizeTextarea(), 0)
+    }
+  }
+
+  async function sendMessage(event?: FormEvent<HTMLFormElement>, promptOverride?: string, conversationOverride?: Message[], routeOverride?: Partial<PromptRoute>) {
     event?.preventDefault()
     const rawContent = (promptOverride ?? draft).trim()
     const imageFiles = promptOverride ? [] : attachedFiles.filter(f => f.kind === 'image')
@@ -641,8 +894,17 @@ function App() {
       setMessageImages(prev => new Map(prev).set(userMessage.id, urls))
     }
 
-    setMessages([...conversation, { id: assistantId, role: 'assistant', content: '', agentEvents: [], timestamp: Date.now() }])
+    const baseRoute = routePrompt(rawContent, attachedFiles.length > 0, imageFiles.length > 0, settings, agentMode)
+    const route: PromptRoute = {
+      ...baseRoute,
+      ...routeOverride,
+      scores: { ...baseRoute.scores, ...routeOverride?.scores },
+      signals: routeOverride?.signals ?? baseRoute.signals,
+    }
+
+    setMessages([...conversation, { id: assistantId, role: 'assistant', content: '', agentEvents: [], timestamp: Date.now(), route }])
     setDraft('')
+    setPreEnhanceDraft(null)
     setAttachedFiles([])
     if (textareaRef.current) { textareaRef.current.style.height = 'auto' }
     setEngineError('')
@@ -650,11 +912,22 @@ function App() {
     wasStreamingRef.current = true
     atBottomRef.current = true // always scroll to bottom on new send
     sendTimeRef.current = Date.now()
+    telemetryRef.current.set(assistantId, {
+      id: assistantId,
+      startedAt: sendTimeRef.current,
+      route,
+      promptLength: rawContent.length,
+      requestedModel: selectedModel,
+      toolCount: 0,
+    })
 
     const controller = new AbortController()
     abortRef.current = controller
 
-    const endpoint = agentMode ? `${API_BASE}/api/agent` : `${API_BASE}/api/chat`
+    const endpoint = route.useAgent ? `${API_BASE}/api/agent` : `${API_BASE}/api/chat`
+    if (settings.autoRoute || settings.autoIntelligence) {
+      addToast(`Auto: ${route.useAgent ? 'Agent' : 'Chat'} · ${INTELLIGENCE_LABEL[route.intelligenceMode]} · ${Math.round(route.confidence * 100)}% (${route.reason})`, 'info')
+    }
 
     try {
       const response = await fetch(endpoint, {
@@ -667,8 +940,10 @@ function App() {
           maxIterations: settings.maxIterations,
           systemPrompt: settings.systemPrompt,
           fastModel: settings.fastModel || undefined,
+          intelligenceMode: route.intelligenceMode,
           domainExpertise: settings.domainExpertise || undefined,
           numCtx: settings.numCtx,
+          answerStyle: settings.answerStyle,
           // Strip "data:image/...;base64," prefix — Ollama expects raw base64
           images: imageFiles.length > 0
             ? imageFiles.map(f => f.content.replace(/^data:[^;]+;base64,/, ''))
@@ -686,6 +961,8 @@ function App() {
     } catch (sendError) {
       if (!controller.signal.aborted) {
         const msg = sendError instanceof Error ? sendError.message : 'The assistant failed to answer.'
+        const pendingTelemetry = telemetryRef.current.get(assistantId)
+        if (pendingTelemetry) pendingTelemetry.errorType = msg.slice(0, 120)
         addToast(msg, 'error')
         setMessages((current) =>
           current.map((chatMessage) =>
@@ -696,6 +973,11 @@ function App() {
         )
       }
     } finally {
+      const pendingTelemetry = telemetryRef.current.get(assistantId)
+      if (pendingTelemetry) {
+        recordTelemetry(pendingTelemetry)
+        telemetryRef.current.delete(assistantId)
+      }
       setIsStreaming(false)
       abortRef.current = null
       // Auto-save conversation to history
@@ -740,6 +1022,12 @@ function App() {
 
     switch (eventName) {
       case 'token':
+        {
+          const pendingTelemetry = telemetryRef.current.get(assistantId)
+          if (pendingTelemetry && !pendingTelemetry.firstTokenMs) {
+            pendingTelemetry.firstTokenMs = Date.now() - pendingTelemetry.startedAt
+          }
+        }
         setMessages((current) =>
           current.map((chatMessage) => {
             if (chatMessage.id !== assistantId) return chatMessage
@@ -761,11 +1049,41 @@ function App() {
         })
         break
 
+      case 'agent_plan':
+        appendAgentEvent(assistantId, {
+          type: 'agent_plan',
+          plan: payload.plan,
+        })
+        break
+
+      case 'agent_task_state':
+        appendAgentEvent(assistantId, {
+          type: 'agent_task_state',
+          status: payload.status,
+          detail: payload.detail as string,
+        })
+        break
+
+      case 'stream_status':
+        appendAgentEvent(assistantId, {
+          type: 'stream_status',
+          status: payload.status as string,
+          detail: payload.detail as string | undefined,
+          elapsedMs: payload.elapsedMs as number | undefined,
+          firstTokenMs: payload.firstTokenMs as number | undefined,
+          totalMs: payload.totalMs as number | undefined,
+        })
+        break
+
       case 'thinking':
         appendAgentEvent(assistantId, { type: 'thinking', content: payload.content as string })
         break
 
       case 'tool_call':
+        {
+          const pendingTelemetry = telemetryRef.current.get(assistantId)
+          if (pendingTelemetry) pendingTelemetry.toolCount += 1
+        }
         appendAgentEvent(assistantId, {
           type: 'tool_call',
           id: payload.id as string,
@@ -789,6 +1107,7 @@ function App() {
           id: payload.id as string,
           question: payload.question as string,
           context: (payload.context as string) ?? '',
+          kind: payload.kind === 'permission' ? 'permission' : 'question',
         })
         appendAgentEvent(assistantId, {
           type: 'user_question',
@@ -799,6 +1118,10 @@ function App() {
         break
 
       case 'error':
+        {
+          const pendingTelemetry = telemetryRef.current.get(assistantId)
+          if (pendingTelemetry) pendingTelemetry.errorType = (payload.error as string | undefined)?.slice(0, 120) ?? 'stream error'
+        }
         throw new Error(payload.error ?? 'The assistant stream failed.')
 
       case 'set_content':
@@ -813,6 +1136,15 @@ function App() {
         break
 
       case 'metrics':
+        {
+          const pendingTelemetry = telemetryRef.current.get(assistantId)
+          if (pendingTelemetry) {
+            pendingTelemetry.model = payload.model as string | undefined
+            pendingTelemetry.promptTokens = payload.promptTokens as number | undefined
+            pendingTelemetry.responseTokens = payload.responseTokens as number | undefined
+            pendingTelemetry.tokensPerSec = payload.tokensPerSec as number | undefined
+          }
+        }
         setMessages((current) =>
           current.map((chatMessage) =>
             chatMessage.id === assistantId
@@ -833,11 +1165,12 @@ function App() {
     }
   }
 
-  async function submitAnswer(event?: FormEvent<HTMLFormElement>) {
+  async function submitAnswer(event?: FormEvent<HTMLFormElement>, answerOverride?: string) {
     event?.preventDefault()
-    if (!pendingQuestion || !questionDraft.trim()) return
+    if (!pendingQuestion) return
     const { id } = pendingQuestion
-    const answer = questionDraft.trim()
+    const answer = (answerOverride ?? questionDraft).trim()
+    if (!answer) return
     setPendingQuestion(null)
     setQuestionDraft('')
     try {
@@ -864,9 +1197,44 @@ function App() {
     void sendMessage(undefined, userMsg.content, historyBeforeUser)
   }
 
+  function rerunFromAssistant(assistantId: string, routeOverride: Partial<PromptRoute>, promptPrefix?: string) {
+    if (isStreaming) return
+    const assistantIdx = messages.findIndex(m => m.id === assistantId)
+    if (assistantIdx < 1) return
+    let userIdx = assistantIdx - 1
+    while (userIdx >= 0 && messages[userIdx].role !== 'user') userIdx--
+    if (userIdx < 0) return
+    const userMessage = messages[userIdx]
+    const historyBeforeUser = messages.slice(0, userIdx)
+    const nextPrompt = promptPrefix ? `${promptPrefix}\n\n${userMessage.content}` : userMessage.content
+    setMessages(historyBeforeUser)
+    void sendMessage(undefined, nextPrompt, historyBeforeUser, routeOverride)
+  }
+
+  function shortenAssistantMessage(message: Message) {
+    if (isStreaming || !message.content.trim()) return
+    const prompt = `Make this answer shorter while preserving the important details:\n\n${message.content}`
+    void sendMessage(undefined, prompt)
+  }
+
+  function toggleMessageExpand(id: string) {
+    setExpandedMessages(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   function stopStreaming() {
     abortRef.current?.abort()
     setIsStreaming(false)
+    // Also exit voice conversation mode when the user stops a stream
+    if (voiceConvRef.current) {
+      voiceConvRef.current = false
+      setVoiceConvMode(false)
+      window.speechSynthesis.cancel()
+    }
   }
 
   function resetChat() {
@@ -937,8 +1305,39 @@ function App() {
           <button type="button" className="sidebar-action-btn" onClick={() => setShowMemory(true)}>
             <Brain size={13} /> Memory
           </button>
+          <button
+            type="button"
+            className="sidebar-action-btn"
+            onClick={() => setShowTasks(true)}
+            title="Task manager — view and create tasks"
+          >
+            <ListTodo size={13} /> Tasks
+            {taskOverdueCount > 0 && (
+              <span className="sidebar-task-badge">{taskOverdueCount}</span>
+            )}
+          </button>
           <button type="button" className="sidebar-action-btn" onClick={() => setShowHealer(true)} title="Self-Healer — scan for TypeScript errors and auto-propose fixes">
             <Zap size={13} /> Heal
+          </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowHealth(true)} title="Health Command Center">
+            <Activity size={13} /> Health
+          </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowConnectors(true)} title="External Connectors — browser and API integrations">
+            <RadioTower size={13} /> Connect
+          </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowProjectBuilder(true)} title="Project Builder — scaffold, validate, and open programming projects">
+            <Code2 size={13} /> Build
+          </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowReferenceBuilder(true)} title="Reference Builder — learn a public URL or screenshot and create an original build blueprint">
+            <Search size={13} /> Learn
+          </button>
+          <button
+            type="button"
+            className={`sidebar-action-btn ${showUpgrade ? 'observer-active' : ''}`}
+            onClick={() => setShowUpgrade(true)}
+            title="Self-Upgrade — Ultron proposes improvements to its own code"
+          >
+            <Cpu size={13} /> Upgrade
           </button>
           <button
             type="button"
@@ -988,6 +1387,38 @@ function App() {
           </div>
         )}
 
+        <div className="profile-selector">
+          <span className="model-selector-label">Intelligence</span>
+          <select
+            className="model-select"
+            value={settings.intelligenceMode}
+            onChange={(e) => setIntelligenceMode(e.target.value as IntelligenceMode)}
+            disabled={settings.autoIntelligence}
+          >
+            <option value="instant">Instant — shortest path</option>
+            <option value="balanced">Balanced — default</option>
+            <option value="deep">Deep — deliberate analysis</option>
+            <option value="research">Research — verify and synthesize</option>
+          </select>
+          {settings.autoIntelligence && <span className="auto-router-hint">Auto chooses per prompt</span>}
+        </div>
+
+        <div className="profile-selector">
+          <span className="model-selector-label">Answer style</span>
+          <div className="answer-style-control" role="group" aria-label="Answer style">
+            {(Object.keys(ANSWER_STYLE_LABEL) as AnswerStyle[]).map(style => (
+              <button
+                key={style}
+                type="button"
+                className={settings.answerStyle === style ? 'active' : ''}
+                onClick={() => setAnswerStyle(style)}
+              >
+                {ANSWER_STYLE_LABEL[style]}
+              </button>
+            ))}
+          </div>
+        </div>
+
       </section>
 
       <section className="chat-panel" aria-label="Chat with Ultron">
@@ -1033,6 +1464,17 @@ function App() {
                 Export
               </button>
             )}
+            {availableModels.filter(m => !m.includes('embed')).length > 1 && (
+              <button
+                type="button"
+                className={`export-btn compare-trigger-btn ${showCompare ? 'active' : ''}`}
+                onClick={() => setShowCompare(c => !c)}
+                title="Model Compare (Ctrl+M) — run prompt on all models simultaneously"
+              >
+                <Scale size={14} />
+                Compare
+              </button>
+            )}
             <button type="button" className="ghost-button" onClick={resetChat}>
               New chat
             </button>
@@ -1076,10 +1518,16 @@ function App() {
           {deferredMessages.length === 0 ? (
             <div className="welcome-state">
               <div className="welcome-brand">
-                <div className="welcome-icon"><Bot size={32} /></div>
-                <div>
+                <div className="welcome-icon-wrap"><Bot size={30} /></div>
+                <div className="welcome-hero-text">
                   <h2>{getGreeting()} How can I help?</h2>
-                  <p className="welcome-sub">Private · Local · {selectedModel || 'Ollama'}</p>
+                  <div className="welcome-badges">
+                    <span className="welcome-badge badge-private">🔒 Private</span>
+                    <span className="welcome-badge badge-local">🧠 {selectedModel.split(':')[0] || 'Ollama'}</span>
+                    <span className="welcome-badge badge-mode">{INTELLIGENCE_LABEL[settings.intelligenceMode]}</span>
+                    {agentMode && <span className="welcome-badge badge-agent">⚡ Agent</span>}
+                    {observerStatus?.enabled && <span className="welcome-badge badge-obs">👁 Watching</span>}
+                  </div>
                 </div>
               </div>
               <div className="quick-actions">
@@ -1091,18 +1539,24 @@ function App() {
                     onClick={() => sendMessage(undefined, action.prompt)}
                   >
                     <span className="quick-action-emoji">{action.emoji}</span>
-                    <span>{action.label}</span>
+                    <div className="quick-action-text">
+                      <span className="quick-action-label">{action.label}</span>
+                      {'desc' in action && action.desc && <span className="quick-action-desc">{action.desc}</span>}
+                    </div>
                   </button>
                 ))}
               </div>
               {recentChats.length > 0 && (
                 <div className="recent-chats">
                   <p className="recent-chats-label">Continue a conversation</p>
-                  <div className="recent-chat-list" style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+                  <div className="recent-chat-list">
                     {recentChats.map(s => (
-                      <button key={s.id} type="button" className="recent-chat-card" style={{ display: 'block', width: '100%', textAlign: 'left' }} onClick={() => void loadHistory(s.id)}>
+                      <button key={s.id} type="button" className="recent-chat-card" onClick={() => void loadHistory(s.id)}>
                         <span className="recent-chat-title">{s.title}</span>
-                        <span className="recent-chat-meta">{s.model.split(':')[0]} · {relativeTime(s.updatedAt)}</span>
+                        <div className="recent-chat-foot">
+                          <span className="recent-chat-model">{s.model.split(':')[0]}</span>
+                          <span className="recent-chat-time">{relativeTime(s.updatedAt)}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -1118,37 +1572,133 @@ function App() {
                 <div className="message-bubble">
                   <span>{message.role === 'assistant' ? 'Ultron' : 'You'}</span>
                   {message.agentEvents.length > 0 && <AgentTrace events={message.agentEvents} />}
-                  {message.role === 'assistant' && message.content ? (
-                    <MessageContent
-                      content={message.content}
-                      streaming={isStreaming && msgIdx === deferredMessages.length - 1}
-                      onImageClick={url => setLightboxUrl(url)}
-                    />
-                  ) : message.role === 'user' && message.content ? (
-                    <>
-                      {messageImages.get(message.id)?.map((url, i) => (
-                        <img key={i} src={url} alt="Attached" className="msg-image-thumb" onClick={() => setLightboxUrl(url)} style={{ cursor: 'zoom-in' }} />
-                      ))}
-                      <MessageContent content={message.content} onImageClick={url => setLightboxUrl(url)} />
-                    </>
-                  ) : message.agentEvents.length === 0 ? (
+                  {message.role === 'assistant' && message.route && (
+                    <details className="route-decision" title="Why Ultron chose this mode">
+                      <summary className="route-decision-summary">
+                        <span className={`route-mode ${message.route.useAgent ? 'agent' : 'chat'}`}>{message.route.useAgent ? 'Agent' : 'Chat'}</span>
+                        <span>{INTELLIGENCE_LABEL[message.route.intelligenceMode]}</span>
+                        <span>{Math.round(message.route.confidence * 100)}%</span>
+                      </summary>
+                      <div className="route-decision-detail">
+                        <p>{message.route.reason}</p>
+                        {message.route.signals.length > 0 && (
+                          <div className="route-signals">
+                            {message.route.signals.map(signal => <span key={signal}>{signal}</span>)}
+                          </div>
+                        )}
+                        <div className="route-scores" aria-label="Router score breakdown">
+                          {ROUTE_SCORE_LABELS.map(([scoreKey, label]) => (
+                            <span key={scoreKey}>{label}: {message.route?.scores[scoreKey] ?? 0}</span>
+                          ))}
+                        </div>
+                        <div className="route-actions">
+                          <button type="button" onClick={() => rerunFromAssistant(message.id, { useAgent: true })} disabled={isStreaming}>Rerun as Agent</button>
+                          <button type="button" onClick={() => rerunFromAssistant(message.id, { useAgent: false })} disabled={isStreaming}>Rerun as Chat</button>
+                          <button type="button" onClick={() => rerunFromAssistant(message.id, { intelligenceMode: 'deep' })} disabled={isStreaming}>Rerun as Deep</button>
+                          <button type="button" onClick={() => rerunFromAssistant(message.id, { useAgent: true, intelligenceMode: 'research' })} disabled={isStreaming}>Rerun as Research</button>
+                          <button type="button" onClick={() => rerunFromAssistant(message.id, { useAgent: true, intelligenceMode: 'deep' }, 'Verify this with tools and correct anything uncertain:')} disabled={isStreaming}>Verify with tools</button>
+                          <button type="button" onClick={() => shortenAssistantMessage(message)} disabled={isStreaming}>Make shorter</button>
+                        </div>
+                      </div>
+                    </details>
+                  )}
+                  {message.role === 'assistant' && message.content ? (() => {
+                    const lineCount = message.content.split('\n').length
+                    const isLong = !isStreaming && (lineCount > 55 || message.content.length > 2800)
+                    const expanded = expandedMessages.has(message.id)
+                    return (
+                      <>
+                        <div className={`msg-body-wrap ${isLong && !expanded ? 'msg-body-collapsed' : ''}`}>
+                          <MessageContent
+                            content={message.content}
+                            streaming={isStreaming && msgIdx === deferredMessages.length - 1}
+                            onImageClick={url => setLightboxUrl(url)}
+                          />
+                          {isLong && !expanded && <div className="msg-body-fade" />}
+                        </div>
+                        {isLong && (
+                          <button type="button" className="msg-expand-btn" onClick={() => toggleMessageExpand(message.id)}>
+                            {expanded ? '\u2191 Collapse' : `\u2193 Show full response (${lineCount} lines)`}
+                          </button>
+                        )}
+                      </>
+                    )
+                  })() : message.role === 'user' && message.content ? (() => {
+                    const lineCount = message.content.split('\n').length
+                    const isLong = lineCount > 12 || message.content.length > 500
+                    const expanded = expandedMessages.has(message.id)
+                    return (
+                      <>
+                        {messageImages.get(message.id)?.map((url, i) => (
+                          <img key={i} src={url} alt="Attached" className="msg-image-thumb" onClick={() => setLightboxUrl(url)} style={{ cursor: 'zoom-in' }} />
+                        ))}
+                        <div className={`msg-body-wrap ${isLong && !expanded ? 'msg-body-collapsed msg-body-collapsed-user' : ''}`}>
+                          <MessageContent content={message.content} onImageClick={url => setLightboxUrl(url)} />
+                          {isLong && !expanded && <div className="msg-body-fade msg-body-fade-user" />}
+                        </div>
+                        {isLong && (
+                          <button type="button" className="msg-expand-btn msg-expand-btn-user" onClick={() => toggleMessageExpand(message.id)}>
+                            {expanded ? '\u2191 Collapse' : `\u2193 Show full message (${lineCount} lines)`}
+                          </button>
+                        )}
+                      </>
+                    )
+                  })() : message.agentEvents.length === 0 ? (
                     <div className="typing-dots" aria-label="Thinking">
                       <span /><span /><span />
                     </div>
                   ) : null}
 
-                  {/* Follow-up suggestion chips */}
+                  {/* Follow-up suggestions + Ultron's clarifying questions */}
                   {message.role === 'assistant' && message.followups && message.followups.length > 0 && (
                     <div className="followup-chips">
-                      {message.followups.map((q) => (
+                      {message.followups.map((q) => {
+                        const isAsk = q.startsWith('ASK: ')
+                        const label = isAsk ? q.slice(5) : q
+                        return isAsk ? (
+                          <div key={q} className="ultron-question">
+                            <span className="ultron-question-label">Ultron asks:</span>
+                            <span className="ultron-question-text">{label}</span>
+                          </div>
+                        ) : (
+                          <button
+                            key={q}
+                            type="button"
+                            className="followup-chip"
+                            onClick={() => sendMessage(undefined, q)}
+                            disabled={isStreaming}
+                          >
+                            {q}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Predictive action cards — what Ultron can proactively do next */}
+                  {message.role === 'assistant' && message.predictions && message.predictions.length > 0 && (
+                    <div className="prediction-cards">
+                      <span className="prediction-header">What I can do next</span>
+                      {message.predictions.map(p => (
                         <button
-                          key={q}
+                          key={p.label}
                           type="button"
-                          className="followup-chip"
-                          onClick={() => sendMessage(undefined, q)}
+                          className="prediction-card"
                           disabled={isStreaming}
+                          title="Click to approve and run in agent mode"
+                          onClick={() => {
+                            if (!isStreaming) {
+                              setAgentMode(true)
+                              void sendMessage(undefined, p.prompt)
+                            }
+                          }}
                         >
-                          {q}
+                          <span className="prediction-emoji">{p.emoji}</span>
+                          <div className="prediction-content">
+                            <span className="prediction-name">{p.label}</span>
+                            <span className="prediction-desc">{p.prompt}</span>
+                          </div>
+                          <span className="prediction-run">▶ Run</span>
                         </button>
                       ))}
                     </div>
@@ -1196,30 +1746,9 @@ function App() {
                     </div>
                   )}
 
-                  {/* Message footer: metrics + feedback + regenerate */}
+                  {/* Message actions: feedback + regenerate (metrics removed for cleaner UI) */}
                   {message.role === 'assistant' && (message.metrics || (!isStreaming && msgIdx === deferredMessages.length - 1)) && (
                     <div className="message-footer">
-                      {message.metrics && (
-                        <span className="msg-meta">
-                          {message.metrics.model.split(':')[0]}
-                          {message.metrics.responseTokens ? ` · ${message.metrics.responseTokens} tok` : ''}
-                          {message.metrics.tokensPerSec ? ` · ${message.metrics.tokensPerSec} tok/s` : ''}
-                          {message.metrics.iterations && message.metrics.iterations > 1 ? ` · ${message.metrics.iterations} steps` : ''}
-                          {message.metrics.promptTokens ? (() => {
-                            const pct = Math.min(100, Math.round(message.metrics.promptTokens! / settings.numCtx * 100))
-                            return (
-                              <span className="ctx-bar-wrap" title={`Context: ${message.metrics.promptTokens} / ${settings.numCtx} tokens (${pct}%)`}>
-                                <span className="ctx-bar-fill" style={{ width: `${pct}%`, background: pct > 80 ? '#f85149' : pct > 60 ? '#e3b341' : '#3fb950' }} />
-                              </span>
-                            )
-                          })() : ''}
-                          {message.firstTokenMs ? <> · ftt: {(message.firstTokenMs / 1000).toFixed(2)}s</> : ''}
-                          {message.content && (() => {
-                            const wc = message.content.split(/\s+/).filter(Boolean).length
-                            return wc > 80 ? <> · {wc} words</> : null
-                          })()}
-                        </span>
-                      )}
                       <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', alignItems: 'center' }}>
                         <button
                           type="button"
@@ -1254,25 +1783,47 @@ function App() {
         </div>
 
         {pendingQuestion && (
-          <div className="question-prompt">
-            <p className="question-label">Ultron is asking:</p>
+          <div className={`question-prompt ${pendingQuestion.kind === 'permission' ? 'permission-prompt' : ''}`}>
+            <p className="question-label">{pendingQuestion.kind === 'permission' ? 'Permission required' : 'Ultron is asking:'}</p>
             <p className="question-text">{pendingQuestion.question}</p>
             {pendingQuestion.context && <p className="question-context">{pendingQuestion.context}</p>}
-            <form className="question-form" onSubmit={(e) => { void submitAnswer(e) }}>
-              <input
-                autoFocus
-                value={questionDraft}
-                onChange={(e) => setQuestionDraft(e.target.value)}
-                placeholder="Type your answer…"
-                className="question-input"
-              />
-              <button type="submit" className="icon-button" disabled={!questionDraft.trim()}>
-                <Send size={16} />
-              </button>
-            </form>
+            {pendingQuestion.kind === 'permission' ? (
+              <div className="permission-actions">
+                <button type="button" className="permission-allow" onClick={() => void submitAnswer(undefined, 'ALLOW')}>Allow</button>
+                <button type="button" className="permission-deny" onClick={() => void submitAnswer(undefined, 'DENY')}>Deny</button>
+              </div>
+            ) : (
+              <form className="question-form" onSubmit={(e) => { void submitAnswer(e) }}>
+                <input
+                  autoFocus
+                  value={questionDraft}
+                  onChange={(e) => setQuestionDraft(e.target.value)}
+                  placeholder="Type your answer…"
+                  className="question-input"
+                />
+                <button type="submit" className="icon-button" disabled={!questionDraft.trim()}>
+                  <Send size={16} />
+                </button>
+              </form>
+            )}
           </div>
         )}
         <div style={{ position: 'relative' }}>
+          {/* Voice conversation mode banner */}
+          {voiceConvMode && (
+            <div className="conv-mode-bar">
+              <PhoneCall size={13} />
+              {isListening ? 'Listening… speak now' : isStreaming ? 'Generating response…' : 'Voice conversation active — speak to send, Ultron replies aloud'}
+              <button
+                type="button"
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14, padding: '0 2px' }}
+                onClick={startConversation}
+                title="Exit conversation mode"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {/* Slash command menu */}
           {slashMenu !== null && (() => {
             const filtered = SLASH_COMMANDS.filter(c =>
@@ -1421,13 +1972,32 @@ function App() {
           >
             <Paperclip size={16} />
           </button>
+          {draft.trim().length > 8 && (
+            <button
+              type="button"
+              className={`icon-button enhance-btn ${preEnhanceDraft !== null ? 'enhanced' : ''}`}
+              onClick={preEnhanceDraft !== null ? undoEnhance : () => void enhancePrompt()}
+              title={preEnhanceDraft !== null ? 'Undo enhancement — restore original draft' : 'Enhance prompt — AI improves your message for better results'}
+              disabled={isStreaming || enhancing}
+            >
+              {enhancing ? <Loader size={15} className="spin" /> : <Wand2 size={15} />}
+            </button>
+          )}
           <button
             type="button"
             className={`icon-button voice-btn ${isListening ? 'listening' : ''}`}
-            onClick={toggleVoice}
+            onClick={voiceConvMode ? startConversation : _doToggleVoice}
             aria-label={isListening ? 'Stop listening' : 'Voice input'}
           >
             {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+          <button
+            type="button"
+            className={`icon-button conv-btn ${voiceConvMode ? 'conv-active' : ''}`}
+            onClick={startConversation}
+            title={voiceConvMode ? 'Stop conversation mode' : 'Start voice conversation — Ultron listens, responds, and speaks back automatically'}
+          >
+            {voiceConvMode ? <PhoneOff size={16} /> : <PhoneCall size={16} />}
           </button>
           {isStreaming ? (
             <button type="button" className="icon-button stop" onClick={stopStreaming} aria-label="Stop response">
@@ -1542,10 +2112,59 @@ function App() {
         onClose={() => setShowHealer(false)}
       />
     )}
+    {showHealth && (
+      <HealthPanel
+        apiBase={API_BASE}
+        onClose={() => setShowHealth(false)}
+      />
+    )}
+    {showCompare && (
+      <ComparePanel
+        models={availableModels}
+        settings={settings}
+        initialDraft={draft}
+        onClose={() => setShowCompare(false)}
+      />
+    )}
+    {showTasks && (
+      <TaskPanel
+        apiBase={API_BASE}
+        onClose={() => { setShowTasks(false); reloadTaskCount() }}
+      />
+    )}
+    {showConnectors && (
+      <ConnectorsPanel
+        apiBase={API_BASE}
+        onClose={() => setShowConnectors(false)}
+      />
+    )}
+    {showProjectBuilder && (
+      <ProjectBuilderPanel
+        apiBase={API_BASE}
+        onClose={() => setShowProjectBuilder(false)}
+      />
+    )}
+    {showReferenceBuilder && (
+      <ReferenceBuilderPanel
+        apiBase={API_BASE}
+        onUsePrompt={(prompt) => {
+          setDraft(prompt)
+          setAgentMode(true)
+          setTimeout(() => { textareaRef.current?.focus(); autoResizeTextarea() }, 0)
+        }}
+        onClose={() => setShowReferenceBuilder(false)}
+      />
+    )}
+    {showUpgrade && (
+      <SelfUpgradePanel
+        currentModel={selectedModel}
+        onClose={() => setShowUpgrade(false)}
+      />
+    )}
     {showSettings && (
       <SettingsPanel
         settings={settings}
-        onChange={setSettings}
+        onChange={updateSettings}
         onClose={() => setShowSettings(false)}
         models={availableModels}
       />

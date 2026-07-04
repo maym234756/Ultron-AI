@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Brain, ChevronDown, ChevronRight, FileText, Globe, HelpCircle, Loader, Search, Terminal } from 'lucide-react'
+import { Brain, CheckCircle2, ChevronDown, ChevronRight, FileText, Globe, HelpCircle, Loader, Search, Terminal } from 'lucide-react'
 import type { AgentEvent, ToolCallEvent, ToolResultEvent } from '../types'
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
@@ -105,6 +105,18 @@ export function AgentTrace({ events }: { events: AgentEvent[] }) {
           )
         }
 
+        if (event.type === 'agent_plan') {
+          return <PlanBlock key={i} plan={event.plan} />
+        }
+
+        if (event.type === 'agent_task_state') {
+          return <TaskStateBlock key={i} status={event.status} detail={event.detail} />
+        }
+
+        if (event.type === 'stream_status') {
+          return <StreamStatusBlock key={i} event={event} />
+        }
+
         if (event.type === 'thinking') {
           return <ThinkingBlock key={i} content={event.content} />
         }
@@ -126,6 +138,55 @@ export function AgentTrace({ events }: { events: AgentEvent[] }) {
         // tool_result is rendered inside ToolBlock — skip standalone
         return null
       })}
+    </div>
+  )
+}
+
+function PlanBlock({ plan }: { plan: Extract<AgentEvent, { type: 'agent_plan' }>['plan'] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="agent-plan-block">
+      <button className="agent-plan-header" onClick={() => setOpen(o => !o)} type="button" aria-expanded={open}>
+        <Brain size={12} />
+        <span>Task plan</span>
+        <span className="agent-plan-meta">{plan.taskSize} · {plan.toolBudget} tools</span>
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      </button>
+      {open && (
+        <div className="agent-plan-body">
+          <p><strong>Goal:</strong> {plan.goal}</p>
+          <p><strong>Tools:</strong> {plan.toolsNeeded.join(', ')}</p>
+          <p><strong>Verify:</strong> {plan.verificationMethod}</p>
+          <p><strong>Done:</strong> {plan.doneCondition}</p>
+          <ol>
+            {plan.steps.map(step => <li key={step}>{step}</li>)}
+          </ol>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskStateBlock({ status, detail }: { status: Extract<AgentEvent, { type: 'agent_task_state' }>['status']; detail: string }) {
+  const label = status.replaceAll('_', ' ')
+  const Icon = status === 'done' ? CheckCircle2 : status === 'needs_user_input' ? HelpCircle : Loader
+  return (
+    <div className={`agent-task-state ${status}`}>
+      <Icon size={12} className={status === 'done' || status === 'needs_user_input' ? undefined : 'spin'} />
+      <span>{label}</span>
+      <small>{detail}</small>
+    </div>
+  )
+}
+
+function StreamStatusBlock({ event }: { event: Extract<AgentEvent, { type: 'stream_status' }> }) {
+  const label = event.status.replaceAll('_', ' ')
+  const metric = event.firstTokenMs ?? event.totalMs ?? event.elapsedMs
+  return (
+    <div className={`agent-task-state stream-${event.status}`}>
+      <Loader size={12} className={event.status === 'done' ? undefined : 'spin'} />
+      <span>{label}</span>
+      <small>{event.detail ?? (typeof metric === 'number' ? `${metric} ms` : 'Model stream status')}</small>
     </div>
   )
 }

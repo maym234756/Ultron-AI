@@ -18,6 +18,14 @@ export const terminalDefinition: ToolDefinition = {
           type: 'string',
           description: 'Optional working directory. Defaults to the project root.',
         },
+        timeout_sec: {
+          type: 'string',
+          description: 'Optional timeout in seconds, from 1 to 600. Defaults to 120.',
+        },
+        max_output_chars: {
+          type: 'string',
+          description: 'Optional maximum returned output characters, from 1000 to 200000. Defaults to 50000.',
+        },
       },
       required: ['command'],
     },
@@ -27,6 +35,8 @@ export const terminalDefinition: ToolDefinition = {
 export const runTerminal: ToolHandler = (args) => {
   const command = (args.command ?? '').trim()
   const cwd = args.cwd?.trim() || process.cwd()
+  const timeoutSec = Math.min(600, Math.max(1, parseInt(args.timeout_sec ?? '120', 10) || 120))
+  const maxOutputChars = Math.min(200_000, Math.max(1000, parseInt(args.max_output_chars ?? '50000', 10) || 50_000))
 
   if (!command) return Promise.resolve('Error: no command provided')
 
@@ -44,8 +54,8 @@ export const runTerminal: ToolHandler = (args) => {
     const timer = setTimeout(() => {
       settled = true
       proc.kill('SIGTERM')
-      resolve('Error: command timed out after 120 seconds')
-    }, 120_000)
+      resolve(`Error: command timed out after ${timeoutSec} seconds`)
+    }, timeoutSec * 1000)
 
     proc.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
@@ -59,7 +69,9 @@ export const runTerminal: ToolHandler = (args) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      const out = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n')
+      const rawOut = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n')
+      const truncated = rawOut.length > maxOutputChars
+      const out = truncated ? `${rawOut.slice(0, maxOutputChars)}\n[output truncated to ${maxOutputChars.toLocaleString()} chars from ${rawOut.length.toLocaleString()}]` : rawOut
       const exitNote = code !== 0 ? `\n[exit code ${code ?? '?'}]` : ''
       resolve((out || '(no output)') + exitNote)
     })

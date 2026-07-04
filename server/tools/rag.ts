@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import { createReadStream, existsSync, appendFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { ToolDefinition, ToolHandler } from './types.js'
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
@@ -19,6 +20,9 @@ interface RagChunk {
   content: string
   embedding: number[]
   indexedAt: number
+  contentHash?: string
+  sourceMtimeMs?: number
+  sourceSize?: number
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -69,6 +73,10 @@ function chunkText(text: string): string[] {
   return chunks
 }
 
+function hashContent(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
 async function loadAllChunks(): Promise<RagChunk[]> {
   if (!existsSync(STORE_PATH)) return []
   const chunks: RagChunk[] = []
@@ -80,9 +88,18 @@ async function loadAllChunks(): Promise<RagChunk[]> {
   return chunks
 }
 
-async function getIndexedFiles(): Promise<Set<string>> {
+async function getIndexedFileState(): Promise<Map<string, { contentHash?: string; chunks: number; indexedAt: number }>> {
   const chunks = await loadAllChunks()
-  return new Set(chunks.map((c) => c.file))
+  const state = new Map<string, { contentHash?: string; chunks: number; indexedAt: number }>()
+  for (const chunk of chunks) {
+    const existing = state.get(chunk.file)
+    state.set(chunk.file, {
+      contentHash: chunk.contentHash ?? existing?.contentHash,
+      chunks: (existing?.chunks ?? 0) + 1,
+      indexedAt: Math.max(existing?.indexedAt ?? 0, chunk.indexedAt),
+    })
+  }
+  return state
 }
 
 async function rewriteStore(chunks: RagChunk[]): Promise<void> {
@@ -116,7 +133,7 @@ export const ragIndex: ToolHandler = async (args) => {
   const force = args.force === 'true'
   const recursive = args.recursive !== 'false'
 
-  const indexed = await getIndexedFiles()
+  const indexed = await getIndexedFileState()
   const filesToProcess: string[] = []
 
   async function collect(p: string) {
@@ -136,17 +153,26 @@ export const ragIndex: ToolHandler = async (args) => {
 
   await collect(absTarget)
 
-  const toIndex = force ? filesToProcess : filesToProcess.filter((f) => !indexed.has(f))
-  if (toIndex.length === 0) return `All ${filesToProcess.length} file(s) already indexed. Use force:true to re-index.`
-
   let indexed_count = 0
   let chunk_count = 0
+  let skipped_count = 0
   const errors: string[] = []
+  const existingChunks = await loadAllChunks()
+  let retainedChunks = existingChunks
+  const newChunks: RagChunk[] = []
 
-  for (const filePath of toIndex) {
+  for (const filePath of filesToProcess) {
     try {
       const content = await fs.readFile(filePath, 'utf-8')
+      const stat = await fs.stat(filePath)
+      const contentHash = hashContent(content)
+      const previous = indexed.get(filePath)
+      if (!force && previous?.contentHash === contentHash) {
+        skipped_count++
+        continue
+      }
       const chunks = chunkText(content)
+      retainedChunks = retainedChunks.filter((chunk) => chunk.file !== filePath)
       for (let i = 0; i < chunks.length; i++) {
         const embedding = await embedText(chunks[i])
         const chunk: RagChunk = {
@@ -156,8 +182,11 @@ export const ragIndex: ToolHandler = async (args) => {
           content: chunks[i],
           embedding,
           indexedAt: Date.now(),
+          contentHash,
+          sourceMtimeMs: stat.mtimeMs,
+          sourceSize: stat.size,
         }
-        appendFileSync(STORE_PATH, JSON.stringify(chunk) + '\n', 'utf-8')
+        newChunks.push(chunk)
         chunk_count++
       }
       indexed_count++
@@ -166,8 +195,9 @@ export const ragIndex: ToolHandler = async (args) => {
     }
   }
 
+  if (newChunks.length) await rewriteStore([...retainedChunks, ...newChunks])
   const errMsg = errors.length ? `\nErrors (${errors.length}): ${errors.slice(0, 3).join('; ')}` : ''
-  return `Indexed ${indexed_count} file(s), ${chunk_count} chunks.${errMsg}`
+  return `Indexed ${indexed_count} changed file(s), ${chunk_count} chunks. Skipped ${skipped_count} unchanged file(s).${errMsg}`
 }
 
 // ── rag_search ────────────────────────────────────────────────────────────────
@@ -209,7 +239,7 @@ export const ragSearch: ToolHandler = async (args) => {
 
   return scored
     .map((c, i) =>
-      `[${i + 1}] ${path.basename(c.file)} (score: ${c.score.toFixed(3)})\n${c.content.trim()}`,
+      `[${i + 1}] ${c.file.startsWith('http') ? c.file : path.relative(process.cwd(), c.file)}#chunk-${c.chunkIdx} (score: ${c.score.toFixed(3)})\n${c.content.trim()}`,
     )
     .join('\n\n---\n\n')
 }
@@ -229,10 +259,18 @@ export const ragStatus: ToolHandler = async (_args) => {
   const chunks = await loadAllChunks()
   if (chunks.length === 0) return 'Knowledge base is empty. Use rag_index to index files.'
   const fileSet = new Set(chunks.map((c) => c.file))
+  const hashTracked = new Set(chunks.filter((c) => c.contentHash).map((c) => c.file))
   const byFile: Record<string, number> = {}
   for (const c of chunks) byFile[c.file] = (byFile[c.file] ?? 0) + 1
-  const lines = Object.entries(byFile).map(([f, n]) => `  ${path.basename(f)}: ${n} chunks`)
-  return `Knowledge base: ${fileSet.size} files, ${chunks.length} total chunks\n\n${lines.join('\n')}`
+  const latestByFile = new Map<string, number>()
+  for (const c of chunks) latestByFile.set(c.file, Math.max(latestByFile.get(c.file) ?? 0, c.indexedAt))
+  const lines = Object.entries(byFile).map(([f, n]) => {
+    const source = f.startsWith('http') ? f : path.relative(process.cwd(), f)
+    const indexedAt = latestByFile.get(f) ? new Date(latestByFile.get(f)!).toISOString() : 'unknown time'
+    const tracked = hashTracked.has(f) ? 'hash-tracked' : 'legacy/no-hash'
+    return `  ${source}: ${n} chunks, ${tracked}, indexed ${indexedAt}`
+  })
+  return `Knowledge base: ${fileSet.size} files, ${chunks.length} total chunks, ${hashTracked.size} hash-tracked source(s)\n\n${lines.join('\n')}`
 }
 
 // ── rag_clear ─────────────────────────────────────────────────────────────────
@@ -287,10 +325,6 @@ export const ragIndexUrlDefinition: ToolDefinition = {
 export const ragIndexUrl: ToolHandler = async (args) => {
   if (!args.url) return 'Error: url required'
   const urlKey = args.url // used as the "file" identifier
-  if (args.force !== 'true') {
-    const existing = await loadAllChunks()
-    if (existing.some(c => c.file === urlKey)) return `Already indexed: ${args.url}. Use force:"true" to re-index.`
-  }
   try {
     const res = await fetch(args.url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -306,9 +340,14 @@ export const ragIndexUrl: ToolHandler = async (args) => {
       .trim()
     if (text.length < 50) return `Error: page too short or could not extract text from ${args.url}`
 
+    const contentHash = hashContent(text)
+    const existing = await loadAllChunks()
+    if (args.force !== 'true' && existing.some(c => c.file === urlKey && c.contentHash === contentHash)) {
+      return `Already indexed and unchanged: ${args.url}. Use force:"true" to rebuild chunks.`
+    }
+
     const chunks = chunkText(text)
     // Remove old entries for this URL
-    const existing = await loadAllChunks()
     const filtered = existing.filter(c => c.file !== urlKey)
     await rewriteStore(filtered)
 
@@ -322,6 +361,8 @@ export const ragIndexUrl: ToolHandler = async (args) => {
         content: chunks[i],
         embedding,
         indexedAt: Date.now(),
+        contentHash,
+        sourceSize: text.length,
       }
       appendFileSync(STORE_PATH, JSON.stringify(chunk) + '\n', 'utf-8')
       indexed++

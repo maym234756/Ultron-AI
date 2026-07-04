@@ -29,12 +29,116 @@ export type AgentOptions = {
   numCtx?: number
   images?: string[]
   allowedTools?: string[]  // if set, only these tools are permitted (guardrail for restricted agents)
+  intelligenceMode?: 'instant' | 'balanced' | 'deep' | 'research'
 }
 
 type ToolCallParsed = {
   name: string
   args: Record<string, string>
   preamble: string
+}
+
+type AgentTaskSize = 'simple' | 'normal' | 'deep'
+
+type AgentTaskPlan = {
+  goal: string
+  assumptions: string[]
+  steps: string[]
+  toolsNeeded: string[]
+  verificationMethod: string
+  doneCondition: string
+  taskSize: AgentTaskSize
+  toolBudget: number
+}
+
+type LocationPermissionRequest = {
+  kind: 'read' | 'write'
+  locations: string[]
+  actionLabel: string
+  grantAliases?: string[]
+}
+
+const LOCATION_PERMISSION_TOOLS = new Set([
+  'file_read', 'file_list', 'file_search', 'file_info', 'open_in_explorer',
+  'file_write', 'file_move', 'file_delete', 'folder_create', 'folder_delete', 'folder_copy',
+])
+
+function locationPermissionForTool(name: string, args: Record<string, string>): LocationPermissionRequest | null {
+  if (name === 'open_browser' || name === 'browser_go') {
+    const url = (args.url ?? '').trim()
+    return { kind: 'read', locations: [url || 'external browser'], actionLabel: 'open or navigate an external browser location', grantAliases: ['read:browser'] }
+  }
+
+  if (name.startsWith('browser_') && name !== 'browser_snapshot' && name !== 'browser_screenshot') {
+    return { kind: 'read', locations: ['active browser page'], actionLabel: 'control the active browser page', grantAliases: ['read:browser'] }
+  }
+
+  if (name === 'run_terminal' || name === 'sys_run') {
+    const command = (args.command ?? '').trim()
+    return { kind: 'write', locations: [command ? `PowerShell: ${command.slice(0, 160)}` : 'PowerShell'], actionLabel: 'run a terminal or PowerShell command', grantAliases: ['write:terminal'] }
+  }
+
+  if (name === 'open_app') {
+    const app = (args.app ?? '').trim().toLowerCase()
+    const location = (args.args ?? '').trim()
+    if ((app === 'explorer' || app === 'file explorer' || app === 'explorer.exe') && location) {
+      return { kind: 'read', locations: [location], actionLabel: 'open this location in File Explorer', grantAliases: ['read:file explorer'] }
+    }
+    if (app) return { kind: 'read', locations: [args.app ?? app], actionLabel: 'open a local app', grantAliases: [`read:app:${app}`] }
+    return null
+  }
+
+  if (!LOCATION_PERMISSION_TOOLS.has(name)) return null
+
+  const readOnly = name === 'file_read' || name === 'file_list' || name === 'file_search' || name === 'file_info' || name === 'open_in_explorer'
+  const locations = [args.path, args.from, args.to]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(value => value.trim())
+
+  if (locations.length === 0) {
+    if (name === 'file_list') locations.push('~/Desktop')
+    if (name === 'file_search') locations.push('~/Documents')
+  }
+
+  return {
+    kind: readOnly ? 'read' : 'write',
+    locations,
+    actionLabel: readOnly ? 'review/open this location' : 'change files or folders at this location',
+  }
+}
+
+function permissionGrantKey(request: LocationPermissionRequest): string {
+  return `${request.kind}:${request.locations.map(location => location.toLowerCase()).join('|')}`
+}
+
+function hasPermissionGrant(grants: Set<string>, request: LocationPermissionRequest): boolean {
+  if (grants.has(permissionGrantKey(request))) return true
+  return Boolean(request.grantAliases?.some(alias => grants.has(alias)))
+}
+
+function addPermissionGrant(grants: Set<string>, request: LocationPermissionRequest): void {
+  grants.add(permissionGrantKey(request))
+  for (const alias of request.grantAliases ?? []) grants.add(alias)
+}
+
+function isApprovalAnswer(answer: string): boolean {
+  return /^(allow|approved?|yes|y|ok|okay|grant|go ahead|proceed)\b/i.test(answer.trim())
+}
+
+function explicitLocalPathsFromPrompt(prompt: string): string[] {
+  const paths = new Set<string>()
+  const pathPattern = /\b[A-Za-z]:[\\/][^\s"'`<>|]+|(?:^|\s)(~[\\/][^\s"'`<>|]+)/g
+  let match: RegExpExecArray | null
+  while ((match = pathPattern.exec(prompt)) !== null) {
+    const raw = (match[1] ?? match[0]).trim()
+    const clean = raw.replace(/[.,;:)\]]+$/, '')
+    if (clean) paths.add(clean)
+  }
+  return [...paths]
+}
+
+function shouldPreflightPathPermission(prompt: string): boolean {
+  return /\b(review|analy[sz]e|audit|inspect|scan|check|look through|open|list|read|search|folder|directory|project|codebase|repo|repository|file explorer)\b/i.test(prompt)
 }
 
 // Extract and remove <think>...</think> blocks emitted by reasoning models (qwen3, deepseek-r1, etc.)
@@ -83,6 +187,55 @@ function extractToolCall(text: string): ToolCallParsed | null {
   return calls.length > 0 ? calls[0] : null
 }
 
+function latestUserPrompt(messages: Array<{ role: 'user' | 'assistant'; content: string }>): string {
+  return messages.findLast(message => message.role === 'user')?.content.trim() ?? ''
+}
+
+function classifyTaskSize(prompt: string, mode: NonNullable<AgentOptions['intelligenceMode']>, maxIterations: number): { taskSize: AgentTaskSize; toolBudget: number } {
+  const text = prompt.toLowerCase()
+  const deepCue = /\b(deep|thorough|research|audit|debug|fix|build|implement|refactor|multiple|entire|complete|full|production|diagnose|investigate)\b/.test(text)
+  const simpleCue = /\b(open|show|focus|copy|read|screenshot|what'?s on my screen|launch)\b/.test(text) && text.length < 180
+  if (mode === 'deep' || mode === 'research' || deepCue) {
+    return { taskSize: 'deep', toolBudget: Math.max(10, maxIterations) }
+  }
+  if (mode === 'instant' || simpleCue) {
+    return { taskSize: 'simple', toolBudget: 1 }
+  }
+  return { taskSize: 'normal', toolBudget: Math.min(6, Math.max(3, Math.ceil(maxIterations / 2))) }
+}
+
+function inferToolsNeeded(prompt: string): string[] {
+  const text = prompt.toLowerCase()
+  const tools = new Set<string>()
+  if (/\b(browser|website|web|gmail|salesforce|youtube|sheets|click|login|tab|page)\b/.test(text)) tools.add('browser tools')
+  if (/\b(file|folder|directory|read|write|edit|code|repo|workspace)\b/.test(text)) tools.add('file/code tools')
+  if (/\b(run|build|test|lint|terminal|command|install|execute)\b/.test(text)) tools.add('terminal tools')
+  if (/\b(search|research|latest|current|source|cite|look up)\b/.test(text)) tools.add('search/RAG tools')
+  if (/\b(screen|screenshot|desktop|window|app)\b/.test(text)) tools.add('desktop/screen tools')
+  return tools.size > 0 ? [...tools] : ['no tool required unless verification is needed']
+}
+
+function buildTaskPlan(prompt: string, mode: NonNullable<AgentOptions['intelligenceMode']>, maxIterations: number): AgentTaskPlan {
+  const { taskSize, toolBudget } = classifyTaskSize(prompt, mode, maxIterations)
+  const toolsNeeded = inferToolsNeeded(prompt)
+  const needsExternalState = toolsNeeded.some(tool => tool !== 'no tool required unless verification is needed')
+  return {
+    goal: prompt.slice(0, 220) || 'Complete the requested agent task.',
+    assumptions: [
+      needsExternalState ? 'External state must be checked with tools before claiming completion.' : 'The task may be answerable without tools.',
+      'Sensitive or irreversible actions require user approval before execution.',
+    ],
+    steps: taskSize === 'simple'
+      ? ['Choose the single correct action.', 'Run one tool if needed.', 'Report the result and stop.']
+      : ['Clarify the goal and constraints.', 'Use the smallest useful set of tools.', 'Recover from failures with a different approach.', 'Verify the outcome.', 'Report what changed, what was verified, and what remains.'],
+    toolsNeeded,
+    verificationMethod: needsExternalState ? 'Inspect tool results and run a confirming read/test when available.' : 'Check the answer against the user request before finalizing.',
+    doneCondition: needsExternalState ? 'The requested action is completed or a clear blocker/fallback is reported.' : 'The user has a direct, complete answer with any caveats stated.',
+    taskSize,
+    toolBudget,
+  }
+}
+
 const AGENT_SYSTEM_BASE = `You are Ultron, a powerful local AI assistant with full tool access on a Windows machine.
 
 ── HOW TO REASON (apply every turn) ─────────────────────────────────────────
@@ -104,6 +257,17 @@ Before acting, think through these steps:
 • Show reasoning chains for complex answers: Because X → therefore Y → conclusion Z.
 • Self-check before final answer: Is this accurate? Complete? The simplest/best approach?
 • Never confabulate. Unknown version, path, or spec? Say so and look it up with a tool.
+• Sound like a capable teammate, not a template. For build/create/start requests, ask the next missing decision or use tools; do not give generic lectures.
+
+── TASK PLANNER CONTRACT ────────────────────────────────────────────────────
+For agent tasks, follow the task plan and current tool budget from the runtime.
+State transitions are: Planning → Using tools → Verifying → Done, or Needs user input when blocked.
+If a tool fails:
+• Browser selector fails → try text locator, accessible label, or page read before retrying.
+• Command fails → parse the error, repair the likely cause, then rerun the narrowest check.
+• File missing → search nearby paths before giving up.
+• Tool unavailable → explain the fallback and use the next best tool.
+Final answer contract: What changed, what was verified, what remains, and next best action.
 
 ── TOOL CALL FORMAT ──────────────────────────────────────────────────────────
 To call a tool, output ONLY a JSON object on a single line — no code blocks, no other text on that line:
@@ -382,17 +546,78 @@ code_stats        – {directory?, exclude?}        – count lines and files by
 
 After each tool call you receive the result. Call as many tools as needed. When done, respond in Markdown.`
 
+const INTELLIGENCE_AGENT_INSTRUCTIONS: Record<NonNullable<AgentOptions['intelligenceMode']>, string> = {
+  instant: `INTELLIGENCE PROFILE: Instant. Minimum steps, maximum directness.
+  Call the ONE correct tool and respond. Do not explore beyond the immediate task. Keep answers compact.
+  If no tool is needed, answer in the shortest useful form and stop.`,
+
+  balanced: `INTELLIGENCE PROFILE: Balanced. Use the plan-act-verify loop proportionate to the task.
+  Prefer fewer, better tool calls over many redundant ones.
+  Before using a tool, ask: will this materially improve correctness or complete an action? If not, answer directly.`,
+
+  deep: `INTELLIGENCE PROFILE: Deep. Work methodically and verify before concluding.
+  Before acting, reason explicitly:
+    1. What am I actually being asked to do? (beneath the surface request)
+    2. What tools are needed in what order? What result confirms success vs failure?
+    3. What assumptions am I making that I should verify with a tool?
+  After each tool call: did the result match expectations? If not, diagnose why before proceeding.
+  For multi-file or multi-step tasks: always read before writing. Verify edits with lint_code.
+  Final answer: include outcome, verification performed, concrete tradeoffs, and the single most important caveat.`,
+
+  research: `INTELLIGENCE PROFILE: Research. Evidence-based analysis before synthesis.
+  • Gather evidence from multiple sources (files, search, memory) before concluding.
+  • Distinguish confirmed facts from inferences — label each clearly.
+  • Cite sources inline: "According to [filename.ts line 42]..." or "Per search result from ..."
+  • After gathering evidence, state your confidence level explicitly.
+  • Flag when retrieved information may be outdated, partial, or ambiguous.
+  • If fresh/current facts are requested, use search/web tools before final synthesis.
+  • Final answer: lead with the main finding, then supporting evidence, then caveats and next validation step.`,
+}
+
+// Per-mode inference options — mirrors buildInferenceOptions in index.ts
+function agentInferenceOptions(
+  temperature: number,
+  numCtx: number,
+  mode: NonNullable<AgentOptions['intelligenceMode']> = 'balanced',
+): Record<string, number | undefined> {
+  const base = { temperature, num_ctx: numCtx, top_p: 0.92, repeat_penalty: 1.12 }
+  switch (mode) {
+    case 'instant': return { ...base, temperature: Math.min(temperature, 0.22), top_p: 0.82, repeat_penalty: 1.08, num_predict: 768 }
+    case 'balanced': return { ...base, top_p: 0.92, repeat_penalty: 1.12, num_predict: 1536 }
+    case 'deep':     return { ...base, top_p: 0.95, repeat_penalty: 1.15, num_predict: 3072, mirostat: 2, mirostat_tau: 5.0, mirostat_eta: 0.10 }
+    case 'research': return { ...base, temperature: Math.min(temperature, 0.35), top_p: 0.96, repeat_penalty: 1.18, num_predict: 3072, mirostat: 2, mirostat_tau: 4.0, mirostat_eta: 0.08 }
+  }
+}
+
 export async function runAgent(
   userMessages: Array<{ role: 'user' | 'assistant'; content: string }>,
   options: AgentOptions,
   response: express.Response,
   abortSignal: AbortSignal,
 ): Promise<void> {
-  const { model, temperature, systemContent, ollamaBaseUrl, maxIterations = 12, numCtx = 8192, images } = options
+  const { model, temperature, systemContent, ollamaBaseUrl, maxIterations = 12, numCtx = 8192, images, intelligenceMode = 'balanced' } = options
+  const userPrompt = latestUserPrompt(userMessages)
+  const taskPlan = buildTaskPlan(userPrompt, intelligenceMode, maxIterations)
+  let toolsUsed = 0
+  const approvedLocationGrants = new Set<string>()
 
+  async function askUser(question: string, context: string, kind: 'question' | 'permission' = 'question'): Promise<string> {
+    const qid = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    sendEvent(response, 'agent_task_state', { status: 'needs_user_input', detail: question })
+    sendEvent(response, 'question', { id: qid, question, context, kind })
+    return new Promise<string>((resolve) => {
+      const timeout = setTimeout(() => {
+        pendingAnswers.delete(qid)
+        resolve('[User did not answer within 5 minutes — continuing with best judgement]')
+      }, 300_000)
+      pendingAnswers.set(qid, (answer) => { clearTimeout(timeout); resolve(answer) })
+    })
+  }
+
+  const profileInstructions = INTELLIGENCE_AGENT_INSTRUCTIONS[intelligenceMode]
   const systemFull = systemContent.trim()
-    ? `${AGENT_SYSTEM_BASE}\n\nAdditional instructions:\n${systemContent}`
-    : AGENT_SYSTEM_BASE
+    ? `${AGENT_SYSTEM_BASE}\n\n${profileInstructions}\n\nAdditional instructions:\n${systemContent}`
+    : `${AGENT_SYSTEM_BASE}\n\n${profileInstructions}`
 
   // Build history — attach images to the last user message (vision support)
   const ollamaMessages: OllamaMessage[] = userMessages.map((m) => ({ role: m.role as OllamaRole, content: m.content }))
@@ -402,9 +627,40 @@ export async function runAgent(
   }
 
   const history: OllamaMessage[] = [
-    { role: 'system', content: systemFull },
+    { role: 'system', content: `${systemFull}\n\nRuntime task plan:\n${JSON.stringify(taskPlan, null, 2)}` },
     ...ollamaMessages,
   ]
+
+  sendEvent(response, 'agent_plan', { plan: taskPlan })
+  sendEvent(response, 'agent_task_state', { status: 'planning', detail: `Planned ${taskPlan.taskSize} task with ${taskPlan.toolBudget} tool budget.` })
+
+  const preflightLocations = shouldPreflightPathPermission(userPrompt) ? explicitLocalPathsFromPrompt(userPrompt) : []
+  if (preflightLocations.length > 0) {
+    const permission: LocationPermissionRequest = { kind: 'read', locations: preflightLocations, actionLabel: 'review/open this location' }
+    const answer = await askUser(
+      'Allow Ultron to review this location?',
+      `Location: ${preflightLocations.join('\nLocation: ')}\nUltron will start with a safe directory listing, then continue the review using approved filesystem tools.`,
+      'permission',
+    )
+    if (!isApprovalAnswer(answer)) {
+      const denied = `Permission denied for: ${preflightLocations.join(', ')}. I did not access that location.`
+      sendEvent(response, 'set_content', { content: denied })
+      sendEvent(response, 'agent_task_state', { status: 'done', detail: 'Permission denied by user.' })
+      sendEvent(response, 'metrics', { model, iterations: 0 })
+      return
+    }
+
+    addPermissionGrant(approvedLocationGrants, permission)
+    const callId = crypto.randomUUID()
+    const firstLocation = preflightLocations[0]
+    sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Permission approved. Listing ${firstLocation} before model review.` })
+    sendEvent(response, 'tool_call', { id: callId, name: 'file_list', args: { path: firstLocation, recursive: 'false' } })
+    let preflightResult = await executeTool('file_list', { path: firstLocation, recursive: 'false' })
+    if (preflightResult.length > 4000) preflightResult = `${preflightResult.slice(0, 4000)}\n\n[...${(preflightResult.length - 4000).toLocaleString()} chars truncated]`
+    sendEvent(response, 'tool_result', { id: callId, name: 'file_list', result: preflightResult })
+    toolsUsed += 1
+    history.push({ role: 'user', content: `User approved read access for: ${preflightLocations.join(', ')}. Initial directory listing for ${firstLocation}:\n${preflightResult}\n\nContinue the review using concise tool calls. Start by inspecting the most relevant project metadata and source directories; do not ask for permission again for the approved location during this run.` })
+  }
 
   for (let step = 1; step <= maxIterations; step++) {
     if (abortSignal.aborted) return
@@ -435,7 +691,7 @@ export async function runAgent(
             messages: history,
             stream: true,
             keep_alive: '60m',
-            options: { temperature, num_ctx: numCtx },
+            options: agentInferenceOptions(temperature, numCtx, intelligenceMode),
           }),
           signal: stepAbort.signal,
         })
@@ -470,17 +726,25 @@ export async function runAgent(
       return
     }
 
-    // Parse NDJSON stream from Ollama — emit tokens to client in real-time
+    // Parse NDJSON stream from Ollama — batch tokens before emitting to reduce SSE overhead
     const reader = ollamaRes.body!.getReader()
     const decoder = new TextDecoder()
     let streamBuf = ''
     let fullContent = ''
+    let tokenBatch = ''
     let finalData: OllamaChatChunk | null = null
+
+    function flushTokenBatch() {
+      if (tokenBatch && !response.writableEnded) {
+        sendEvent(response, 'token', { token: tokenBatch })
+        tokenBatch = ''
+      }
+    }
 
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) { flushTokenBatch(); break }
         streamBuf += decoder.decode(value, { stream: true })
         const lines = streamBuf.split('\n')
         streamBuf = lines.pop() ?? ''
@@ -491,10 +755,13 @@ export async function runAgent(
           if (chunk.message?.content) {
             const token = chunk.message.content
             fullContent += token
-            // Stream token to client immediately (real-time, like ChatGPT)
-            sendEvent(response, 'token', { token })
+            tokenBatch += token
+            // Flush on natural boundaries to keep streaming feel smooth
+            if (tokenBatch.length >= 10 || tokenBatch.includes('\n') || tokenBatch.endsWith('. ') || tokenBatch.endsWith('! ') || tokenBatch.endsWith('? ')) {
+              flushTokenBatch()
+            }
           }
-          if (chunk.done) finalData = chunk
+          if (chunk.done) { flushTokenBatch(); finalData = chunk }
         }
       }
     } catch (streamErr) {
@@ -528,6 +795,14 @@ export async function runAgent(
     const toolCall = allToolCalls[0] ?? null
 
     if (allToolCalls.length > 0) {
+      if (toolsUsed >= taskPlan.toolBudget) {
+        sendEvent(response, 'agent_task_state', { status: 'verifying', detail: `Tool budget reached (${toolsUsed}/${taskPlan.toolBudget}); finalizing from gathered evidence.` })
+        history.push({ role: 'assistant', content: responseContent })
+        history.push({ role: 'user', content: 'The tool budget for this task has been reached. Do not call more tools. Finalize now using the final answer contract: what changed, what was verified, what remains, and the next best action.' })
+        sendEvent(response, 'set_content', { content: '' })
+        continue
+      }
+
       const preamble = toolCall.preamble
       if (preamble) {
         sendEvent(response, 'thinking', { content: preamble })
@@ -538,6 +813,7 @@ export async function runAgent(
       history.push({ role: 'assistant', content: responseContent })
 
       if (abortSignal.aborted) return
+      sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Using ${allToolCalls.length} tool call(s); ${Math.max(0, taskPlan.toolBudget - toolsUsed)} remaining before this step.` })
 
       // Execute all tool calls — single call sequential, multiple calls in parallel
       const MAX_RESULT = 4000
@@ -550,16 +826,22 @@ export async function runAgent(
         if (tc.name === 'ask_user') {
           const question = tc.args.question ?? 'I have a question for you:'
           const context = tc.args.context ?? ''
-          const qid = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          sendEvent(response, 'question', { id: qid, question, context })
-          result = await new Promise<string>((resolve) => {
-            const timeout = setTimeout(() => {
-              pendingAnswers.delete(qid)
-              resolve('[User did not answer within 5 minutes — continuing with best judgement]')
-            }, 300_000)
-            pendingAnswers.set(qid, (answer) => { clearTimeout(timeout); resolve(answer) })
-          })
+          result = await askUser(question, context)
         } else {
+          const permission = locationPermissionForTool(tc.name, tc.args)
+          if (permission) {
+            if (!hasPermissionGrant(approvedLocationGrants, permission)) {
+              const answer = await askUser(
+                `Allow Ultron to ${permission.actionLabel}?`,
+                `Tool: ${tc.name}\nLocation: ${permission.locations.join('\nLocation: ')}\nOnly approve locations you recognize. Deny blocks this tool call.`,
+                'permission',
+              )
+              if (!isApprovalAnswer(answer)) {
+                return { tc, callId, result: `Permission denied by user for ${tc.name}: ${permission.locations.join(', ')}` }
+              }
+              addPermissionGrant(approvedLocationGrants, permission)
+            }
+          }
           const skip = tc.name.startsWith('browser_screenshot') || tc.name === 'take_screenshot'
           result = await executeTool(tc.name, tc.args)
           if (!skip && result.length > MAX_RESULT) {
@@ -579,6 +861,8 @@ export async function runAgent(
         sendEvent(response, 'tool_result', { id: callId, name: tc.name, result })
         resultSummaryParts.push(`Tool result (${tc.name}):\n${result}`)
       }
+      toolsUsed += executed.length
+      sendEvent(response, 'agent_task_state', { status: 'verifying', detail: `Checked ${toolsUsed}/${taskPlan.toolBudget} budgeted tool result(s).` })
       history.push({ role: 'user', content: resultSummaryParts.join('\n\n') })
 
       // Auto-complete single-action tools
@@ -591,6 +875,7 @@ export async function runAgent(
       if (allToolCalls.length === 1 && SELF_COMPLETING.has(toolCall.name) && !executed[0].result.startsWith('Error')) {
         const summary = preamble ? `${preamble}\n\n${executed[0].result}` : executed[0].result
         sendEvent(response, 'set_content', { content: summary })
+        sendEvent(response, 'agent_task_state', { status: 'done', detail: 'Single-action task completed.' })
         sendEvent(response, 'metrics', { model, iterations: step })
         return
       }
@@ -625,10 +910,12 @@ export async function runAgent(
       responseTokens: finalData?.eval_count,
       tokensPerSec,
     })
+    sendEvent(response, 'agent_task_state', { status: 'done', detail: 'Final answer produced.' })
 
     return
   }
 
+  sendEvent(response, 'agent_task_state', { status: 'verifying', detail: `Reached ${maxIterations} iterations; reporting blocker.` })
   sendEvent(response, 'error', {
     error: `Agent reached the ${maxIterations}-step limit without completing.`,
   })
@@ -641,11 +928,12 @@ export async function runAgentHeadless(
   prompt: string,
   options: AgentOptions,
 ): Promise<string> {
-  const { model, temperature, systemContent, ollamaBaseUrl, maxIterations = 12, numCtx = 8192, allowedTools } = options
+  const { model, temperature, systemContent, ollamaBaseUrl, maxIterations = 12, numCtx = 8192, allowedTools, intelligenceMode = 'balanced' } = options
 
+  const profileInstructions = INTELLIGENCE_AGENT_INSTRUCTIONS[intelligenceMode]
   const systemFull = systemContent?.trim()
-    ? `${AGENT_SYSTEM_BASE}\n\nAdditional instructions:\n${systemContent}`
-    : AGENT_SYSTEM_BASE
+    ? `${AGENT_SYSTEM_BASE}\n\n${profileInstructions}\n\nAdditional instructions:\n${systemContent}`
+    : `${AGENT_SYSTEM_BASE}\n\n${profileInstructions}`
 
   const history: OllamaMessage[] = [
     { role: 'system', content: systemFull },

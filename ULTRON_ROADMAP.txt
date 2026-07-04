@@ -1,0 +1,537 @@
+================================================================================
+                         ULTRON PRODUCT ROADMAP
+                         Prepared: July 3, 2026
+================================================================================
+
+MISSION
+--------------------------------------------------------------------------------
+Make Ultron better than cloud chat assistants by focusing on what cloud products
+cannot do as well: local privacy, OS-level action, authenticated browser work,
+connector workflows, self-upgrade, transparent routing, and controllable agent
+execution.
+
+Core positioning:
+
+  ChatGPT can answer.
+  Ultron can answer, inspect, operate, verify, remember, connect, and improve
+  itself locally.
+
+--------------------------------------------------------------------------------
+CURRENT STRENGTHS
+--------------------------------------------------------------------------------
+- Fully local Ollama-powered assistant
+- 150 callable tools
+- 52-service external connector registry
+- Chat / Agent auto-router
+- Auto intelligence profiles: Instant, Balanced, Deep, Research
+- Health Command Center
+- Model Compare
+- Voice Conversation Mode
+- Task Dashboard
+- Prompt Enhance
+- Self-Upgrade with guardrails
+- RAG + long-term memory
+- Browser, desktop, file, terminal, coding, and OS automation
+- OpenAI-compatible /v1 API
+
+--------------------------------------------------------------------------------
+ROADMAP PRIORITIES
+--------------------------------------------------------------------------------
+
+PRIORITY 1 — ROUTER PREVIEW + DECISION CHIPS
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- /api/router/preview endpoint for route previews.
+- Route metadata saved on assistant messages.
+- Decision chip showing Chat/Agent, intelligence profile, and confidence.
+- Expandable reason, matched signals, and score breakdown.
+- Override actions: Rerun as Agent, Rerun as Chat, Rerun as Deep,
+  Rerun as Research, Verify with tools, and Make shorter.
+- Validated with npm run build and focused editor diagnostics.
+
+Goal:
+Make Ultron's automatic decisions visible, trustworthy, and overrideable.
+
+Why it matters:
+The prompt router is now one of Ultron's most important intelligence layers. The
+user should see why Ultron chose Chat vs Agent and Instant vs Deep/Research.
+
+Build:
+- Add /api/router/preview endpoint.
+- Return route decision:
+  - Chat or Agent
+  - Instant / Balanced / Deep / Research
+  - confidence percentage
+  - reason
+  - matched signals
+  - score breakdown: agent, chat, complexity, freshness
+- Show a compact decision chip above or below each assistant message:
+  - Chat · Instant · 98%
+  - Agent · Research · 73%
+- Add hover/click details: "Why Ultron chose this mode".
+- Add override buttons:
+  - Rerun as Agent
+  - Rerun as Chat
+  - Rerun as Deep
+  - Rerun as Research
+  - Verify with tools
+  - Make shorter
+
+Expected impact:
+- Higher trust
+- Faster debugging of bad routing
+- Better user control
+- Stronger product feel than ChatGPT/Claude
+
+--------------------------------------------------------------------------------
+PRIORITY 2 — ROUTER EVALUATION SUITE
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- Added scripts/router-eval.ts with representative route/profile cases.
+- Added npm run test:router.
+- Tracks expected Chat/Agent route, intelligence profile, confidence, signals,
+  and pass/fail output.
+- Validated with npm run test:router: 8/8 cases passing.
+
+Goal:
+Make routing quality measurable and prevent regressions.
+
+Why it matters:
+Ultron should not merely "feel" smart. It should have a repeatable test suite
+that proves whether its routing and intelligence selection are working.
+
+Build:
+- Add a local router test suite with representative prompts.
+- Include expected route and intelligence profile for each prompt.
+- Example cases:
+  - "What is Salesforce?" -> Chat / Instant
+  - "Connect to my Salesforce account" -> Agent / Balanced
+  - "Research latest Salesforce AI competitors with sources" -> Agent / Research
+  - "Review this TypeScript code for bugs" -> Chat / Deep
+  - "Run the build and fix failures" -> Agent / Deep
+  - "Quickly summarize Docker in one sentence" -> Chat / Instant
+- Track pass/fail and confidence.
+- Add command: npm run test:router.
+- Optionally display router health in Health Command Center.
+
+Expected impact:
+- Prevents routing regressions
+- Makes intelligence tuning safer
+- Creates measurable progress toward better-than-cloud behavior
+
+--------------------------------------------------------------------------------
+PRIORITY 3 — AGENT TASK PLANNER
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- Structured runtime task planner with goal, assumptions, steps, tools needed,
+  verification method, done condition, task size, and tool budget.
+- Agent task states streamed to the UI: Planning, Using tools, Verifying, Done,
+  and Needs user input.
+- Tool budgets by task size: Simple = 1, Normal = 3-6, Deep/Research = 10+.
+- Failure-recovery rules added to the agent contract for browser selectors,
+  command failures, missing files, and unavailable tools.
+- Final answer contract strengthened: what changed, what was verified, what
+  remains, and next best action.
+- Agent trace UI now shows a collapsible task plan and live task-state badges.
+- Validated with npm run build and an Agent SSE smoke test confirming planner
+  and task-state events on the real Agent path.
+
+Goal:
+Make Agent Mode more disciplined, reliable, and easy to follow.
+
+Why it matters:
+Agent Mode should behave like a senior operator: plan, act, verify, and stop
+when done. It should avoid wandering, repeated tool calls, and vague outcomes.
+
+Build:
+- Add a structured task planner object:
+  - goal
+  - assumptions
+  - steps
+  - tools needed
+  - verification method
+  - done condition
+- Show task state in the UI:
+  - Planning
+  - Using tools
+  - Verifying
+  - Done
+  - Needs user input
+- Add tool budgets by task size:
+  - Simple: 1 tool
+  - Normal: 3-6 tools
+  - Deep: 10+ tools
+- Improve failure recovery:
+  - Browser selector fails -> try text locator
+  - Command fails -> parse error and repair
+  - File missing -> search nearby paths
+  - Tool unavailable -> explain fallback
+- Strengthen final answer contract:
+  - What changed
+  - What was verified
+  - What remains
+  - Next best action
+
+Expected impact:
+- More reliable agent execution
+- Less wasted time
+- Better long-task transparency
+- Stronger differentiation from cloud chat
+
+--------------------------------------------------------------------------------
+PRIORITY 4 — CONNECTOR SETUP WIZARD
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- Connector setup wizard embedded in the External Connectors panel.
+- Non-secret local setup state stored outside the repo for preferred auth path,
+  permission level, browser session readiness, API readiness, audit toggle,
+  and latest connection test result.
+- Permission levels: Read only, Draft changes, Apply with approval, and Fully
+  automated for safe tasks only.
+- Browser session setup flow with Open, Mark browser signed in, and Test
+  connection controls.
+- API/OAuth setup visibility through required environment variables without
+  collecting or storing secrets in chat.
+- Connector audit log for setup updates and connection tests.
+- Backend endpoints: /api/connectors/:id/setup and /api/connectors/:id/test.
+- Validated with npm run build and Salesforce setup/test endpoint smoke test.
+
+Goal:
+Turn the 52 connector registry from "browser-ready" into first-class workflows.
+
+Why it matters:
+Connectors are one of Ultron's strongest ways to beat ChatGPT/Claude. Cloud chat
+can describe Salesforce or Gmail; Ultron can operate them locally through an
+authenticated browser session or configured API token.
+
+Build:
+- Add connector setup wizard:
+  - Browser session setup
+  - OAuth/API token setup
+  - Test connection
+  - Permission level
+  - Audit log status
+- Connector permission levels:
+  - Read only
+  - Draft changes
+  - Apply with approval
+  - Fully automated for safe tasks only
+- Per-connector workflows:
+  - Salesforce: search leads, update activity, create task
+  - Gmail: read inbox, summarize thread, draft reply, send after approval
+  - Google Sheets: read rows, append row, update cell
+  - YouTube: summarize video, search channel, review comments
+  - Slack/Teams: summarize channels, draft messages
+  - Stripe/PayPal/Square: review payments, draft billing actions
+  - GitHub/Jira/Linear: review issues, summarize work, draft updates
+- Connector audit log:
+  - What Ultron read
+  - What Ultron drafted
+  - What Ultron changed
+  - When approval was requested
+
+Expected impact:
+- Converts integrations into real product value
+- Adds enterprise-grade safety
+- Creates a major moat versus cloud assistants
+
+--------------------------------------------------------------------------------
+PRIORITY 5 — TELEMETRY + OBSERVABILITY
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- Local browser-only telemetry store for route, intelligence mode, confidence,
+  prompt length, first-token latency, total response time, tool count, model,
+  token metrics, and error type.
+- Automatic telemetry capture from chat and Agent streaming lifecycle.
+- Health Command Center diagnostics panel for recent routes, slow prompts, tool
+  failures, model latency, and connector readiness.
+- Telemetry export to JSON for debugging sessions.
+- Telemetry clear control for local privacy and reset.
+- Answer bubbles remain clean; diagnostics live in the Health panel.
+- Validated with npm run build, focused diagnostics, router regression suite,
+  and health checks.
+
+Goal:
+Make speed, routing, tool use, and model behavior visible and measurable.
+
+Why it matters:
+Ultron cannot be optimized reliably without diagnostics. Telemetry should stay
+local and private.
+
+Build:
+- Add local telemetry store for:
+  - route selected
+  - intelligence mode selected
+  - confidence
+  - prompt length
+  - first-token latency
+  - total response time
+  - tool count
+  - model used
+  - error/failure type
+- Add diagnostics panel:
+  - recent routes
+  - slow prompts
+  - tool failures
+  - model latency
+  - connector readiness
+- Keep answer bubbles clean; diagnostics live in the panel.
+- Add export for debugging sessions.
+
+Expected impact:
+- Makes performance tuning objective
+- Helps find slow paths
+- Improves supportability
+
+--------------------------------------------------------------------------------
+PRIORITY 6 — MEMORY 2.0
+--------------------------------------------------------------------------------
+Status: Complete — built July 3, 2026.
+Implemented:
+- Structured long-term memory entries with confidence, source, scope,
+  expiration, and promotion metadata while preserving old JSONL memories.
+- User, project, and temporary memory scopes.
+- Temporary memory expiration filtering and promotion to permanent user or
+  project memory.
+- Conflict candidate detection for preference/deployment-style memories before
+  saving new entries.
+- Structured memory APIs that return review-ready entries while preserving the
+  legacy text response for compatibility.
+- Memory 2.0 review panel with scope summaries, filters, source/confidence
+  badges, recent auto-saved memories, conflict warnings, delete, and promote
+  actions.
+- Validated with npm run build, Memory API create/list/promote/delete smoke
+  test, router regression suite, and health check.
+
+Goal:
+Make memory more selective, organized, and trustworthy.
+
+Why it matters:
+Memory is powerful, but noisy memory makes answers worse. Ultron should remember
+important things and forget temporary or stale things.
+
+Build:
+- Add memory confidence and source.
+- Add project-scoped memories.
+- Add temporary memories with expiration.
+- Add memory promotion:
+  - "This seems important. Save permanently?"
+- Add memory conflict detection:
+  - "You previously preferred X, but now said Y. Update memory?"
+- Add memory review panel:
+  - what Ultron remembers about the user
+  - what Ultron remembers about this project
+  - recent auto-saved memories
+
+Expected impact:
+- Cleaner personalization
+- Better project continuity
+- Less stale context pollution
+
+--------------------------------------------------------------------------------
+PRIORITY 7 — SELF-UPGRADE 2.0
+--------------------------------------------------------------------------------
+Goal:
+Turn self-upgrade into a structured product improvement loop.
+
+Why it matters:
+Ultron already proposes guarded changes. The next step is making self-upgrade
+organized, prioritized, testable, and rollback-aware.
+
+Build:
+- Add self-upgrade backlog:
+  - proposed improvement
+  - risk level
+  - impact estimate
+  - files affected
+  - required validation
+- Add upgrade packs:
+  - Router Intelligence Pack
+  - Connector Pack
+  - Performance Pack
+  - UI Polish Pack
+  - Memory Pack
+- Run validation before preview where possible.
+- Compare before/after health.
+- Add rollback support for applied previews.
+
+Expected impact:
+- Safer self-improvement
+- Better roadmap execution
+- More confidence in AI-generated changes
+
+Status: COMPLETE
+Completed build:
+- Added Self-Upgrade 2.0 backend packs, backlog metadata, risk/impact/files/validation tracking, and persisted run history.
+- Added guarded self-upgrade status APIs plus before/after safety snapshots.
+- Added applied-preview history and rollback API support.
+- Upgraded the Self-Upgrade panel with pack launchers, backlog visibility, health/safety counters, and rollback controls.
+- Validation: npm run build passed.
+
+--------------------------------------------------------------------------------
+PRIORITY 8 — SPEED + LATENCY SYSTEM
+--------------------------------------------------------------------------------
+Goal:
+Make Ultron feel fast even when local models are slower than cloud inference.
+
+Why it matters:
+Speed is user experience. Local AI must avoid unnecessary model/tool work.
+
+Build:
+- Keep fast model warm.
+- Cache model warmup status.
+- Use fast model for:
+  - titles
+  - followups
+  - prompt enhancement
+  - short answers
+  - router explanations
+- Use primary model for:
+  - Deep reasoning
+  - Research synthesis
+  - coding
+  - agent tasks
+- Add stream heartbeat for long tasks.
+- Add visible task progress for Agent Mode.
+- Add latency diagnostics in Health/Diagnostics panel.
+- Avoid loading full agent prompt for knowledge-only or connector setup prompts.
+
+Expected impact:
+- Faster perceived response time
+- Less waiting on simple prompts
+- Better local-model experience
+
+Status: COMPLETE
+Completed build:
+- Added observable model warmup status, fast-model readiness, and /api/latency/status diagnostics.
+- Added Speed + latency system health row.
+- Routed title generation, followups, and prompt enhancement through the detected fast model when available.
+- Added SSE stream_status events for connected, waiting for first token, streaming, and done states.
+- Rendered stream progress in the Agent Trace/loading UI.
+- Validation: npm run build passed.
+
+--------------------------------------------------------------------------------
+PRIORITY 9 — CHAT CONTAINER / FRONTEND COMMAND CENTER
+--------------------------------------------------------------------------------
+Goal:
+Make the UI feel like a serious AI workspace rather than a basic chat window.
+
+Build:
+- Add Auto Decision Chip per answer.
+- Add rerun controls:
+  - Rerun as Agent
+  - Rerun as Deep
+  - Rerun as Research
+  - Verify with tools
+- Add answer style controls:
+  - concise
+  - detailed
+  - technical
+  - executive
+- Add Agent task-state banner.
+- Improve loading states:
+  - Model warming
+  - Planning
+  - Using tools
+  - Waiting for browser
+  - Verifying
+- Add route/latency diagnostics to a side panel, not inside answer bubbles.
+
+Expected impact:
+- More trust
+- More control
+- Cleaner experience
+- Stronger product polish
+
+Status: COMPLETE
+Completed build:
+- Added answer style controls for concise, detailed, technical, and executive response modes.
+- Threaded answer style through chat and Agent Mode system prompts.
+- Preserved existing Auto Decision Chip, rerun controls, Verify with tools, task-state trace, and route diagnostics.
+- Added SSE stream progress events into the trace UI for clearer loading states.
+- Validation: npm run build passed.
+
+--------------------------------------------------------------------------------
+PRIORITY 10 — NATIVE CONNECTOR ACTIONS
+--------------------------------------------------------------------------------
+Goal:
+Move from generic browser automation to typed, reusable connector actions.
+
+Build:
+- Add native action schemas per connector.
+- Examples:
+  - salesforce.searchLeads
+  - salesforce.logActivity
+  - gmail.summarizeThread
+  - gmail.draftReply
+  - sheets.appendRow
+  - github.reviewPullRequest
+  - stripe.summarizePayments
+- Add approval requirements per action type.
+- Add dry-run mode.
+- Add connector tests.
+
+Expected impact:
+- Safer automation
+- Faster connector workflows
+- Better reliability than browser-only flows
+
+Status: COMPLETE
+Completed build:
+- Added typed native connector action schemas for Salesforce, Gmail, Google Sheets, GitHub, and Stripe examples.
+- Added dry-run planning with required inputs, prerequisites, permission level, approval reason, and plan steps.
+- Added /api/connectors/actions and /api/connectors/actions/dry-run endpoints.
+- Added connector_action_dry_run Agent Mode tool so agents can plan native connector work without mutating live systems.
+- Added Connectors panel native action cards and dry-run result display.
+- Added audit entries for native action dry-runs when connector audit logging is enabled.
+- Validation: npm run build passed.
+
+--------------------------------------------------------------------------------
+LONGER-TERM PRODUCTIZATION
+--------------------------------------------------------------------------------
+- Cross-platform support: macOS/Linux
+- Multi-user auth and tenant isolation
+- Enterprise SSO: SAML/OIDC
+- Docker/VPS deployment option
+- Marketplace for community tools/plugins
+- Mobile companion app
+- Fine-tuning pipeline for custom local models
+- Analytics dashboard
+- Native OAuth connector setup
+- Router telemetry/evaluation dashboard
+
+--------------------------------------------------------------------------------
+BEST NEXT IMPLEMENTATION ORDER
+--------------------------------------------------------------------------------
+1. Router Preview + Decision Chips
+2. Router Evaluation Suite
+3. Agent Task Planner
+4. Connector Setup Wizard
+5. Telemetry + Observability
+6. Memory 2.0
+7. Self-Upgrade 2.0
+8. Speed + Latency System
+9. Chat Container Command Center
+10. Native Connector Actions
+
+--------------------------------------------------------------------------------
+SUCCESS METRICS
+--------------------------------------------------------------------------------
+- Simple prompts answer in <2 seconds to first useful token when model is warm
+- Knowledge prompts avoid Agent Mode unless tools are needed
+- Research/current prompts use Agent + Research mode
+- Account/connector prompts use Agent Mode and approval gates
+- Router test suite passes >95% of cases
+- Agent tasks report a done condition and verification result
+- Connector actions never apply sensitive changes without approval
+- Health Command Center remains green after upgrades
+- User can understand why Ultron chose each mode
+
+================================================================================
+END OF ROADMAP
+================================================================================

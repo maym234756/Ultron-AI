@@ -29,6 +29,8 @@ import {
   browserClick, browserClickDefinition,
   browserFill, browserFillDefinition,
   browserRead, browserReadDefinition,
+  browserAssert, browserAssertDefinition,
+  browserSnapshot, browserSnapshotDefinition,
   browserScreenshot, browserScreenshotDefinition,
   browserEval, browserEvalDefinition,
   browserWait, browserWaitDefinition,
@@ -91,6 +93,7 @@ import {
   cancelSchedule, cancelScheduleDefinition,
   runScheduleNow, runScheduleNowDefinition,
 } from './scheduler.js'
+import { planConnectorAction } from '../connectorActions.js'
 import {
   emailRead, emailReadDefinition,
   emailSend, emailSendDefinition,
@@ -105,7 +108,7 @@ import { transcribeAudio, transcribeAudioDefinition, installWhisper, installWhis
 import { memSave, memSaveDefinition, memRecall, memRecallDefinition, memList, memListDefinition, memForget, memForgetDefinition } from './longmem.js'
 import { sysStats, sysStatsDefinition, sysProcesses, sysProcessesDefinition, sysKill, sysKillDefinition, sysRun, sysRunDefinition, sysEnv, sysEnvDefinition } from './sysmon.js'
 import { fileRead, fileReadDefinition, fileWrite, fileWriteDefinition, fileList, fileListDefinition, fileMove, fileMoveDefinition, fileDelete, fileDeleteDefinition, fileSearch, fileSearchDefinition, fileInfo, fileInfoDefinition, folderCreate, folderCreateDefinition, folderDelete, folderDeleteDefinition, folderCopy, folderCopyDefinition, openInExplorer, openInExplorerDefinition } from './userfiles.js'
-import { ghSetToken, ghSetTokenDefinition, ghRepos, ghReposDefinition, ghIssues, ghIssuesDefinition, ghPrs, ghPrsDefinition, ghCreateIssue, ghCreateIssueDefinition, ghRepoInfo, ghRepoInfoDefinition, ghSearch, ghSearchDefinition } from './github.js'
+import { ghSetToken, ghSetTokenDefinition, ghAuthStatus, ghAuthStatusDefinition, ghRepos, ghReposDefinition, ghIssues, ghIssuesDefinition, ghPrs, ghPrsDefinition, ghCreateIssue, ghCreateIssueDefinition, ghRepoInfo, ghRepoInfoDefinition, ghSearch, ghSearchDefinition } from './github.js'
 import { desktopClick, desktopClickDefinition, desktopType, desktopTypeDefinition, desktopSendKeys, desktopSendKeysDefinition, desktopFindWindow, desktopFindWindowDefinition, desktopListWindows, desktopListWindowsDefinition, desktopGetCursorPos, desktopGetCursorPosDefinition, desktopScroll, desktopScrollDefinition } from './desktop.js'
 import { agentRun, agentRunDefinition, agentParallel, agentParallelDefinition } from './multiagent.js'
 import {
@@ -137,6 +140,38 @@ import {
   dailyBriefing, dailyBriefingDefinition,
 } from './tasks.js'
 
+const connectorActionDryRunDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'connector_action_dry_run',
+    description: 'Plan a typed native connector action in dry-run mode. Never mutates live connector data.',
+    parameters: {
+      type: 'object',
+      properties: {
+        actionName: { type: 'string', description: 'Native action name, e.g. salesforce.searchLeads or gmail.draftReply.' },
+        inputJson: { type: 'string', description: 'JSON object containing the action inputs.' },
+      },
+      required: ['actionName'],
+    },
+  },
+}
+
+async function connectorActionDryRun(args: ToolArgs): Promise<string> {
+  let input: Record<string, unknown> = {}
+  if (args.inputJson) {
+    try {
+      const parsed = JSON.parse(args.inputJson) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) input = parsed as Record<string, unknown>
+    } catch {
+      return 'Error: inputJson must be a JSON object string.'
+    }
+  }
+
+  const plan = planConnectorAction(args.actionName ?? '', input, toolDefinitions.map(tool => tool.function.name), process.env)
+  if (!plan) return `Error: Unknown native connector action "${args.actionName ?? ''}".`
+  return JSON.stringify(plan, null, 2)
+}
+
 export const toolDefinitions: ToolDefinition[] = [
   terminalDefinition,
   writeFileDefinition,
@@ -164,6 +199,8 @@ export const toolDefinitions: ToolDefinition[] = [
   browserClickDefinition,
   browserFillDefinition,
   browserReadDefinition,
+  browserAssertDefinition,
+  browserSnapshotDefinition,
   browserScreenshotDefinition,
   browserEvalDefinition,
   browserWaitDefinition,
@@ -260,6 +297,7 @@ export const toolDefinitions: ToolDefinition[] = [
   openInExplorerDefinition,
   // GitHub
   ghSetTokenDefinition,
+  ghAuthStatusDefinition,
   ghReposDefinition,
   ghIssuesDefinition,
   ghPrsDefinition,
@@ -305,6 +343,7 @@ export const toolDefinitions: ToolDefinition[] = [
   taskDeleteDefinition,
   taskUpdateDefinition,
   dailyBriefingDefinition,
+  connectorActionDryRunDefinition,
 ]
 
 const handlers: Record<string, ToolHandler> = {
@@ -334,6 +373,8 @@ const handlers: Record<string, ToolHandler> = {
   browser_click: browserClick,
   browser_fill: browserFill,
   browser_read: browserRead,
+  browser_assert: browserAssert,
+  browser_snapshot: browserSnapshot,
   browser_screenshot: browserScreenshot,
   browser_eval: browserEval,
   browser_wait: browserWait,
@@ -429,6 +470,7 @@ const handlers: Record<string, ToolHandler> = {
   open_in_explorer: openInExplorer,
   // GitHub
   gh_set_token: ghSetToken,
+  gh_auth_status: ghAuthStatus,
   gh_repos: ghRepos,
   gh_issues: ghIssues,
   gh_prs: ghPrs,
@@ -474,6 +516,7 @@ const handlers: Record<string, ToolHandler> = {
   task_delete: taskDelete,
   task_update: taskUpdate,
   daily_briefing: dailyBriefing,
+  connector_action_dry_run: connectorActionDryRun,
 }
 
 export async function executeTool(name: string, args: ToolArgs): Promise<string> {

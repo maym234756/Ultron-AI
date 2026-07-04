@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Clock, Pencil, Search, Trash2, X } from 'lucide-react'
+import { Check, Clock, Loader, Pencil, Search, Trash2, X } from 'lucide-react'
 import type { HistoryMeta, Message } from '../types'
 
 interface Props {
@@ -7,6 +7,8 @@ interface Props {
   onLoad: (messages: Message[], model: string) => void
   onClose: () => void
 }
+
+interface SearchResult extends HistoryMeta { snippet: string }
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -35,10 +37,13 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
   const [sessions, setSessions] = useState<HistoryMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [contentResults, setContentResults] = useState<SearchResult[] | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetch(`${apiBase}/api/history`)
@@ -51,6 +56,26 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
   useEffect(() => {
     setTimeout(() => searchRef.current?.focus(), 80)
   }, [])
+
+  // Debounced full-content search across all sessions
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = search.trim()
+    if (!q) { setContentResults(null); setSearching(false); return }
+
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const r = await fetch(`${apiBase}/api/history/search?q=${encodeURIComponent(q)}`)
+        if (r.ok) {
+          const d = await r.json() as { results: SearchResult[] }
+          setContentResults(d.results ?? [])
+        }
+      } catch { /* silent */ } finally {
+        setSearching(false)
+      }
+    }, 350)
+  }, [search, apiBase])
 
   async function loadSession(id: string) {
     try {
@@ -67,6 +92,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
     e.stopPropagation()
     await fetch(`${apiBase}/api/history/${id}`, { method: 'DELETE' }).catch(() => {})
     setSessions((s) => s.filter((x) => x.id !== id))
+    setContentResults(r => r ? r.filter(x => x.id !== id) : r)
   }
 
   function startRename(e: React.MouseEvent, session: HistoryMeta) {
@@ -88,17 +114,25 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
     setRenamingId(null)
   }
 
-  const filtered = sessions.filter(s =>
+  function highlightSnippet(snippet: string, query: string): string {
+    const idx = snippet.toLowerCase().indexOf(query.toLowerCase())
+    if (idx < 0) return snippet
+    return snippet.slice(0, idx) + '**' + snippet.slice(idx, idx + query.length) + '**' + snippet.slice(idx + query.length)
+  }
+
+  const titleFiltered = sessions.filter(s =>
     !search.trim() || s.title.toLowerCase().includes(search.toLowerCase()),
   )
 
   // Build date-grouped map
   const grouped = new Map<DateGroup, HistoryMeta[]>()
-  for (const s of filtered) {
+  for (const s of titleFiltered) {
     const g = getDateGroup(s.updatedAt)
     if (!grouped.has(g)) grouped.set(g, [])
     grouped.get(g)!.push(s)
   }
+
+  const isSearching = search.trim().length > 0
 
   return (
     <div className="panel-overlay" onClick={onClose}>
@@ -121,11 +155,12 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search history…"
+            placeholder="Search titles and messages…"
             className="history-search-input"
           />
-          {search && (
-            <button type="button" className="history-search-clear" onClick={() => setSearch('')}>
+          {searching && <Loader size={12} className="spin history-search-icon" />}
+          {search && !searching && (
+            <button type="button" className="history-search-clear" onClick={() => { setSearch(''); setContentResults(null) }}>
               <X size={12} />
             </button>
           )}
@@ -136,9 +171,39 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
           {!loading && sessions.length === 0 && (
             <p className="panel-hint">No saved conversations yet. They'll appear here automatically.</p>
           )}
-          {!loading && sessions.length > 0 && filtered.length === 0 && (
+
+          {/* Full-content search results */}
+          {isSearching && contentResults !== null && contentResults.length > 0 && (
+            <>
+              <div className="history-group-label">
+                Message matches ({contentResults.length})
+              </div>
+              {contentResults.map(r => (
+                <div key={`cr-${r.id}`} className="history-item-row">
+                  <button type="button" className="history-item history-item-content-match" onClick={() => void loadSession(r.id)}>
+                    <div className="history-item-text">
+                      <span className="history-item-title">{r.title}</span>
+                      <span className="history-content-snippet">{highlightSnippet(r.snippet, search.trim())}</span>
+                      <div className="history-item-meta">
+                        <span className="history-model-badge">{r.model.split(':')[0]}</span>
+                        <span>{relativeTime(r.updatedAt)}</span>
+                      </div>
+                    </div>
+                  </button>
+                  <button type="button" className="icon-button history-delete" onClick={(e) => void deleteSession(e, r.id)} aria-label="Delete">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              {titleFiltered.length > 0 && <div className="history-group-label" style={{ marginTop: 8 }}>Title matches</div>}
+            </>
+          )}
+
+          {isSearching && contentResults !== null && contentResults.length === 0 && titleFiltered.length === 0 && (
             <p className="panel-hint">No matches for "{search}".</p>
           )}
+
+          {/* Normal / title-filtered list */}
           {DATE_GROUP_ORDER.map(group => {
             const items = grouped.get(group)
             if (!items?.length) return null
@@ -194,3 +259,4 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
     </div>
   )
 }
+

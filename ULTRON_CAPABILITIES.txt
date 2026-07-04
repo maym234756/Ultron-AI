@@ -7,6 +7,10 @@ access. Primary model: qwen2.5:14b. Vision: llava. Fast model: llama3.2:3b.
 Embeddings: nomic-embed-text. Playwright-controlled Chromium for full browser
 automation (headless:false). Passive screen observer runs in the background,
 injecting live context. Real-time token streaming. Parallel tool execution.
+Scored prompt router chooses Chat vs Agent and Instant/Balanced/Deep/Research.
+Answer style controls tune output as Concise, Detailed, Technical, or Executive.
+External Connector Hub tracks 52 supported services with typed native action
+schemas and dry-run planning.
 
 --------------------------------------------------------------------------------
 MODELS
@@ -51,6 +55,178 @@ Context Management:
 - Screen observer context injected into every request (configurable)
 - RAG knowledge + long-term memories auto-recalled per query
 
+Intelligence Profiles:
+- Instant: shortest correct path, fast-model routing, minimal context overhead
+- Balanced: default profile for normal chat and coding work
+- Deep: stronger decomposition, edge-case checking, larger context floor
+- Research: evidence-first synthesis with uncertainty handling and citations
+- Profiles are persisted in browser settings and sent to both chat and agent APIs
+
+Auto Router / Decision Engine:
+- Scores every prompt before dispatch: agent score, chat score, complexity,
+  freshness, confidence, and matched decision signals
+- Auto-selects Chat vs Agent based on tool/action/connector/file/web needs
+- Auto-selects intelligence mode based on speed, complexity, research, code,
+  vision, and account-action cues
+- Keeps simple knowledge prompts fast: "What is Salesforce?" -> Chat/Instant
+- Routes action and research prompts correctly: "Open Gmail" -> Agent;
+  "Research latest X with sources" -> Agent/Research
+- Routes project, folder, codebase, and explicit local-path reviews to Agent/Deep
+  so Ultron can request permission and use filesystem tools instead of guessing
+- Settings toggles: Auto route Chat/Agent and Auto intelligence profile
+
+Critical Thinking Upgrades:
+- Chat answers follow direct-answer-first contract
+- Separates facts, assumptions, caveats, and recommended next action
+- Deep mode includes conclusion, reasoning, tradeoff, and next step
+- Research mode labels whether claims came from live retrieval or model/context
+- Long-context compression preserves active task, decisions, verified facts,
+  key content, verification status, and open questions
+
+--------------------------------------------------------------------------------
+MODEL COMPARE (Ultron-exclusive)
+--------------------------------------------------------------------------------
+Run the same prompt against all your installed Ollama models simultaneously:
+- Up to 4 models side-by-side in a responsive CSS-grid layout
+- All models stream tokens in parallel (Promise.allSettled concurrency)
+- Per-column metrics: first-token latency (ftt:), tokens, tok/s when done
+- Select/deselect models via chip buttons; rank shown on each chip
+- Triggered via Compare button in chat header (shown when 2+ models installed)
+- Keyboard shortcut: Ctrl+M
+- New endpoint: POST /api/compare (SSE)
+
+--------------------------------------------------------------------------------
+VOICE CONVERSATION MODE (Ultron-exclusive)
+--------------------------------------------------------------------------------
+Full hands-free voice conversation loop — no keyboard needed:
+- Click the 📞 Phone button in the composer to enter conversation mode
+- Ultron listens (Web Speech API), auto-sends when you stop speaking
+- When response finishes, Ultron speaks it aloud automatically (Web Speech TTS)
+- After speaking, Ultron restarts listening — fully hands-free loop
+- Red banner above composer shows conversation state (Listening / Generating)
+- Click X in banner or phone button again to exit conversation mode
+- Stopping a stream also exits conversation mode
+- Normal mic button still works for single-shot voice input
+
+--------------------------------------------------------------------------------
+PROMPT ENHANCE (Ultron-exclusive)
+--------------------------------------------------------------------------------
+- ✨ Wand icon appears in composer when draft is longer than 8 characters
+- Calls /api/enhance: asks the model to rewrite your prompt for clarity and precision
+- Replaces draft in-place; button turns accent-colored to signal enhancement
+- Click again to undo — restores original draft exactly
+- Endpoint: POST /api/enhance
+
+--------------------------------------------------------------------------------
+PROJECT BUILDER (Ultron-exclusive)
+--------------------------------------------------------------------------------
+Template-driven programming project creation with approval-first local actions:
+- Sidebar Build panel scaffolds complete starter projects from templates
+- Natural prompts like "Let's build a website" route to a guided builder flow:
+  Ultron asks for the project name and location, asks approval, then creates
+  and opens the project instead of giving a generic tutorial
+- Templates: zero-dependency browser app, React + Vite + TypeScript,
+  Express API service, and Python CLI tool
+- User chooses project name, destination folder, validation/build options,
+  VS Code open, and File Explorer open
+- Project Memory remembers generated projects, paths, stacks, commands, last
+  check status, last action, and preview URL when available
+- Remembered projects can be opened in File Explorer, opened in VS Code,
+  checked/built again, repaired with a check-fix-check loop, or started as a
+  dev server from the Builder panel
+- Fix action runs the project check, reads the error output and editable source
+  files, asks the local model for minimal full-file repairs, applies them only
+  inside the remembered project folder, then runs the check again
+- Requires explicit approval before creating files, running commands, or opening
+  local tools
+- Runs the first validation/build pass and returns file list, logs, and next
+  commands for continued programmer workflow
+- Endpoints: GET /api/project-builder/templates,
+  POST /api/project-builder/build, GET /api/project-builder/projects,
+  POST /api/project-builder/projects/:id/actions
+
+--------------------------------------------------------------------------------
+REFERENCE BUILDER / WEBSITE LEARNER (Ultron-exclusive)
+--------------------------------------------------------------------------------
+Reference-to-blueprint workflow for building original websites from examples:
+- Sidebar Learn panel accepts a public website URL, screenshot image, or both
+- Requires explicit approval before scanning the URL or analyzing the screenshot
+- Extracts page title, headings, navigation, CTAs, forms, colors, image alt text,
+  text sample, and screenshot layout summary when a vision model is available
+- Creates an original build blueprint with product concept, pages, components,
+  workflows, visual direction, and a ready-to-use Ultron build prompt
+- Learn + Build creates a complete original zero-dependency website project from
+  the scanned reference, writes source files, runs the first check, and adds the
+  result to Project Memory
+- Optional Visual Compare captures the reference page/screenshot and generated
+  site with Playwright, saves visual-compare/reference.png and
+  visual-compare/generated.png, and writes VISUAL_COMPARE.md with local vision
+  model feedback or manual-review guidance if automated comparison is unavailable
+- Enforces guardrails against copying brand names, logos, exact text, protected
+  imagery, or distinctive trade dress; it learns structure and workflow patterns
+- "Use As Build Prompt" sends the blueprint into chat and enables Agent mode so
+  Ultron can continue into Project Builder, validation, repair, and preview
+- Endpoints: POST /api/reference-builder/scan,
+  POST /api/reference-builder/build
+
+--------------------------------------------------------------------------------
+TASK DASHBOARD
+--------------------------------------------------------------------------------
+Full task management UI backed by a persistent task file (~/.ultron-tasks.json):
+- Sidebar Tasks button shows live overdue badge count
+- Filter tabs: Pending / Today / Overdue / Done / All — each with live counts
+- Inline quick-add form: title, due date picker, priority selector, tags
+- Task cards: priority dot (red/amber/green), relative due date, tags, notes
+- Overdue tasks highlighted in red with day-count label
+- Check-to-complete, hover-to-delete
+- Works in sync with agent: if agent creates tasks, they appear in the panel
+- REST endpoints: GET/POST /api/tasks, PATCH /api/tasks/:id/done, DELETE /api/tasks/:id
+
+--------------------------------------------------------------------------------
+SELF-UPGRADE 2.0 SYSTEM (Ultron-exclusive)
+--------------------------------------------------------------------------------
+Ultron can analyze and improve its own source code — with strict guardrails:
+
+HOW IT WORKS:
+1. Click “Upgrade” in the sidebar to open the Self-Upgrade panel
+2. Choose an upgrade pack, quick task, backlog item, or custom improvement
+3. The agent reads the codebase using code_search, read_file, list_directory
+4. Each run is recorded with risk, impact, affected files, and validation needs
+5. Before/after safety snapshots track pending previews, applied previews,
+  rollbackable changes, and tool count
+6. Proposes changes via preview_write (shows diff for user review)
+7. User reviews diffs in the Preview panel and applies, discards, or rolls back
+  applied file previews
+
+GUARDRAILS (strictly enforced):
+• Only permitted tools: read_file, list_directory, code_search, diff_files,
+  lint_code, preview_write
+• Direct write_file is BLOCKED — all changes go through preview/approval
+• Only src/ and server/ directories may be modified
+• Protected files: package.json, tsconfig*.json, node_modules, .env, dist/,
+  .chat-history, *.jsonl, vite.config.ts, electron/
+• Changes are minimal and surgical (no whole-file rewrites)
+• Lint validation required after each proposed change
+• Max 15 reasoning steps per upgrade session
+
+Quick tasks built-in:
+• Review codebase for improvement opportunities
+• Fix TypeScript errors
+• Optimize agent loop performance
+• UI accessibility audit
+• Security review
+• Add analytics to agent
+
+Upgrade packs built-in:
+• Router Intelligence Pack
+• Connector Pack
+• Performance Pack
+• UI Polish Pack
+• Memory Pack
+
+Endpoints: GET /api/self-upgrade, POST /api/self-upgrade (SSE),
+           GET /api/previews/applied, POST /api/previews/:id/rollback
+
 --------------------------------------------------------------------------------
 TERMINAL & SCRIPTING
 --------------------------------------------------------------------------------
@@ -82,6 +258,15 @@ FILE SYSTEM (HOME DIRECTORY — FULL ACCESS)
 - Search for text content across files (grep-style, with extension filter)
 - Get file metadata: size, created/modified dates, type
 - Open any folder or file in Windows Explorer
+- Protected location tools now show a permission popup before access. User can
+  Allow or Deny reads, searches, Explorer opens, writes, moves, copies, creates,
+  and deletes for requested paths; approved locations are remembered for the
+  current agent run only.
+- External app/platform launches also require an Allow/Deny popup first:
+  File Explorer, PowerShell, Command Prompt, Windows Terminal, Gmail,
+  Salesforce, YouTube, Google Search, Facebook, and other connector/web targets.
+  Approval grants that platform/tool surface for the current run so Ultron can
+  continue the requested workflow without repeatedly asking for the same access.
 
 --------------------------------------------------------------------------------
 SYSTEM MONITOR
@@ -115,6 +300,39 @@ WEB & SEARCH
 - Call REST APIs, webhooks, and private services
 - List ALL open browser tabs across Chrome/Edge/Firefox/Brave (UI Automation)
 - Switch focus to any open tab by title in the real browser
+
+--------------------------------------------------------------------------------
+EXTERNAL CONNECTOR HUB (52 registered services)
+--------------------------------------------------------------------------------
+Central registry for authenticated websites, SaaS apps, cloud consoles, and APIs:
+- 52 connectors registered, 52 browser-ready through authenticated Chrome/Edge
+- Status endpoint reports API-ready, browser-ready, setup-needed, missing tools
+- Sidebar "Connect" panel lists connector category, auth modes, capabilities,
+  safety rules, and Open button for each service
+- Agent fast path uses the same registry, so connector prompts answer instantly
+- Safe authentication model: user logs in normally; Ultron uses browser session
+  or configured OAuth/API tokens; passwords are never collected in chat
+- Sensitive actions are approval-gated: sending email, editing CRM records,
+  deleting rows/files, posting content, changing billing/security settings
+- Native connector actions are typed and dry-run first: salesforce.searchLeads,
+  salesforce.logActivity, gmail.summarizeThread, gmail.draftReply,
+  sheets.appendRow, github.reviewPullRequest, stripe.summarizePayments
+- Dry-run plans report required inputs, connector readiness, prerequisites,
+  approval reason, permission level, warnings, and execution steps
+- Agent tool: connector_action_dry_run plans native connector work without
+  mutating live systems
+
+Connector categories:
+- CRM: Salesforce, HubSpot
+- Email/calendar/productivity: Gmail, Outlook, Google Calendar, Slack, Teams,
+  Discord, Zoom, Notion, Trello, Asana, Monday.com, Calendly
+- Google/workspace: Google Sheets, Google Drive, YouTube, Google Ads
+- Developer/support/data: GitHub, Jira, Linear, Zendesk, Intercom, ServiceNow,
+  Airtable, Snowflake
+- Commerce/finance: Shopify, QuickBooks, Stripe, PayPal, Square
+- Social/marketing/design/cloud/automation: LinkedIn, X/Twitter, Facebook/Meta,
+  Instagram, TikTok, Reddit, WordPress, Webflow, Mailchimp, Meta Ads, Figma,
+  Canva, DocuSign, AWS Console, Azure Portal, Zapier, Make
 
 --------------------------------------------------------------------------------
 PLAYWRIGHT BROWSER AUTOMATION (37 tools)
@@ -366,9 +584,15 @@ INTERACTION & UI FEATURES
 --------------------------------------------------------------------------------
 AI INTELLIGENCE:
 - Ask clarifying questions mid-task and wait for your answer (ask_user)
+- Intelligence profile selector: Instant / Balanced / Deep / Research
+- Auto Router: chooses Chat vs Agent with confidence, reason, and signals
+- Auto Intelligence: chooses Instant / Balanced / Deep / Research per prompt
 - Follow-up suggestion chips: 3 AI-generated follow-ups after each response
 - Smart conversation auto-title: LLM generates 4-6 word titles automatically
-- Context auto-compression: conversations >18 turns are summarized intelligently
+- Predictive action cards: suggests next tool actions after applicable answers
+- Collapsible long messages: condenses oversized user/assistant containers
+- Context auto-compression: conversations >18 turns preserve decisions,
+  active task, verified facts, key content, checks run, and open questions
 - RAG + long-term memory auto-injected into BOTH chat and agent modes
 - Parallel tool execution: multiple independent tools run simultaneously
 - Auto-retry: one automatic retry on transient Ollama connection errors
@@ -377,9 +601,8 @@ CHAT INTERFACE:
 - Real-time token streaming (tokens appear as generated, not after)
 - Streaming typing cursor while generating
 - Typing indicator (animated dots) while waiting for first token
-- First-token latency displayed in metrics footer (ftt: 0.4s)
 - Message timestamps (relative: "2 min ago")
-- Message metrics footer: model name · tokens · tok/s · steps · % ctx · words
+- Clean answer containers: metrics hidden from bubbles; actions appear on hover
 - Read Aloud button: browser TTS for any response (click to stop)
 - Copy button: copies raw response text to clipboard
 - Edit button: restore any sent message to the composer for editing
@@ -451,6 +674,9 @@ NAVIGATION & HISTORY:
 - Export chat: downloads conversation as .md Markdown file
 
 SETTINGS:
+- Intelligence profile selector (Instant, Balanced, Deep, Research)
+- Auto route Chat/Agent toggle
+- Auto intelligence profile toggle
 - Temperature slider (0–1.5)
 - Max agent iterations (1–30)
 - Context window size (2,048–32,768 tokens)
@@ -482,20 +708,40 @@ AGENT TOOLS PANEL:
 
 OTHER:
 - Toast notifications (success/error/info, auto-dismiss 4s)
+- Health Command Center: live readiness panel for Ollama, models, tools,
+  observer, self-healer, RAG, memory, external connectors, and production build
+  artifacts
+- External Connectors panel: 52-service registry with status and safe launch
+- External Connectors panel: native action schemas, dry-run plans, and audit log
 - Observer bar: shows active app + open browser tabs in real time
 - Model selector: change Ollama model live from the UI
   · Vision models marked with 👁 badge
   · Hint shown when image attached to non-vision model
+- Answer style segmented control: Concise / Detailed / Technical / Executive
+- Stream progress trace: connected, waiting for first token, streaming, done
 - Keyboard shortcuts help modal: press ? to see all shortcuts
 - Electron tray app: Ctrl+Shift+U global hotkey, hides to tray (npm run tray)
+- Downloadable Windows desktop installer: npm run desktop:dist builds
+  desktop-release/Ultron-Setup-<version>.exe, and the GitHub Desktop Release
+  workflow publishes installer artifacts or draft tagged releases
 
 --------------------------------------------------------------------------------
-API ENDPOINTS: 38+
+API ENDPOINTS: 52+
 --------------------------------------------------------------------------------
 /api/health           — Ollama status + best available model
+/api/capabilities/status — Full Ultron readiness report and operational health
+/api/connectors/status — External connector registry and readiness snapshot
+/api/connectors/actions — Native connector action schema registry
+/api/connectors/actions/dry-run — Dry-run a typed connector action plan
+/api/latency/status    — Model warmup, fast model, and cache diagnostics
 /api/models           — List models with vision capability flag
 /api/agent            — Agent stream (SSE): tool calls, thinking, metrics
 /api/chat             — Chat stream (SSE) with RAG + memory injection
+/api/compare          — Multi-model side-by-side SSE comparison
+/api/tasks            — Task dashboard CRUD API
+/api/project-builder  — Template project creation + validation workflow
+/api/enhance          — Prompt enhancer
+/api/self-upgrade     — Guarded self-upgrade status + agent stream
 /api/run-code         — Execute Python/JS/TS/Bash/PS code, return output
 /api/local-file       — Securely serve local image files (screenshots, generated)
 /api/memories         — List / add long-term memories
@@ -560,7 +806,28 @@ WHAT IT DETECTS:
 • Import errors, undefined variables, unused variables (warnings)
 
 --------------------------------------------------------------------------------
-TOOL COUNT: 151 tools  |  API ENDPOINTS: 41+
+HEALTH COMMAND CENTER
+--------------------------------------------------------------------------------
+Ultron now has first-class self-health reporting, not just a basic server ping.
+
+WHAT IT CHECKS:
+• Ollama reachability and local model inventory
+• Vision model availability for image/screenshot tasks
+• Tool registry load status and callable tool count
+• External connector registry readiness and browser/API status
+• Passive observer state and capture interval
+• Self-healer status, scan errors, and issue count
+• RAG and long-term-memory stores
+• Production build artifact presence
+
+HOW TO USE IT:
+1. Click "Health" in the sidebar
+2. Review the green/amber readiness cards
+3. Click "Refresh" after pulling models, running builds, or changing settings
+4. API consumers can call GET /api/capabilities/status directly
+
+--------------------------------------------------------------------------------
+TOOL COUNT: 154 tools  |  API ENDPOINTS: 52+  |  CONNECTORS: 52
 --------------------------------------------------------------------------------
 SYSTEM:       run_terminal, open_app, take_screenshot, clipboard_read,
               clipboard_write, speak, notify

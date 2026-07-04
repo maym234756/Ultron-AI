@@ -12,6 +12,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getPage } from './playwright.js'
 import type { ToolDefinition, ToolHandler } from './types.js'
+import type { Page, Response } from 'playwright'
 
 // ── Credential vault (AES-256-GCM) ───────────────────────────────────────────
 
@@ -358,8 +359,11 @@ export const browserRecordStop: ToolHandler = async (args) => {
 
 // ── browser_network_capture ───────────────────────────────────────────────────
 
-const _capturedRequests: Array<{ url: string; method: string; status: number; body: string }> = []
+const _capturedRequests: Array<{ url: string; method: string; status: number; contentType: string; size: number; capturedAt: number; body: string }> = []
 let _capturing = false
+let _networkCapturePage: Page | null = null
+let _networkCaptureHandler: ((response: Response) => Promise<void>) | null = null
+let _networkCaptureStartedAt = 0
 
 export const browserNetworkCaptureDefinition: ToolDefinition = {
   type: 'function',
@@ -371,6 +375,11 @@ export const browserNetworkCaptureDefinition: ToolDefinition = {
       properties: {
         action: { type: 'string', description: 'start, stop, or get (default: get captured so far).' },
         filter: { type: 'string', description: 'URL substring filter (e.g. "/api/", "graphql").' },
+        method: { type: 'string', description: 'Optional comma-separated HTTP methods to capture, e.g. GET,POST.' },
+        status: { type: 'string', description: 'Optional comma-separated HTTP statuses to capture, e.g. 200,201,404.' },
+        content_type: { type: 'string', description: 'Optional content-type substring filter, e.g. json, text, graphql.' },
+        max_body_chars: { type: 'string', description: 'Maximum response body characters to store per response (default 5000).' },
+        save_to: { type: 'string', description: 'For action=get, optional filename to save captured responses as JSON in the workspace.' },
       },
     },
   },
@@ -382,38 +391,72 @@ export const browserNetworkCapture: ToolHandler = async (args) => {
   if (action === 'start') {
     try {
       const page = await getPage()
+      if (_networkCapturePage && _networkCaptureHandler) {
+        _networkCapturePage.off('response', _networkCaptureHandler)
+      }
       _capturedRequests.length = 0
       _capturing = true
+      _networkCaptureStartedAt = Date.now()
+      const methods = new Set((args.method ?? '').split(',').map(method => method.trim().toUpperCase()).filter(Boolean))
+      const statuses = new Set((args.status ?? '').split(',').map(status => parseInt(status.trim(), 10)).filter(Number.isFinite))
+      const maxBodyChars = Math.max(200, Math.min(200_000, parseInt(args.max_body_chars ?? '5000', 10) || 5000))
+      const contentTypeFilter = args.content_type?.toLowerCase()
 
-      page.on('response', async (response) => {
+      _networkCaptureHandler = async (response: Response) => {
         if (!_capturing) return
         const url = response.url()
         if (args.filter && !url.includes(args.filter)) return
+        const method = response.request().method()
+        if (methods.size && !methods.has(method.toUpperCase())) return
+        const status = response.status()
+        if (statuses.size && !statuses.has(status)) return
         const ct = response.headers()['content-type'] ?? ''
-        if (!ct.includes('json') && !ct.includes('text')) return
+        if (contentTypeFilter && !ct.toLowerCase().includes(contentTypeFilter)) return
+        if (!contentTypeFilter && !ct.includes('json') && !ct.includes('text')) return
         try {
           const body = await response.text()
           _capturedRequests.push({
             url,
-            method: response.request().method(),
-            status: response.status(),
-            body: body.slice(0, 5000),
+            method,
+            status,
+            contentType: ct,
+            size: Buffer.byteLength(body, 'utf8'),
+            capturedAt: Date.now(),
+            body: body.slice(0, maxBodyChars),
           })
         } catch { /* skip */ }
-      })
+      }
+      _networkCapturePage = page
+      page.on('response', _networkCaptureHandler)
 
-      return `Network capture started${args.filter ? ` (filter: ${args.filter})` : ''}. Interact with the page, then call browser_network_capture {action:"get"} to see responses.`
+      const filters = [
+        args.filter && `url includes "${args.filter}"`,
+        methods.size && `method in ${Array.from(methods).join(',')}`,
+        statuses.size && `status in ${Array.from(statuses).join(',')}`,
+        contentTypeFilter && `content-type includes "${contentTypeFilter}"`,
+      ].filter(Boolean).join('; ')
+      return `Network capture started${filters ? ` (${filters})` : ''}. Interact with the page, then call browser_network_capture {action:"get"} to see responses.`
     } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
   }
 
   if (action === 'stop') {
     _capturing = false
+    if (_networkCapturePage && _networkCaptureHandler) {
+      _networkCapturePage.off('response', _networkCaptureHandler)
+      _networkCapturePage = null
+      _networkCaptureHandler = null
+    }
     return `Capture stopped. ${_capturedRequests.length} responses captured. Call browser_network_capture {action:"get"} to view.`
   }
 
   // get
   if (!_capturedRequests.length) return 'No requests captured. Call browser_network_capture {action:"start"} first.'
+  if (args.save_to) {
+    const dest = join(process.cwd(), `${args.save_to.replace(/\.json$/i, '')}.json`)
+    await writeFile(dest, JSON.stringify({ startedAt: _networkCaptureStartedAt, captured: _capturedRequests }, null, 2), 'utf-8')
+    return `Saved ${_capturedRequests.length} captured response(s) to ${dest}`
+  }
   return _capturedRequests.map((r, i) =>
-    `[${i + 1}] ${r.method} ${r.url}\nStatus: ${r.status}\n${r.body.slice(0, 1000)}`
+    `[${i + 1}] ${r.method} ${r.url}\nStatus: ${r.status} · ${r.contentType || 'unknown type'} · ${r.size.toLocaleString()} bytes\n${r.body.slice(0, 1000)}`
   ).join('\n\n---\n\n')
 }

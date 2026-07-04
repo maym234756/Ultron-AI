@@ -14,10 +14,12 @@ interface Task {
   done: boolean
   priority: 'low' | 'medium' | 'high'
   due?: string          // YYYY-MM-DD
+  repeat?: 'daily' | 'weekly' | 'monthly'
   tags: string[]
   notes?: string
   createdAt: string
   completedAt?: string
+  snoozedAt?: string
 }
 
 function load(): Task[] {
@@ -32,17 +34,46 @@ function save(tasks: Task[]): void {
 
 function resolveDate(raw?: string): string | undefined {
   if (!raw) return undefined
+  const input = raw.trim().toLowerCase()
   const today = new Date()
-  if (raw === 'today') return today.toISOString().split('T')[0]
-  if (raw === 'tomorrow') {
-    today.setDate(today.getDate() + 1)
-    return today.toISOString().split('T')[0]
+  const addDays = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return d.toISOString().split('T')[0]
   }
-  if (raw === 'next week') {
-    today.setDate(today.getDate() + 7)
-    return today.toISOString().split('T')[0]
-  }
+  if (input === 'today') return today.toISOString().split('T')[0]
+  if (input === 'tomorrow') return addDays(1)
+  if (input === 'next week') return addDays(7)
+  const inMatch = input.match(/^in\s+(\d+)\s+(day|days|week|weeks)$/)
+  if (inMatch) return addDays(parseInt(inMatch[1], 10) * (inMatch[2].startsWith('week') ? 7 : 1))
+  const plusMatch = input.match(/^\+(\d+)(d|w)$/)
+  if (plusMatch) return addDays(parseInt(plusMatch[1], 10) * (plusMatch[2] === 'w' ? 7 : 1))
   return raw
+}
+
+function addRepeatDate(due: string | undefined, repeat: Task['repeat']): string | undefined {
+  if (!due || !repeat) return undefined
+  const next = new Date(`${due}T12:00:00`)
+  if (Number.isNaN(next.getTime())) return undefined
+  if (repeat === 'daily') next.setDate(next.getDate() + 1)
+  if (repeat === 'weekly') next.setDate(next.getDate() + 7)
+  if (repeat === 'monthly') next.setMonth(next.getMonth() + 1)
+  return next.toISOString().split('T')[0]
+}
+
+function normalizeRepeat(raw?: string): Task['repeat'] | undefined {
+  if (!raw) return undefined
+  const value = raw.trim().toLowerCase()
+  if (value === 'daily' || value === 'weekly' || value === 'monthly') return value
+  return undefined
+}
+
+function priorityRank(priority: Task['priority']): number {
+  switch (priority) {
+    case 'high': return 3
+    case 'medium': return 2
+    case 'low': return 1
+  }
 }
 
 function parseTags(raw?: string): string[] {
@@ -67,6 +98,7 @@ export const taskAddDefinition: ToolDefinition = {
         title: { type: 'string', description: 'Task title or description' },
         due: { type: 'string', description: 'Due date: YYYY-MM-DD, "today", "tomorrow", or "next week"' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Task priority (default: medium)' },
+        repeat: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: 'Optional recurrence for the task.' },
         tags: { type: 'string', description: 'Comma-separated tags e.g. "work,urgent,review"' },
         notes: { type: 'string', description: 'Optional extra notes for the task' },
       },
@@ -83,6 +115,7 @@ export const taskAdd: ToolHandler = async (args) => {
     done: false,
     priority: (args.priority ?? 'medium') as Task['priority'],
     due: resolveDate(args.due),
+    repeat: normalizeRepeat(args.repeat),
     tags: parseTags(args.tags),
     notes: args.notes ?? undefined,
     createdAt: new Date().toISOString(),
@@ -90,7 +123,8 @@ export const taskAdd: ToolHandler = async (args) => {
   tasks.push(task)
   save(tasks)
   const due = task.due ? `, due ${task.due}` : ''
-  return `✅ Task added [${task.id}]: ${task.title} (${task.priority}${due})`
+  const repeat = task.repeat ? `, repeats ${task.repeat}` : ''
+  return `✅ Task added [${task.id}]: ${task.title} (${task.priority}${due}${repeat})`
 }
 
 // ── task_list ─────────────────────────────────────────────────────────────────
@@ -106,6 +140,8 @@ export const taskListDefinition: ToolDefinition = {
         filter: { type: 'string', enum: ['all', 'pending', 'done', 'overdue', 'today', 'upcoming'], description: 'Which tasks to show (default: pending)' },
         tag: { type: 'string', description: 'Only show tasks with this tag' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Filter by priority' },
+        query: { type: 'string', description: 'Search title, notes, tags, or ID.' },
+        sort: { type: 'string', enum: ['due', 'priority', 'created'], description: 'Sort results by due date, priority, or created time (default due).' },
       },
       required: [],
     },
@@ -127,6 +163,17 @@ export const taskList: ToolHandler = async (args) => {
 
   if (args.tag)      tasks = tasks.filter(t => t.tags.includes(args.tag))
   if (args.priority) tasks = tasks.filter(t => t.priority === args.priority)
+  if (args.query) {
+    const q = args.query.toLowerCase()
+    tasks = tasks.filter(t => [t.id, t.title, t.notes ?? '', ...t.tags].some(value => value.toLowerCase().includes(q)))
+  }
+
+  const sort = args.sort ?? 'due'
+  tasks = [...tasks].sort((a, b) => {
+    if (sort === 'priority') return priorityRank(b.priority) - priorityRank(a.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999')
+    if (sort === 'created') return a.createdAt.localeCompare(b.createdAt)
+    return (a.due ?? '9999-99-99').localeCompare(b.due ?? '9999-99-99') || priorityRank(b.priority) - priorityRank(a.priority)
+  })
 
   if (tasks.length === 0) return 'No tasks found.'
 
@@ -134,9 +181,10 @@ export const taskList: ToolHandler = async (args) => {
     const status = t.done ? '✓' : '○'
     const icon = priorityIcon(t.priority)
     const due = t.due ? ` due:${t.due}` : ''
+    const repeat = t.repeat ? ` repeat:${t.repeat}` : ''
     const tags = t.tags.length ? ` #${t.tags.join(' #')}` : ''
     const notes = t.notes ? `\n   📝 ${t.notes}` : ''
-    return `[${t.id}] ${status} ${icon} ${t.title}${due}${tags}${notes}`
+    return `[${t.id}] ${status} ${icon} ${t.title}${due}${repeat}${tags}${notes}`
   }).join('\n')
 }
 
@@ -163,8 +211,20 @@ export const taskDone: ToolHandler = async (args) => {
   if (!task) return `Task "${args.id}" not found`
   task.done = true
   task.completedAt = new Date().toISOString()
+  const nextDue = addRepeatDate(task.due, task.repeat)
+  if (nextDue) {
+    tasks.push({
+      ...task,
+      id: randomUUID().slice(0, 8),
+      done: false,
+      due: nextDue,
+      createdAt: new Date().toISOString(),
+      completedAt: undefined,
+      snoozedAt: undefined,
+    })
+  }
   save(tasks)
-  return `✅ Completed: ${task.title}`
+  return `✅ Completed: ${task.title}${nextDue ? `\nNext ${task.repeat} occurrence created for ${nextDue}.` : ''}`
 }
 
 // ── task_delete ───────────────────────────────────────────────────────────────
@@ -207,6 +267,8 @@ export const taskUpdateDefinition: ToolDefinition = {
         title:    { type: 'string', description: 'New title' },
         due:      { type: 'string', description: 'New due date: YYYY-MM-DD, "today", "tomorrow", or "next week"' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'New priority' },
+        repeat:   { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: 'Set recurrence. Use "none" to clear.' },
+        snooze_days: { type: 'string', description: 'Push the due date out by this many days.' },
         notes:    { type: 'string', description: 'New notes (replaces old notes)' },
         tags:     { type: 'string', description: 'New comma-separated tags (replaces old tags)' },
       },
@@ -222,6 +284,14 @@ export const taskUpdate: ToolHandler = async (args) => {
   if (args.title)    task.title    = args.title
   if (args.due)      task.due      = resolveDate(args.due)
   if (args.priority) task.priority = args.priority as Task['priority']
+  if (args.repeat)   task.repeat   = args.repeat === 'none' ? undefined : normalizeRepeat(args.repeat)
+  if (args.snooze_days) {
+    const days = Math.min(365, Math.max(1, parseInt(args.snooze_days, 10) || 1))
+    const base = task.due ? new Date(`${task.due}T12:00:00`) : new Date()
+    base.setDate(base.getDate() + days)
+    task.due = base.toISOString().split('T')[0]
+    task.snoozedAt = new Date().toISOString()
+  }
   if (args.notes !== undefined) task.notes = args.notes
   if (args.tags)     task.tags     = parseTags(args.tags)
   save(tasks)

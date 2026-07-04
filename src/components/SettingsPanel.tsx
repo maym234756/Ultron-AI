@@ -1,7 +1,14 @@
 import { X, SlidersHorizontal } from 'lucide-react'
-import type { AppSettings } from '../types'
+import type { AppSettings, IntelligenceMode } from '../types'
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+
+const INTELLIGENCE_MODES: Array<{ value: IntelligenceMode; label: string; hint: string }> = [
+  { value: 'instant', label: 'Instant', hint: 'Short answers, fast-model routing, minimal context overhead.' },
+  { value: 'balanced', label: 'Balanced', hint: 'Good default for normal chat and coding questions.' },
+  { value: 'deep', label: 'Deep', hint: 'More deliberate reasoning, larger context, stronger verification.' },
+  { value: 'research', label: 'Research', hint: 'Synthesis mode for comparisons, uncertainty, and source-backed answers.' },
+]
 
 interface Props {
   settings: AppSettings
@@ -106,6 +113,58 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
           {/* ── Model ── */}
           <div className="settings-section-title">Model</div>
 
+          <div className="settings-field">
+            <div className="settings-toggle-row">
+              <div>
+                <span className="settings-label">Auto route Chat / Agent</span>
+                <p className="settings-hint">Ultron decides whether a prompt needs tools, browser, files, connectors, or a normal chat answer.</p>
+              </div>
+              <button
+                type="button"
+                className={`toggle-button ${settings.autoRoute ? 'toggle-on' : ''}`}
+                onClick={() => set('autoRoute', !settings.autoRoute)}
+                aria-label="Toggle auto route"
+              >
+                {settings.autoRoute ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-field">
+            <div className="settings-toggle-row">
+              <div>
+                <span className="settings-label">Auto intelligence profile</span>
+                <p className="settings-hint">Ultron chooses Instant, Balanced, Deep, or Research based on prompt complexity and freshness needs.</p>
+              </div>
+              <button
+                type="button"
+                className={`toggle-button ${settings.autoIntelligence ? 'toggle-on' : ''}`}
+                onClick={() => set('autoIntelligence', !settings.autoIntelligence)}
+                aria-label="Toggle auto intelligence profile"
+              >
+                {settings.autoIntelligence ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-field">
+            <span className="settings-label">Intelligence profile <em>{settings.intelligenceMode}</em></span>
+            <div className="intelligence-grid">
+              {INTELLIGENCE_MODES.map(mode => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  className={`intelligence-option ${settings.intelligenceMode === mode.value ? 'selected' : ''}`}
+                  onClick={() => set('intelligenceMode', mode.value)}
+                  disabled={settings.autoIntelligence}
+                >
+                  <strong>{mode.label}</strong>
+                  <span>{mode.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="settings-field">
             <span className="settings-label">Temperature <em>{settings.temperature.toFixed(2)}</em></span>
             <input
@@ -193,8 +252,9 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
             onClick={() => {
               const defaults: AppSettings = {
                 temperature: 0.35, maxIterations: 20, systemPrompt: '', fastModel: '',
+                intelligenceMode: 'balanced', autoRoute: true, autoIntelligence: true,
                 observationEnabled: false, observationMode: 'fast', observationIntervalSec: 60,
-                domainExpertise: '', numCtx: 8192,
+                domainExpertise: '', numCtx: 8192, answerStyle: 'detailed',
               }
               onChange(defaults)
               localStorage.removeItem('ultron-settings')

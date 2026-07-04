@@ -29,6 +29,55 @@ async function ghFetch(endpoint: string, opts?: RequestInit): Promise<unknown> {
   return res.json()
 }
 
+function boundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = parseInt(value ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function formatGitHubError(data: unknown): string | null {
+  if (data && typeof data === 'object' && 'message' in data) {
+    const message = String((data as { message?: unknown }).message ?? 'Unknown GitHub error')
+    const documentation = (data as { documentation_url?: unknown }).documentation_url
+    return `Error: ${message}${documentation ? `\nDocs: ${documentation}` : ''}`
+  }
+  return null
+}
+
+// ── gh_auth_status ───────────────────────────────────────────────────────────
+
+export const ghAuthStatusDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_auth_status',
+    description: 'Check GitHub token health, authenticated user, visible scopes, and API rate-limit status.',
+    parameters: { type: 'object', properties: {} },
+  },
+}
+
+export const ghAuthStatus: ToolHandler = async () => {
+  const token = await getToken()
+  if (!token) return 'No GitHub token configured. Use gh_set_token or set GITHUB_TOKEN.'
+  try {
+    const res = await fetch(`${BASE}/user`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(15_000),
+    })
+    const data = await res.json() as { login?: string; name?: string; message?: string }
+    const remaining = res.headers.get('x-ratelimit-remaining') ?? '?'
+    const limit = res.headers.get('x-ratelimit-limit') ?? '?'
+    const reset = res.headers.get('x-ratelimit-reset')
+    const scopes = res.headers.get('x-oauth-scopes') || '(fine-grained or unavailable)'
+    if (!res.ok) return `GitHub auth failed (${res.status}): ${data.message ?? 'unknown error'}\nRate limit: ${remaining}/${limit}`
+    const resetText = reset ? new Date(parseInt(reset, 10) * 1000).toISOString() : 'unknown'
+    return [`Authenticated as: ${data.login ?? '(unknown)'}`, `Name: ${data.name ?? '(none)'}`, `Scopes: ${scopes}`, `Rate limit: ${remaining}/${limit}`, `Rate reset: ${resetText}`].join('\n')
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
 // ── gh_set_token ──────────────────────────────────────────────────────────────
 
 export const ghSetTokenDefinition: ToolDefinition = {
@@ -64,6 +113,7 @@ export const ghReposDefinition: ToolDefinition = {
       properties: {
         sort: { type: 'string', description: 'updated (default), created, pushed, full_name.' },
         limit: { type: 'string', description: 'Max repos (default 20).' },
+        page: { type: 'string', description: 'Page number for pagination (default 1).' },
       },
     },
   },
@@ -74,8 +124,11 @@ type GhRepo = { full_name: string; description: string | null; language: string 
 export const ghRepos: ToolHandler = async (args) => {
   try {
     const sort = args.sort ?? 'updated'
-    const limit = parseInt(args.limit ?? '20', 10) || 20
-    const data = await ghFetch(`/user/repos?sort=${sort}&per_page=${limit}`) as GhRepo[]
+    const limit = boundedInt(args.limit, 20, 1, 100)
+    const page = boundedInt(args.page, 1, 1, 1000)
+    const data = await ghFetch(`/user/repos?sort=${encodeURIComponent(sort)}&per_page=${limit}&page=${page}`) as GhRepo[]
+    const error = formatGitHubError(data)
+    if (error) return error
     if (!Array.isArray(data)) return `Error: ${JSON.stringify(data)}`
     return data.map(r =>
       `${r.private ? '🔒' : '📦'} ${r.full_name} [${r.language ?? '?'}] ★${r.stargazers_count}\n   ${r.description ?? '(no description)'} | Updated: ${r.updated_at?.slice(0, 10)}`
@@ -96,6 +149,7 @@ export const ghIssuesDefinition: ToolDefinition = {
         repo: { type: 'string', description: 'owner/repo (e.g. "octocat/Hello-World").' },
         state: { type: 'string', description: 'open (default), closed, all.' },
         limit: { type: 'string', description: 'Max results (default 10).' },
+        page: { type: 'string', description: 'Page number for pagination (default 1).' },
       },
       required: ['repo'],
     },
@@ -107,7 +161,11 @@ type GhIssue = { number: number; title: string; state: string; user?: { login: s
 export const ghIssues: ToolHandler = async (args) => {
   if (!args.repo) return 'Error: repo required (owner/repo)'
   try {
-    const data = await ghFetch(`/repos/${args.repo}/issues?state=${args.state ?? 'open'}&per_page=${parseInt(args.limit ?? '10') || 10}`) as GhIssue[]
+    const limit = boundedInt(args.limit, 10, 1, 100)
+    const page = boundedInt(args.page, 1, 1, 1000)
+    const data = await ghFetch(`/repos/${args.repo}/issues?state=${args.state ?? 'open'}&per_page=${limit}&page=${page}`) as GhIssue[]
+    const error = formatGitHubError(data)
+    if (error) return error
     if (!Array.isArray(data)) return `Error: ${JSON.stringify(data)}`
     const issues = data.filter(i => !i.pull_request)
     return issues.length
@@ -129,6 +187,7 @@ export const ghPrsDefinition: ToolDefinition = {
         repo: { type: 'string', description: 'owner/repo.' },
         state: { type: 'string', description: 'open (default), closed, all.' },
         limit: { type: 'string', description: 'Max results (default 10).' },
+        page: { type: 'string', description: 'Page number for pagination (default 1).' },
       },
       required: ['repo'],
     },
@@ -140,7 +199,11 @@ type GhPr = { number: number; title: string; state: string; user?: { login: stri
 export const ghPrs: ToolHandler = async (args) => {
   if (!args.repo) return 'Error: repo required'
   try {
-    const data = await ghFetch(`/repos/${args.repo}/pulls?state=${args.state ?? 'open'}&per_page=${parseInt(args.limit ?? '10') || 10}`) as GhPr[]
+    const limit = boundedInt(args.limit, 10, 1, 100)
+    const page = boundedInt(args.page, 1, 1, 1000)
+    const data = await ghFetch(`/repos/${args.repo}/pulls?state=${args.state ?? 'open'}&per_page=${limit}&page=${page}`) as GhPr[]
+    const error = formatGitHubError(data)
+    if (error) return error
     if (!Array.isArray(data)) return `Error: ${JSON.stringify(data)}`
     return data.length
       ? data.map(pr => `#${pr.number} [${pr.state}] ${pr.title}\n   ${pr.head?.label ?? '?'} → ${pr.base?.label ?? '?'} | ${pr.user?.login ?? '?'} | ${pr.created_at.slice(0, 10)}`).join('\n\n')
@@ -179,7 +242,8 @@ export const ghCreateIssue: ToolHandler = async (args) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }) as { number?: number; html_url?: string; message?: string }
-    return data.message ? `Error: ${data.message}` : `Created issue #${data.number}: ${data.html_url}`
+    const error = formatGitHubError(data)
+    return error ? error : `Created issue #${data.number}: ${data.html_url}`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -211,6 +275,8 @@ export const ghRepoInfo: ToolHandler = async (args) => {
   if (!args.repo) return 'Error: repo required'
   try {
     const d = await ghFetch(`/repos/${args.repo}`) as GhRepoDetail
+    const error = formatGitHubError(d)
+    if (error) return error
     return [
       `Repo: ${d.full_name} (${d.private ? 'private' : 'public'})`,
       `URL: ${d.html_url}`,
@@ -236,6 +302,7 @@ export const ghSearchDefinition: ToolDefinition = {
         query: { type: 'string', description: 'Search query.' },
         type: { type: 'string', description: 'repositories (default), issues, code.' },
         limit: { type: 'string', description: 'Max results (default 10).' },
+        page: { type: 'string', description: 'Page number for pagination (default 1).' },
       },
       required: ['query'],
     },
@@ -246,11 +313,15 @@ export const ghSearch: ToolHandler = async (args) => {
   if (!args.query) return 'Error: query required'
   try {
     const type = args.type === 'issues' ? 'issues' : args.type === 'code' ? 'code' : 'repositories'
-    const limit = parseInt(args.limit ?? '10', 10) || 10
-    const data = await ghFetch(`/search/${type}?q=${encodeURIComponent(args.query)}&per_page=${limit}`) as {
+    const limit = boundedInt(args.limit, 10, 1, 100)
+    const page = boundedInt(args.page, 1, 1, 10)
+    const data = await ghFetch(`/search/${type}?q=${encodeURIComponent(args.query)}&per_page=${limit}&page=${page}`) as {
       total_count?: number
+      message?: string
       items?: Array<{ full_name?: string; name?: string; description?: string | null; html_url?: string; stargazers_count?: number; number?: number; title?: string; repository?: { full_name?: string } }>
     }
+    const error = formatGitHubError(data)
+    if (error) return error
     if (!data.items?.length) return 'No results found.'
     return `Total: ${data.total_count ?? '?'} results\n\n` + data.items.map((item, i) => {
       if (type === 'repositories') return `${i + 1}. ${item.full_name} ★${item.stargazers_count ?? 0}\n   ${item.description ?? ''}\n   ${item.html_url}`

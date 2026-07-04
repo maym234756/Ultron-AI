@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, Plus, Search, Star, Trash2, X } from 'lucide-react'
+import { BookOpen, Plus, Search, Trash2, X } from 'lucide-react'
 
 interface Template {
   id: string

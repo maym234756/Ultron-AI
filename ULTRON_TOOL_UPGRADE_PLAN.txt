@@ -1,0 +1,278 @@
+ULTRON TOOL UPGRADE PLAN
+Generated: 2026-07-03
+Companion file: ULTRON_TOOL_BUILD_RANKING.txt
+
+Goal:
+Upgrade every current tool from useful prototype/utility level toward best-in-class reliability, observability, safety, and ergonomics.
+
+Global quality bar for all tools:
+1. Strong schemas: clear required fields, enums where useful, examples in descriptions, and backward-compatible aliases.
+2. Smart targeting: tools should accept human-friendly inputs where possible, not only brittle low-level identifiers.
+3. Structured results: return concise human text plus machine-readable details when the calling layer supports it.
+4. Diagnostics: failures should include the attempted action, reason, current state, and likely next steps.
+5. Safety gates: destructive actions need previews, confirmations, dry runs, or undo paths.
+6. Observability: long-running and external tools need timing, status, and dependency checks.
+7. Tests/checks: each module needs at least type-check coverage and focused smoke tests for critical paths.
+
+Completed in first build increment:
+- Upgraded server/tools/playwright.ts common browser interactions with a shared smart target resolver.
+- Added target support for selector, text, label, placeholder, ARIA role + name, and data-testid where applicable.
+- Improved failure diagnostics for common browser actions with URL, title, reason, and visible target hints.
+- Applied the smart target layer to browser_click, browser_fill, browser_type, browser_hover, browser_scroll, browser_check, browser_get_text, and browser_get_attr.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/playwright.ts
+
+Completed in second build increment:
+- Added browser_assert for URL/title/text/selector/count/attribute verification.
+- Added browser_snapshot for structured page state summaries before choosing the next browser action.
+- Registered both new browser tools in server/tools/registry.ts.
+- Updated the current registered tool count from 150 to 152.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/playwright.ts server/tools/registry.ts
+
+Completed in third build increment:
+- Upgraded rag_index from filename-only skipping to content-hash incremental indexing.
+- Replaced old chunks for changed or force-indexed files instead of appending duplicate stale chunks.
+- Added content hashes, source size, and source mtime metadata to newly indexed file chunks.
+- Upgraded rag_index_url to skip unchanged pages by content hash and rebuild changed pages cleanly.
+- Improved rag_search citations with source path/URL and chunk index.
+- Improved rag_status with hash-tracking coverage and per-source indexed timestamps.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/rag.ts
+
+Completed in fourth build increment:
+- Upgraded browser_network_capture to clean up prior response listeners before starting a new capture.
+- Added method, status, content-type, URL, and max-body-size filters for captured responses.
+- Added captured response metadata: status, content type, original byte size, and capture timestamp.
+- Added JSON export for captured network responses via save_to.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/playwright_adv.ts
+
+Completed in fifth build increment:
+- Upgraded run_terminal with configurable timeout_sec and max_output_chars controls.
+- Added output truncation metadata so large command results report exactly what was returned.
+- Exposed timeout_sec through run_code and lint_code.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/terminal.ts server/tools/coding.ts
+
+Completed in sixth build increment:
+- Added validated scraper field parsing for web_scrape, web_scrape_pages, and web_scrape_list.
+- Added bounded pagination, repeated-URL loop detection, and per-page reports to web_scrape_pages.
+- Added safer Desktop output filename handling and JSON export metadata.
+- Made web_monitor enforce notify_on values and web_check_monitor respect increase/decrease numeric rules.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/scraper.ts
+
+Completed in seventh build increment:
+- Added dry-run previews for file_move, file_delete, folder_delete, and folder_copy.
+- Added max_bytes support for file_read and max_file_kb support for file_search.
+- Added optional SHA-256 hashing to file_info.
+- Added safer extension filtering and bounded search result counts.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/userfiles.ts
+
+Completed in eighth build increment:
+- Made email_send draft-first by default, with explicit send_now support.
+- Added BCC support and safer PowerShell string escaping for Outlook email creation.
+- Added bounded read/search counts for Outlook email/calendar queries.
+- Added calendar conflict detection with force:true override.
+- Added mailto provider support to compose_email.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/outlook.ts
+
+Completed in ninth build increment:
+- Added recurring task support for daily, weekly, and monthly tasks.
+- Added snooze support through task_update snooze_days.
+- Expanded natural-language due dates with "in N days/weeks" and "+Nd/+Nw" formats.
+- Added task_list query search and due/priority/created sorting.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/tasks.ts
+
+Completed in tenth build increment:
+- Added gh_auth_status for token health, authenticated user, scopes, and rate-limit diagnostics.
+- Added bounded limit/page pagination to repo, issue, PR, and search calls.
+- Improved GitHub API error formatting with documentation links when available.
+- Registered gh_auth_status in server/tools/registry.ts.
+- Updated the current registered tool count from 152 to 153.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/github.ts server/tools/registry.ts
+
+Immediate next increments:
+1. Playwright Browser Automation Core
+    - DONE: Add browser_assert for URL/title/text/selector assertions.
+    - DONE: Add browser_snapshot for structured accessibility/DOM summaries.
+   - Add retry policy controls: timeout, wait_until, exact matching, nth match.
+   - Add screenshots-on-failure for debugging.
+   - Add smoke test page and automated tool handler tests.
+
+2. Local RAG / Knowledge Base
+    - DONE: Add chunk deduplication, file hashing, and incremental re-indexing.
+    - DONE: Add source citations with file path, chunk index, and score.
+   - Add index health repair and orphan cleanup.
+   - Add configurable embedding model/provider.
+   - Add tests for indexing, search ranking, clear, and URL indexing.
+
+3. Advanced Browser Automation
+   - Add vault rotation/export/import with explicit user approval.
+   - Add per-site credential metadata and last-used tracking.
+    - DONE: Add network capture filters and JSON export.
+    - Add HAR export and replay helpers.
+   - Add recorder output validation against registered tool schemas.
+
+4. Coding Toolkit
+    - PARTIAL: Add timeout controls to run_code and lint_code.
+    - Add language-specific runners with sandbox limits beyond timeout controls.
+   - Add structured diagnostics for TypeScript, Python, and ESLint/Oxlint output.
+   - Replace shell-only patching with safer patch validation and dry-run mode.
+   - Add project-aware test command discovery.
+
+5. Web Scraper and Monitor
+     - DONE: Add schema validation for scraped fields.
+     - DONE: Add pagination limit guards and per-page reporting.
+    - PARTIAL: Add CSV/JSON export metadata.
+    - Add monitor backoff, notification channels, and history.
+    - Add replayable scrape configs.
+
+6. User Files and Folders
+     - DONE: Add dry-run previews for move/delete/copy.
+   - Add recycle-bin support where possible instead of permanent deletion.
+    - PARTIAL: Add file hashing and safer glob/filter handling.
+     - DONE: Add max-size protections for reads/searches.
+    - Add duplicate detection.
+
+7. Outlook / Email / Calendar
+     - DONE: Add draft-first mode for email_send.
+     - PARTIAL: Add provider abstraction for Outlook desktop, Outlook web, Gmail, Yahoo, Proton Mail, and mailto.
+   - Add attachment handling with explicit confirmation.
+     - DONE: Add calendar conflict detection.
+
+8. Task Manager and Daily Briefing
+     - DONE: Add recurring tasks and snooze.
+     - DONE: Add natural-language due date parsing.
+   - Add import/export and backup.
+     - PARTIAL: Add task search and sorting.
+    - Add saved views.
+
+9. GitHub Integration
+     - DONE: Add token health check and permission reporting.
+   - Add branch/PR creation workflow.
+   - Add issue/PR comments, labels, assignees, and milestones.
+     - DONE: Add rate-limit diagnostics and pagination.
+
+10. Browser Discovery and Web Fetch
+    - Add robust browser path discovery.
+    - Add response status, canonical URL, title, and content-type metadata.
+    - Add readability extraction and markdown output.
+    - Add retry/backoff and size limits.
+
+11. Windows System Tools
+    - Add dependency/status checks for each native capability.
+    - Add safer app launch resolution and process association.
+    - Add notification action support where available.
+    - Add image generation provider health and prompt metadata.
+
+12. Desktop Automation
+    - Add screenshot-coordinate helper and OCR-assisted click targeting.
+    - Add window geometry and active-window metadata.
+    - Add dry-run mode that reports intended coordinates.
+    - Add safer key sequence validation.
+
+13. Scheduler
+    - Add timezone support and human-readable next-run details.
+    - Add run history, retries, and failure notifications.
+    - Add enable/disable without deletion.
+    - Add validation for cron expressions.
+
+14. Git Toolkit
+    - Add dry-run commit summary and diffstat.
+    - Add selective file staging.
+    - Add remote/branch safety checks before push.
+    - Add merge/rebase conflict diagnostics.
+
+15. Long-Term Semantic Memory
+    - Add embedding-backed recall shared with RAG where possible.
+    - Add namespaces/projects/tags.
+    - Add update/edit memory flow.
+    - Add duplicate detection and confidence scoring.
+
+16. Media Tools
+    - Add dependency checks for ffmpeg.
+    - Add progress reporting for long operations.
+    - Add presets for common platforms.
+    - Add metadata inspection and validation before conversion.
+
+17. Preview / Approval Workflow
+    - Add grouped previews for multi-file changes.
+    - Add apply-all/discard-all and conflict detection.
+    - Add command risk classification.
+    - Add persisted preview history.
+
+18. Vision Tools
+    - Add model availability diagnostics.
+    - Add OCR-focused mode and UI element extraction.
+    - Add crop/region support.
+    - Add confidence and fallback behavior.
+
+19. System Monitor
+    - Add services, startup apps, ports, and network diagnostics.
+    - Add safer process kill previews.
+    - Add structured output for stats/processes/env.
+    - Add admin-permission detection.
+
+20. Persistent Python REPL
+    - Add execution timeout and interrupt support.
+    - Add package availability helper.
+    - Add dataframe/table pretty output.
+    - Add isolated session names.
+
+21. Workspace Filesystem
+    - Add structured file metadata and encoding handling.
+    - Add diff-before-write option.
+    - Add directory tree summaries.
+    - Add workspace-safe glob search.
+
+22. Multi-Agent Orchestration
+    - Add task budgets, tool restrictions, and status events.
+    - Add result merging templates.
+    - Add partial failure reporting.
+    - Add cancellation.
+
+23. Whisper Audio Transcription
+    - Add model selection and language hints.
+    - Add timestamps and speaker diarization hooks.
+    - Add dependency checks before transcription.
+    - Add progress reporting.
+
+24. HTTP Client
+    - Add retries, redirects, timeout, and response size limits.
+    - Add auth helpers and secret redaction.
+    - Add JSON/form helpers.
+    - Add curl import/export.
+
+25. SQLite Database Tools
+    - Add schema inspection and query explain.
+    - Add transaction support.
+    - Add backup before destructive execution.
+    - Add result pagination.
+
+26. Conversation Memory
+    - Add namespaces and metadata.
+    - Add list/delete/update operations.
+    - Add max-size and duplicate checks.
+    - Add structured JSON storage validation.
+
+27. Terminal Tool
+    - PARTIAL: Add configurable timeout and output-size controls.
+    - Add env and shell selection parameters.
+    - Add command risk classification.
+    - Add output truncation metadata and log file links.
+    - Add non-interactive safety guardrails.
+
+28. Web Search
+    - Add multiple providers where available.
+    - Add result URLs, snippets, dates, and source ranking.
+    - Add query refinement suggestions.
+    - Add timeout/retry diagnostics.
+
+Recommended next file to edit:
+server/tools/playwright.ts, then server/tools/rag.ts, then server/tools/playwright_adv.ts.

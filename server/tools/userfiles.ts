@@ -3,8 +3,10 @@
  * beyond the workspace root constraint of filesystem.ts
  */
 import fsP from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
 import path from 'node:path'
 import { homedir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { runTerminal } from './terminal.js'
 import type { ToolDefinition, ToolHandler } from './types.js'
 
@@ -12,6 +14,30 @@ function homePath(p: string): string {
   if (!p) return homedir()
   const expanded = p.replace(/^~(?=[/\\]|$)/, homedir())
   return path.isAbsolute(expanded) ? expanded : path.join(homedir(), expanded)
+}
+
+function boundedInt(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = parseInt(value ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function extensionFilter(extension: string | undefined): string {
+  if (!extension) return '*'
+  const clean = extension.trim().replace(/[^.\w*?-]/g, '')
+  if (!clean) return '*'
+  return clean.startsWith('*') ? clean : clean.startsWith('.') ? `*${clean}` : `*.${clean}`
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash('sha256')
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath)
+    stream.on('data', chunk => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', resolve)
+  })
+  return hash.digest('hex')
 }
 
 // ── file_read ─────────────────────────────────────────────────────────────────
@@ -27,6 +53,7 @@ export const fileReadDefinition: ToolDefinition = {
         path: { type: 'string', description: 'File path, e.g. "~/Desktop/notes.txt" or "C:/Users/.../file.txt".' },
         start_line: { type: 'string', description: 'Start line (1-based) for large files.' },
         end_line: { type: 'string', description: 'End line (1-based).' },
+        max_bytes: { type: 'string', description: 'Maximum bytes to read before truncating (default 24000, max 1000000).' },
       },
       required: ['path'],
     },
@@ -37,6 +64,9 @@ export const fileRead: ToolHandler = async (args) => {
   if (!args.path) return 'Error: path required'
   try {
     const full = homePath(args.path)
+    const maxBytes = boundedInt(args.max_bytes, 24_000, 1_000, 1_000_000)
+    const stat = await fsP.stat(full)
+    if (stat.isDirectory()) return 'Error: path is a directory, not a file'
     const raw = await fsP.readFile(full, 'utf-8')
     let content = raw
     if (args.start_line || args.end_line) {
@@ -45,7 +75,7 @@ export const fileRead: ToolHandler = async (args) => {
       const e = args.end_line ? parseInt(args.end_line, 10) : lines.length
       content = lines.slice(s, e).join('\n')
     }
-    return content.length > 24000 ? content.slice(0, 24000) + '\n... [truncated]' : content
+    return content.length > maxBytes ? content.slice(0, maxBytes) + `\n... [truncated to ${maxBytes.toLocaleString()} chars from ${content.length.toLocaleString()}]` : content
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -119,6 +149,7 @@ export const fileMoveDefinition: ToolDefinition = {
       properties: {
         from: { type: 'string', description: 'Source path.' },
         to: { type: 'string', description: 'Destination path.' },
+        dry_run: { type: 'string', description: 'Set "true" to preview the move without changing files.' },
       },
       required: ['from', 'to'],
     },
@@ -130,6 +161,10 @@ export const fileMove: ToolHandler = async (args) => {
   try {
     const src = homePath(args.from)
     const dest = homePath(args.to)
+    const stat = await fsP.stat(src)
+    if (args.dry_run === 'true') {
+      return [`DRY RUN: would move ${stat.isDirectory() ? 'directory' : 'file'}`, `From: ${src}`, `To:   ${dest}`, `Size: ${stat.size.toLocaleString()} bytes`].join('\n')
+    }
     await fsP.mkdir(path.dirname(dest), { recursive: true })
     await fsP.rename(src, dest)
     return `Moved: ${src} → ${dest}`
@@ -147,6 +182,7 @@ export const fileDeleteDefinition: ToolDefinition = {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'File path to delete.' },
+        dry_run: { type: 'string', description: 'Set "true" to preview the delete without changing files.' },
       },
       required: ['path'],
     },
@@ -157,6 +193,9 @@ export const fileDelete: ToolHandler = async (args) => {
   if (!args.path) return 'Error: path required'
   try {
     const full = homePath(args.path)
+    const stat = await fsP.stat(full)
+    if (stat.isDirectory()) return 'Error: path is a directory. Use folder_delete for directories.'
+    if (args.dry_run === 'true') return [`DRY RUN: would delete file`, `Path: ${full}`, `Size: ${stat.size.toLocaleString()} bytes`, `Modified: ${stat.mtime.toISOString()}`].join('\n')
     await fsP.unlink(full)
     return `Deleted: ${full}`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
@@ -176,6 +215,7 @@ export const fileSearchDefinition: ToolDefinition = {
         path: { type: 'string', description: 'Directory to search (default ~/Documents).' },
         extension: { type: 'string', description: 'File extension filter, e.g. ".txt", ".md".' },
         max_results: { type: 'string', description: 'Max results (default 20).' },
+        max_file_kb: { type: 'string', description: 'Skip files larger than this many KB (default 1024, max 102400).' },
       },
       required: ['query'],
     },
@@ -185,11 +225,12 @@ export const fileSearchDefinition: ToolDefinition = {
 export const fileSearch: ToolHandler = async (args) => {
   if (!args.query) return 'Error: query required'
   const dir = homePath(args.path ?? '~/Documents').replace(/'/g, "''")
-  const ext = args.extension ? `*${args.extension}` : '*'
+  const ext = extensionFilter(args.extension).replace(/'/g, "''")
   const q = args.query.replace(/'/g, "''")
-  const max = parseInt(args.max_results ?? '20', 10) || 20
+  const max = boundedInt(args.max_results, 20, 1, 500)
+  const maxFileBytes = boundedInt(args.max_file_kb, 1024, 1, 102400) * 1024
   return runTerminal({
-    command: `Get-ChildItem -Recurse '${dir}' -File -Filter '${ext}' | Select-String -Pattern '${q}' -SimpleMatch | Select-Object -First ${max} | ForEach-Object { "$($_.Filename):$($_.LineNumber): $($_.Line.Trim())" } | Out-String`,
+    command: `Get-ChildItem -Recurse '${dir}' -File -Filter '${ext}' -ErrorAction SilentlyContinue | Where-Object { $_.Length -le ${maxFileBytes} } | Select-String -Pattern '${q}' -SimpleMatch | Select-Object -First ${max} | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" } | Out-String`,
   })
 }
 
@@ -204,6 +245,7 @@ export const fileInfoDefinition: ToolDefinition = {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'File or directory path.' },
+        include_hash: { type: 'string', description: 'Set "true" to include SHA-256 for files up to 250 MB.' },
       },
       required: ['path'],
     },
@@ -215,13 +257,18 @@ export const fileInfo: ToolHandler = async (args) => {
   try {
     const full = homePath(args.path)
     const stat = await fsP.stat(full)
-    return [
+    const lines = [
       `Path: ${full}`,
       `Type: ${stat.isDirectory() ? 'directory' : 'file'}`,
       `Size: ${(stat.size / 1024).toFixed(1)} KB`,
       `Created: ${stat.birthtime.toISOString().slice(0, 19)}`,
       `Modified: ${stat.mtime.toISOString().slice(0, 19)}`,
-    ].join('\n')
+    ]
+    if (args.include_hash === 'true' && stat.isFile()) {
+      if (stat.size > 250 * 1024 * 1024) lines.push('SHA-256: skipped (file larger than 250 MB)')
+      else lines.push(`SHA-256: ${await sha256File(full)}`)
+    }
+    return lines.join('\n')
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -268,6 +315,7 @@ export const folderDeleteDefinition: ToolDefinition = {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Folder path to delete.' },
+        dry_run: { type: 'string', description: 'Set "true" to preview the delete without changing files.' },
       },
       required: ['path'],
     },
@@ -278,6 +326,10 @@ export const folderDelete: ToolHandler = async (args) => {
   if (!args.path) return 'Error: path is required'
   try {
     const full = homePath(args.path)
+    if (args.dry_run === 'true') {
+      const entries = await fsP.readdir(full, { recursive: true }).catch(() => [])
+      return [`DRY RUN: would delete folder`, `Path: ${full}`, `Contained entries: ${entries.length.toLocaleString()}`].join('\n')
+    }
     await fsP.rm(full, { recursive: true, force: true })
     return `Deleted folder: ${full}`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
@@ -295,6 +347,7 @@ export const folderCopyDefinition: ToolDefinition = {
       properties: {
         from: { type: 'string', description: 'Source folder path.' },
         to:   { type: 'string', description: 'Destination folder path.' },
+        dry_run: { type: 'string', description: 'Set "true" to preview the copy without changing files.' },
       },
       required: ['from', 'to'],
     },
@@ -303,8 +356,14 @@ export const folderCopyDefinition: ToolDefinition = {
 
 export const folderCopy: ToolHandler = async (args) => {
   if (!args.from || !args.to) return 'Error: from and to are required'
-  const src  = homePath(args.from).replace(/'/g, "''")
-  const dest = homePath(args.to).replace(/'/g, "''")
+  const rawSrc = homePath(args.from)
+  const rawDest = homePath(args.to)
+  if (args.dry_run === 'true') {
+    const entries = await fsP.readdir(rawSrc, { recursive: true }).catch(() => [])
+    return [`DRY RUN: would copy folder`, `From: ${rawSrc}`, `To:   ${rawDest}`, `Contained entries: ${entries.length.toLocaleString()}`].join('\n')
+  }
+  const src  = rawSrc.replace(/'/g, "''")
+  const dest = rawDest.replace(/'/g, "''")
   return runTerminal({ command: `Copy-Item -Path '${src}' -Destination '${dest}' -Recurse -Force; "Copied: ${src} -> ${dest}"` })
 }
 
