@@ -10,6 +10,7 @@ import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { sendEvent, pendingAnswers } from './shared.js'
+import { backendRuntimeMiddleware, backendRuntimeSnapshot, collectBackendRoutes, recordRuntimeEvent } from './backendStatus.js'
 import { runAgent, runAgentHeadless } from './agent.js'
 import type { AgentOptions } from './agent.js'
 import { startScheduler } from './tools/scheduler.js'
@@ -260,6 +261,7 @@ function buildInferenceOptions(
 
 app.use(cors())
 app.use(express.json({ limit: '8mb' }))
+app.use(backendRuntimeMiddleware())
 
 // ── Observer routes ────────────────────────────────────────────────────────────
 
@@ -313,6 +315,17 @@ app.get('/api/health', async (_request, response) => {
   }
 })
 
+app.get('/api/backend/status', (_request, response) => {
+  response.json(backendRuntimeSnapshot({
+    routes: collectBackendRoutes(app),
+    toolCount: toolDefinitions.length,
+    modelCount: cachedModelNames.length,
+    defaultModel,
+    fastModel: cachedFastModel,
+    warmupDetail: warmupStatus.detail,
+  }))
+})
+
 app.get('/api/capabilities/status', async (_request, response) => {
   const checkedAt = Date.now()
   const requiredModels = [defaultModel, 'nomic-embed-text']
@@ -360,6 +373,21 @@ app.get('/api/capabilities/status', async (_request, response) => {
     label: 'Speed + latency system',
     ok: warmupStatus.primaryOk || Boolean(cachedFastModel),
     detail: `${warmupStatus.primaryModel ?? defaultModel} ${warmupStatus.primaryOk ? 'warm' : 'warming/unknown'} · fast model ${cachedFastModel ?? 'not detected'}`,
+  })
+
+  const runtime = backendRuntimeSnapshot({
+    routes: collectBackendRoutes(app),
+    toolCount: toolDefinitions.length,
+    modelCount: modelNames.length || cachedModelNames.length,
+    defaultModel,
+    fastModel: cachedFastModel,
+    warmupDetail: warmupStatus.detail,
+  })
+  statusRows.push({
+    id: 'backend-runtime',
+    label: 'Backend runtime supervisor',
+    ok: runtime.healthy,
+    detail: `${runtime.traffic.activeRequests} active request(s), ${runtime.traffic.activeStreams} stream(s), ${runtime.traffic.recentErrorCount} recent error(s), ${runtime.inventory.apiRoutes} route(s) tracked`,
   })
 
   const connectorSnapshot = getConnectorStatusSnapshot(toolDefinitions.map(tool => tool.function.name), process.env)
@@ -2092,6 +2120,7 @@ app.listen(port, async () => {
     if (plugins.length) console.log(`[plugins] ${plugins.length} plugin(s) loaded`)
   } catch (err) {
     console.error('[plugins] load error:', err instanceof Error ? err.message : String(err))
+    recordRuntimeEvent('plugins', err instanceof Error ? err.message : String(err), 'error')
   }
 
   // Auto-start passive screen observer (fast mode, every 45s)
@@ -2147,6 +2176,7 @@ app.listen(port, async () => {
       warmupStatus.completedAt = Date.now()
       warmupStatus.primaryOk = false
       warmupStatus.detail = error instanceof Error ? error.message : 'Warmup failed; requests will load on demand.'
+      recordRuntimeEvent('warmup', warmupStatus.detail, 'warn')
     }
   })()
 })

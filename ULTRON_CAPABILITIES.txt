@@ -730,6 +730,9 @@ OTHER:
 - Health Command Center: live readiness panel for Ollama, models, tools,
   observer, self-healer, RAG, memory, external connectors, and production build
   artifacts
+- Backend Runtime Supervisor: request counters, active SSE stream tracking,
+  event-loop delay, memory/uptime, route inventory, slow/busy endpoint stats,
+  and recent runtime/SSE error events
 - External Connectors panel: 52-service registry with status and safe launch
 - External Connectors panel: native action schemas, dry-run plans, and audit log
 - Observer bar: shows active app + open browser tabs in real time
@@ -745,9 +748,11 @@ OTHER:
   workflow publishes installer artifacts and tagged public GitHub Releases
 
 --------------------------------------------------------------------------------
-API ENDPOINTS: 59 route declarations
+API ENDPOINTS: 60 route declarations
 --------------------------------------------------------------------------------
 /api/health           — Ollama status + best available model
+/api/backend/status   — Backend runtime supervisor, route inventory, traffic,
+                        active streams, memory, event-loop, and recent errors
 /api/capabilities/status — Full Ultron readiness report and operational health
 /api/connectors/status — External connector registry and readiness snapshot
 /api/connectors/actions — Native connector action schema registry
@@ -837,6 +842,8 @@ WHAT IT CHECKS:
 • Ollama reachability and local model inventory
 • Vision model availability for image/screenshot tasks
 • Tool registry load status and callable tool count
+• Backend runtime supervisor: active requests, active streams, recent errors,
+  event-loop delay, route inventory, and slow/busy endpoint stats
 • External connector registry readiness and browser/API status
 • Passive observer state and capture interval
 • Self-healer status, scan errors, and issue count
@@ -850,7 +857,7 @@ HOW TO USE IT:
 4. API consumers can call GET /api/capabilities/status directly
 
 --------------------------------------------------------------------------------
-TOOL COUNT: 154 tools  |  API ENDPOINTS: 59 routes  |  CONNECTORS: 52
+TOOL COUNT: 154 tools  |  API ENDPOINTS: 60 routes  |  CONNECTORS: 52
 --------------------------------------------------------------------------------
 SYSTEM:       run_terminal, open_app, take_screenshot, clipboard_read,
               clipboard_write, speak, notify
