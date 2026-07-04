@@ -36,7 +36,7 @@ The Windows installer is written to `desktop-release/Ultron-Setup-<version>.exe`
 GitHub downloads are produced by `.github/workflows/desktop-release.yml`:
 
 - Run the **Desktop Release** workflow manually to create a downloadable installer artifact.
-- Push a tag like `v0.1.0` to create a draft GitHub Release with the installer attached.
+- Push a tag like `v0.1.0` to create a public GitHub Release with the installer attached.
 
 Users still need Ollama installed and running locally, with at least one model pulled, because Ultron stays fully local and does not call cloud model APIs.
 

@@ -723,7 +723,7 @@ OTHER:
 - Electron tray app: Ctrl+Shift+U global hotkey, hides to tray (npm run tray)
 - Downloadable Windows desktop installer: npm run desktop:dist builds
   desktop-release/Ultron-Setup-<version>.exe, and the GitHub Desktop Release
-  workflow publishes installer artifacts or draft tagged releases
+  workflow publishes installer artifacts and tagged public GitHub Releases
 
 --------------------------------------------------------------------------------
 API ENDPOINTS: 52+
