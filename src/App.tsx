@@ -63,6 +63,14 @@ import type { PendingTelemetry } from './lib/telemetry'
 import './App.css'
 
 type EngineStatus = 'checking' | 'online' | 'offline'
+type WorkspaceMode = 'chat' | 'build' | 'research' | 'debug' | 'review' | 'system'
+
+type QuickAction = {
+  emoji: string
+  label: string
+  desc: string
+  prompt: string
+}
 
 const DEFAULT_SETTINGS: AppSettings = {
   temperature: 0.35,
@@ -121,6 +129,14 @@ function loadQuietMode(): boolean {
   try { return localStorage.getItem('ultron-quiet-ui') !== '0' } catch { return true }
 }
 
+function loadWorkspaceMode(): WorkspaceMode {
+  try {
+    const raw = localStorage.getItem('ultron-workspace-mode')
+    if (raw === 'build' || raw === 'research' || raw === 'debug' || raw === 'review' || raw === 'system') return raw
+  } catch { /* ignore */ }
+  return 'chat'
+}
+
 function buildArtifactSrcDoc(lang: string, code: string): string {
   if (lang === 'html' || lang === 'htm') {
     return code.includes('<html') ? code
@@ -165,7 +181,7 @@ const KEYBOARD_SHORTCUTS = [
   { key: 'Ctrl+N',      desc: 'New chat' },
   { key: 'Ctrl+B',      desc: 'Toggle sidebar' },
   { key: 'Ctrl+F',      desc: 'Search in conversation' },
-  { key: 'Ctrl+K',      desc: 'Focus composer' },
+  { key: 'Ctrl+K',      desc: 'Open Command Center' },
   { key: 'Ctrl+M',      desc: 'Open Model Compare' },
   { key: 'Esc',         desc: 'Stop streaming' },
   { key: '?',           desc: 'Show this help' },
@@ -181,7 +197,37 @@ function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString()
 }
 
-const QUICK_ACTIONS = [
+function describeAgentEvent(event: AgentEvent): { label: string; detail: string } {
+  switch (event.type) {
+    case 'agent_plan':
+      return { label: 'Plan', detail: event.plan.goal }
+    case 'agent_task_state':
+      return { label: event.status.replaceAll('_', ' '), detail: event.detail }
+    case 'tool_call':
+      return { label: 'Tool', detail: event.name }
+    case 'tool_result':
+      return { label: 'Result', detail: event.name }
+    case 'stream_status':
+      return { label: 'Status', detail: event.detail ?? event.status }
+    case 'user_question':
+      return { label: event.kind === 'permission' ? 'Permission' : 'Question', detail: event.question }
+    case 'agent_step':
+      return { label: 'Step', detail: `${event.step}/${event.maxSteps}` }
+    case 'thinking':
+      return { label: 'Thinking', detail: event.content }
+  }
+}
+
+const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; headline: string; placeholder: string; agent: boolean }> = [
+  { id: 'chat', label: 'Chat', headline: 'Ask, iterate, build', placeholder: 'Message Ultron...', agent: false },
+  { id: 'build', label: 'Build', headline: 'Build workspace', placeholder: 'Describe the project or feature to build...', agent: true },
+  { id: 'research', label: 'Research', headline: 'Research workspace', placeholder: 'What should Ultron verify, scan, or synthesize?', agent: true },
+  { id: 'debug', label: 'Debug', headline: 'Debug workspace', placeholder: 'Paste the error, failing behavior, or stack trace...', agent: true },
+  { id: 'review', label: 'Review', headline: 'Review workspace', placeholder: 'Paste code or describe what needs review...', agent: false },
+  { id: 'system', label: 'System', headline: 'System workspace', placeholder: 'Ask Ultron to inspect health, tasks, memory, or connectors...', agent: true },
+]
+
+const QUICK_ACTIONS: QuickAction[] = [
   { emoji: '💻', label: 'Review my code', desc: 'Find bugs, suggestions, and best practices', prompt: 'Review the code I\'m working on and suggest improvements.' },
   { emoji: '🔍', label: 'Search the web', desc: 'Find up-to-date information online', prompt: 'Search the web for: ' },
   { emoji: '🐛', label: 'Debug an error', desc: 'Diagnose and fix errors in your code', prompt: 'Help me debug this error:\n\n' },
@@ -190,7 +236,7 @@ const QUICK_ACTIONS = [
   { emoji: '🌐', label: 'Summarize URL', desc: 'Fetch and summarize any web page', prompt: 'Fetch and summarize the content of: ' },
 ]
 
-const AGENT_QUICK_ACTIONS = [
+const AGENT_QUICK_ACTIONS: QuickAction[] = [
   { emoji: '📂', label: 'Explore project', desc: 'Map folder structure and purpose of each module', prompt: 'List this project\'s files and summarise what each top-level folder does.' },
   { emoji: '🔨', label: 'Build & fix errors', desc: 'Run the build, catch errors, auto-fix', prompt: 'Run the build, find any errors, and fix them.' },
   { emoji: '🌐', label: 'Latest Ollama news', desc: 'Find new models worth pulling locally', prompt: 'Search the web for the latest Ollama model releases and tell me which ones to pull.' },
@@ -198,6 +244,40 @@ const AGENT_QUICK_ACTIONS = [
   { emoji: '🧠', label: 'Recall memories', desc: 'Review everything Ultron remembers about you', prompt: 'List everything you remember about me and my projects.' },
   { emoji: '📋', label: 'Daily briefing', desc: 'Tasks, schedule, and system health', prompt: 'Give me my daily briefing — tasks, schedule, and anything I should know.' },
 ]
+
+const WORKSPACE_QUICK_ACTIONS: Record<WorkspaceMode, QuickAction[]> = {
+  chat: QUICK_ACTIONS,
+  build: [
+    { emoji: '🧱', label: 'New project', desc: 'Choose a template, plan files, and scaffold locally', prompt: 'Help me start a new programming project. Ask what kind of project, then make a build plan.' },
+    { emoji: '🔨', label: 'Build & fix', desc: 'Run checks, inspect failures, and repair the project', prompt: 'Run the build, find any errors, and fix them.' },
+    { emoji: '📋', label: 'Project plan', desc: 'Turn an idea into templates, tasks, and milestones', prompt: 'Turn this project idea into a file-by-file implementation plan with build steps:' },
+    ...AGENT_QUICK_ACTIONS.slice(0, 3),
+  ],
+  research: [
+    { emoji: '🌐', label: 'Scan website', desc: 'Learn a reference site and extract a build blueprint', prompt: 'Open Reference Builder so I can learn a website and build an original version from it.' },
+    { emoji: '🔎', label: 'Verify sources', desc: 'Search, compare, and cite current information', prompt: 'Research this topic with current sources and summarize what is verified:' },
+    { emoji: '🧭', label: 'Compare options', desc: 'Build a decision matrix from evidence', prompt: 'Compare these options with pros, cons, risks, and a recommendation:' },
+    ...QUICK_ACTIONS.filter(action => action.label === 'Search the web' || action.label === 'Summarize URL'),
+  ],
+  debug: [
+    { emoji: '🐞', label: 'Diagnose error', desc: 'Find likely cause and next checks', prompt: 'Help me debug this error. Start with the most likely root cause and the cheapest check:\n\n' },
+    { emoji: '🧪', label: 'Run tests', desc: 'Find failing checks and propose fixes', prompt: 'Run the relevant tests or build, explain the failures, and fix what is broken.' },
+    { emoji: '🩺', label: 'Health check', desc: 'Inspect UI, API, models, and local services', prompt: 'Check Ultron health end to end and tell me what needs attention.' },
+    ...AGENT_QUICK_ACTIONS.slice(1, 4),
+  ],
+  review: [
+    { emoji: '🧾', label: 'Code review', desc: 'Prioritize bugs, risks, and missing tests', prompt: 'Review this code like a senior engineer. Lead with bugs and risks:\n\n' },
+    { emoji: '🔐', label: 'Security pass', desc: 'Look for unsafe inputs, secrets, and permissions', prompt: 'Review this for security risks, privacy issues, and permission problems:\n\n' },
+    { emoji: '🧹', label: 'Simplify UI', desc: 'Find frontend noise and simplify the workflow', prompt: 'Review this UI and suggest what to remove, collapse, or make clearer:' },
+    ...QUICK_ACTIONS.slice(0, 3),
+  ],
+  system: [
+    { emoji: '⚙️', label: 'System stats', desc: 'CPU, RAM, disk, processes, and uptime', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
+    { emoji: '🧠', label: 'Recall memory', desc: 'Review what Ultron knows across projects', prompt: 'List everything you remember about me and my projects.' },
+    { emoji: '🛠️', label: 'Self repair', desc: 'Scan Ultron and propose repairs', prompt: 'Run Ultron self-healer and tell me what should be repaired.' },
+    ...AGENT_QUICK_ACTIONS.slice(3),
+  ],
+}
 
 // In dev, call Express directly (bypasses Vite proxy which drops SSE connections on idle).
 // CORS is open on the Express server so this works fine.
@@ -222,6 +302,7 @@ function App() {
   const [observerStatus, setObserverStatus] = useState<ObserverStatus | null>(null)
   const [darkMode, setDarkMode] = useState<boolean>(loadDarkMode)
   const [quietMode, setQuietMode] = useState<boolean>(loadQuietMode)
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(loadWorkspaceMode)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -242,6 +323,9 @@ function App() {
   const [showReferenceBuilder, setShowReferenceBuilder] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showProjectBuilder, setShowProjectBuilder] = useState(false)
+  const [showCommandCenter, setShowCommandCenter] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
+  const [showComposerTools, setShowComposerTools] = useState(false)
   const [voiceConvMode, setVoiceConvMode] = useState(false)
   const [taskOverdueCount, setTaskOverdueCount] = useState(0)
   const voiceConvRef = useRef(false)
@@ -510,8 +594,13 @@ function App() {
         if (isStreaming) { abortRef.current?.abort(); setIsStreaming(false) }
         setLightboxUrl(null)
       }
-      // Ctrl/Cmd+/ → focus composer
-      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.key === 'k') && !inInput) {
+      // Ctrl/Cmd+K → command center, Ctrl/Cmd+/ → focus composer
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !inInput) {
+        e.preventDefault()
+        setShowCommandCenter(true)
+        setCommandQuery('')
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '/' && !inInput) {
         e.preventDefault()
         textareaRef.current?.focus()
       }
@@ -539,6 +628,8 @@ function App() {
       if (e.key === 'Escape') {
         setSlashMenu(null)
         setShowHelp(false)
+        setShowCommandCenter(false)
+        setShowComposerTools(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -1240,6 +1331,13 @@ function App() {
     })
   }
 
+  function applyWorkspaceMode(mode: WorkspaceMode) {
+    const meta = WORKSPACE_MODES.find(item => item.id === mode) ?? WORKSPACE_MODES[0]
+    setWorkspaceMode(mode)
+    setAgentMode(meta.agent)
+    try { localStorage.setItem('ultron-workspace-mode', mode) } catch { /* ignore */ }
+  }
+
   function stopStreaming() {
     abortRef.current?.abort()
     setIsStreaming(false)
@@ -1261,6 +1359,87 @@ function App() {
   }
 
   const statusLabel = status === 'online' ? 'Ollama online' : status === 'checking' ? 'Checking engine' : 'Ollama offline'
+  const workspaceMeta = WORKSPACE_MODES.find(item => item.id === workspaceMode) ?? WORKSPACE_MODES[0]
+  const activeQuickActions = WORKSPACE_QUICK_ACTIONS[workspaceMode]
+  const commandItems = [
+    { group: 'Navigate', label: 'Build Project', hint: 'Open Project Builder', action: () => { applyWorkspaceMode('build'); setShowProjectBuilder(true) } },
+    { group: 'Navigate', label: 'Reference Builder', hint: 'Learn a website or screenshot', action: () => { applyWorkspaceMode('research'); setShowReferenceBuilder(true) } },
+    { group: 'Navigate', label: 'Health Center', hint: 'Check UI, API, models, and tools', action: () => { applyWorkspaceMode('system'); setShowHealth(true) } },
+    { group: 'Navigate', label: 'Tasks', hint: 'Open task dashboard', action: () => setShowTasks(true) },
+    { group: 'Navigate', label: 'Memory', hint: 'Open long-term memory', action: () => setShowMemory(true) },
+    { group: 'Navigate', label: 'Self-Healer', hint: 'Scan and repair Ultron', action: () => { applyWorkspaceMode('debug'); setShowHealer(true) } },
+    { group: 'Navigate', label: 'Connectors', hint: 'Browser and account integrations', action: () => setShowConnectors(true) },
+    { group: 'Navigate', label: 'Settings', hint: 'Models, router, context, observation', action: () => setShowSettings(true) },
+    { group: 'Workspace', label: 'Chat Mode', hint: 'Clean general assistant workspace', action: () => applyWorkspaceMode('chat') },
+    { group: 'Workspace', label: 'Build Mode', hint: 'Project creation and local code actions', action: () => applyWorkspaceMode('build') },
+    { group: 'Workspace', label: 'Research Mode', hint: 'Web, reference, and source synthesis', action: () => applyWorkspaceMode('research') },
+    { group: 'Workspace', label: 'Debug Mode', hint: 'Errors, tests, and repair loops', action: () => applyWorkspaceMode('debug') },
+    { group: 'Workspace', label: 'Review Mode', hint: 'Code review and UX cleanup', action: () => applyWorkspaceMode('review') },
+    { group: 'Workspace', label: 'System Mode', hint: 'Health, tasks, memory, connectors', action: () => applyWorkspaceMode('system') },
+    { group: 'Compose', label: 'Attach File', hint: 'Add file, code, PDF, or image context', action: () => fileInputRef.current?.click() },
+    { group: 'Compose', label: 'Templates', hint: 'Open prompt template library', action: () => setShowTemplates(true) },
+    { group: 'Compose', label: 'Focus Composer', hint: 'Jump to the message box', action: () => textareaRef.current?.focus() },
+    { group: 'Compose', label: 'Voice Conversation', hint: voiceConvMode ? 'Stop hands-free mode' : 'Start hands-free mode', action: startConversation },
+    { group: 'View', label: quietMode ? 'Show Full UI' : 'Show Quiet UI', hint: quietMode ? 'Reveal secondary details' : 'Hide secondary details', action: toggleQuietMode },
+    { group: 'View', label: sidebarCollapsed ? 'Show Tools Sidebar' : 'Hide Tools Sidebar', hint: 'Toggle the main tool rail', action: () => setSidebarCollapsed(c => !c) },
+    { group: 'View', label: 'Model Compare', hint: 'Run one prompt across local models', action: () => setShowCompare(true), disabled: availableModels.filter(m => !m.includes('embed')).length < 2 },
+    { group: 'Chat', label: 'New Chat', hint: 'Clear the current conversation', action: resetChat },
+    { group: 'Chat', label: 'Search Conversation', hint: 'Find text in this chat', action: () => setShowSearch(true), disabled: messages.length === 0 },
+    { group: 'Chat', label: 'Export Chat', hint: 'Download Markdown transcript', action: exportChat, disabled: messages.length === 0 },
+  ]
+  const filteredCommands = commandItems.filter(item => {
+    const q = commandQuery.trim().toLowerCase()
+    if (!q) return true
+    return `${item.group} ${item.label} ${item.hint}`.toLowerCase().includes(q)
+  })
+  const runCommandItem = (item: typeof commandItems[number]) => {
+    if (item.disabled) return
+    item.action()
+    setShowCommandCenter(false)
+    setCommandQuery('')
+  }
+  const latestAgentEvents = [...messages].reverse().find(message => message.role === 'assistant' && message.agentEvents.length > 0)?.agentEvents.slice(-4) ?? []
+  const timelineItems = latestAgentEvents.map(describeAgentEvent)
+  const workspaceCards = (() => {
+    switch (workspaceMode) {
+      case 'build':
+        return [
+          { label: 'Project Builder', detail: 'Templates, plans, install, build, dev server', action: () => setShowProjectBuilder(true) },
+          { label: 'Repair Loop', detail: 'Run build checks and feed failures back to Ultron', action: () => { setAgentMode(true); void sendMessage(undefined, 'Run the build, diagnose any errors, and fix them.') } },
+          { label: 'Project Plan', detail: 'Turn the idea into files, milestones, and commands', action: () => void sendMessage(undefined, 'Create a concise project plan with file structure, templates, commands, and verification steps.') },
+        ]
+      case 'research':
+        return [
+          { label: 'Reference Builder', detail: 'Scan a website or screenshot into a build blueprint', action: () => setShowReferenceBuilder(true) },
+          { label: 'Visual Compare', detail: 'Compare generated output against the reference', action: () => setShowReferenceBuilder(true) },
+          { label: 'Source Brief', detail: 'Search, verify, and summarize with current context', action: () => { setAgentMode(true); void sendMessage(undefined, 'Research this topic with current sources and give me a verified brief:') } },
+        ]
+      case 'debug':
+        return [
+          { label: 'Self-Healer', detail: 'Scan Ultron for errors and propose fixes', action: () => setShowHealer(true) },
+          { label: 'Health Center', detail: 'Check UI, API, model, and tool readiness', action: () => setShowHealth(true) },
+          { label: 'Run Diagnosis', detail: 'Start with the cheapest failing check', action: () => { setAgentMode(true); void sendMessage(undefined, 'Diagnose the current problem. Start with the cheapest check that can disconfirm the likely cause.') } },
+        ]
+      case 'review':
+        return [
+          { label: 'Code Review', detail: 'Bugs, risks, regressions, missing tests', action: () => void sendMessage(undefined, 'Review this code. Lead with bugs, risks, and missing tests:\n\n') },
+          { label: 'UX Cleanup', detail: 'Find and remove interface noise', action: () => void sendMessage(undefined, 'Review this UI and identify what to remove, collapse, or clarify:') },
+          { label: 'Compare Models', detail: 'Ask every local model for a second opinion', action: () => setShowCompare(true) },
+        ]
+      case 'system':
+        return [
+          { label: 'Health', detail: 'API, models, tools, and local readiness', action: () => setShowHealth(true) },
+          { label: 'Tasks', detail: 'Daily planner and open work', action: () => setShowTasks(true) },
+          { label: 'Memory', detail: 'Long-term facts and project context', action: () => setShowMemory(true) },
+        ]
+      default:
+        return [
+          { label: 'Command Center', detail: 'Jump to any Ultron capability', action: () => { setShowCommandCenter(true); setCommandQuery('') } },
+          { label: 'Build', detail: 'Create projects and run local checks', action: () => applyWorkspaceMode('build') },
+          { label: 'Research', detail: 'Scan references and verify sources', action: () => applyWorkspaceMode('research') },
+        ]
+    }
+  })()
 
   return (
   <>
@@ -1453,9 +1632,27 @@ function App() {
         <header className="chat-header">
           <div>
             <p className="eyebrow">{agentMode ? 'Agent workspace' : 'Assistant workspace'}</p>
-            <h2>Ask, iterate, build</h2>
+            <h2>{workspaceMeta.headline}</h2>
+            <div className="workspace-switcher" role="tablist" aria-label="Workspace mode">
+              {WORKSPACE_MODES.map(mode => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={workspaceMode === mode.id}
+                  className={workspaceMode === mode.id ? 'active' : ''}
+                  onClick={() => applyWorkspaceMode(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="chat-header-actions">
+            <button type="button" className="export-btn command-trigger-btn" onClick={() => { setShowCommandCenter(true); setCommandQuery('') }} title="Command Center (Ctrl+K)">
+              <Search size={14} />
+              Command
+            </button>
             {sidebarCollapsed && (
               <button type="button" className="export-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar (Ctrl+B)">
                 <ChevronRight size={14} />
@@ -1499,6 +1696,20 @@ function App() {
             </button>
           </div>
         </header>
+
+        {timelineItems.length > 0 && (
+          <div className="action-timeline" aria-label="Recent action timeline">
+            {timelineItems.map((item, index) => (
+              <div key={`${item.label}-${index}`} className="action-timeline-step">
+                <span className="action-dot" />
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Search bar */}
         {showSearch && (
@@ -1549,10 +1760,18 @@ function App() {
                   </div>
                 </div>
               </div>
+              <div className="workspace-dashboard" aria-label={`${workspaceMeta.label} dashboard`}>
+                {workspaceCards.map(card => (
+                  <button key={card.label} type="button" className="workspace-card" onClick={card.action}>
+                    <span>{card.label}</span>
+                    <small>{card.detail}</small>
+                  </button>
+                ))}
+              </div>
               <div className="quick-actions">
-                {(agentMode ? AGENT_QUICK_ACTIONS : QUICK_ACTIONS).map((action) => (
+                {activeQuickActions.map((action) => (
                   <button
-                    key={action.label}
+                    key={`${workspaceMode}-${action.label}`}
                     type="button"
                     className="quick-action-card"
                     onClick={() => sendMessage(undefined, action.prompt)}
@@ -1894,6 +2113,20 @@ function App() {
               ))}
             </div>
           )}
+          {quietMode && showComposerTools && (
+            <div className="composer-tool-tray" role="toolbar" aria-label="Composer tools">
+              <button type="button" onClick={() => setShowTemplates(true)}><BookOpen size={14} /> Templates</button>
+              <button type="button" onClick={() => fileInputRef.current?.click()}><Paperclip size={14} /> Attach</button>
+              {draft.trim().length > 8 && (
+                <button type="button" onClick={preEnhanceDraft !== null ? undoEnhance : () => void enhancePrompt()} disabled={isStreaming || enhancing}>
+                  {enhancing ? <Loader size={14} className="spin" /> : <Wand2 size={14} />}
+                  {preEnhanceDraft !== null ? 'Undo' : 'Enhance'}
+                </button>
+              )}
+              <button type="button" onClick={voiceConvMode ? startConversation : _doToggleVoice}>{isListening ? <MicOff size={14} /> : <Mic size={14} />} Voice</button>
+              <button type="button" onClick={startConversation}>{voiceConvMode ? <PhoneOff size={14} /> : <PhoneCall size={14} />} Conversation</button>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={draft}
@@ -1961,7 +2194,7 @@ function App() {
               }
             }}
             onPaste={(e) => { void onComposerPaste(e) }}
-            placeholder={agentMode ? 'Give Ultron a task… (Enter to send, Shift+Enter for newline)' : 'Message Ultron… (Enter to send, Shift+Enter for newline)'}
+            placeholder={`${workspaceMeta.placeholder} (Enter to send, Shift+Enter for newline)`}
             rows={1}
           />
           {/* Hidden file input */}
@@ -1973,6 +2206,18 @@ function App() {
             style={{ display: 'none' }}
             onChange={e => { void attachFiles(Array.from(e.target.files ?? [])); e.target.value = '' }}
           />
+          {quietMode ? (
+            <button
+              type="button"
+              className={`icon-button attach-btn composer-tools-toggle ${showComposerTools ? 'active' : ''}`}
+              onClick={() => setShowComposerTools(v => !v)}
+              aria-label="Composer tools"
+              title="Composer tools"
+            >
+              <Wrench size={16} />
+            </button>
+          ) : (
+            <>
           <button
             type="button"
             className="icon-button attach-btn"
@@ -2018,6 +2263,8 @@ function App() {
           >
             {voiceConvMode ? <PhoneOff size={16} /> : <PhoneCall size={16} />}
           </button>
+            </>
+          )}
           {isStreaming ? (
             <button type="button" className="icon-button stop" onClick={stopStreaming} aria-label="Stop response">
               <Square size={18} />
@@ -2063,6 +2310,41 @@ function App() {
             <button type="button" onClick={() => setToasts(p => p.filter(x => x.id !== t.id))} aria-label="Dismiss">×</button>
           </div>
         ))}
+      </div>
+    )}
+
+    {showCommandCenter && (
+      <div className="command-overlay" onClick={() => setShowCommandCenter(false)}>
+        <div className="command-center" onClick={e => e.stopPropagation()}>
+          <div className="command-search-row">
+            <Search size={16} />
+            <input
+              autoFocus
+              value={commandQuery}
+              onChange={event => setCommandQuery(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  const first = filteredCommands.find(item => !item.disabled)
+                  if (first) runCommandItem(first)
+                }
+                if (event.key === 'Escape') setShowCommandCenter(false)
+              }}
+              placeholder="Command Center..."
+            />
+            <kbd>Ctrl K</kbd>
+          </div>
+          <div className="command-list">
+            {filteredCommands.length > 0 ? filteredCommands.map(item => (
+              <button key={`${item.group}-${item.label}`} type="button" className="command-item" disabled={item.disabled} onClick={() => runCommandItem(item)}>
+                <span className="command-group">{item.group}</span>
+                <span className="command-label">{item.label}</span>
+                <span className="command-hint">{item.hint}</span>
+              </button>
+            )) : (
+              <div className="command-empty">No command found</div>
+            )}
+          </div>
+        </div>
       </div>
     )}
 

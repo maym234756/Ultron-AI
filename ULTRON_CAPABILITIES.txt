@@ -604,6 +604,15 @@ AI INTELLIGENCE:
 
 CHAT INTERFACE:
 - Real-time token streaming (tokens appear as generated, not after)
+- Command Center (Ctrl+K): searchable overlay for Build Project, Reference
+  Builder, Health, Tasks, Memory, Self-Healer, Connectors, Settings,
+  workspace modes, composer actions, view toggles, search, export, and new chat
+- Workspace modes: Chat, Build, Research, Debug, Review, and System reshape
+  the title, agent mode, quick actions, composer placeholder, and dashboard
+- Workspace dashboard cards: mode-specific cockpit actions for Project Builder,
+  Repair Loop, Project Plan, Reference Builder, Health, Tasks, Memory, and more
+- Compact action timeline: summarizes recent agent plans, tool calls, tool
+  results, stream status, questions, and permissions without exposing raw logs
 - Streaming typing cursor while generating
 - Typing indicator (animated dots) while waiting for first token
 - Message timestamps (relative: "2 min ago")
@@ -696,13 +705,15 @@ APPEARANCE:
 - Quiet UI mode (persisted, default-on): hides sidebar noise, observer details,
   route diagnostics, agent traces, prediction cards, shortcut hints, and non-ASK
   follow-up chips while keeping Tools / Full UI one click away
+- Quiet composer tool tray: Templates, Attach, Enhance, Voice, and Conversation
+  collapse behind one tools button in Quiet UI
 - Collapsible sidebar (Ctrl+B) — maximize chat space
 - Time-based greeting on welcome screen (Good morning/afternoon/evening)
 - Theme: warm light or GitHub-dark dark mode
 - Image lightbox: click any image (attachment, tool result, or inline) to zoom full-screen
 - Context usage progress bar: colour-coded bar (green/amber/red) shows context fill level
 - Model capability tags in selector: [14B], [3B], [embed], 👁 vision badge
-- Keyboard shortcuts: Ctrl+N, Esc, Ctrl+F, Ctrl+K, Ctrl+B, ?, /
+- Keyboard shortcuts: Ctrl+N, Esc, Ctrl+F, Ctrl+K Command Center, Ctrl+B, ?, /
   ↑/↓ (prompt history navigation)
 
 AGENT TOOLS PANEL:
