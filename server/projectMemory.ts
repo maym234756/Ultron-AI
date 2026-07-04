@@ -4,7 +4,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { ProjectBuildResult } from './projectBuilder.js'
 
-export type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
+export type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
 
 export type ProjectRecord = {
   id: string
@@ -64,6 +64,35 @@ function previewUrlFor(record: ProjectRecord, output = ''): string | undefined {
   if (record.templateId === 'vanilla-ts') return 'http://localhost:5174'
   if (record.templateId === 'express-api') return 'http://localhost:3000/health'
   return record.previewUrl
+}
+
+async function ensureProjectPlan(record: ProjectRecord): Promise<string> {
+  const planPath = safeProjectFile(record.projectPath, 'ULTRON_PROJECT_PLAN.md')
+  try {
+    await fs.access(planPath)
+  } catch {
+    await fs.writeFile(planPath, `# Ultron Project Plan - ${record.projectName}
+
+Recovered from Ultron Project Memory.
+
+## Starting Point
+
+- Template: ${record.templateLabel}
+- Stack: ${record.stack}
+- Install: ${record.installCommand ?? 'Not required'}
+- Check/build: ${record.buildCommand ?? 'Not configured'}
+- Dev server: ${record.devCommand ?? 'Not configured'}
+
+## Recommended Loop
+
+1. Open the project in VS Code.
+2. Run Install if dependencies are missing.
+3. Run Check, then Fix if needed.
+4. Start Dev, inspect Preview, and stop the dev server when done.
+5. Keep this plan updated as the project becomes real.
+`, 'utf-8')
+  }
+  return planPath
 }
 
 async function readStore(): Promise<ProjectStore> {
@@ -362,6 +391,11 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
   if (action === 'openTerminal') {
     output = await runCommand(`Start-Process powershell.exe -WorkingDirectory ${quotePowerShell(record.projectPath)}`, record.projectPath, 20)
     return { record: await patchProject(id, { lastAction: 'Opened project terminal.', lastLog: output }), output }
+  }
+  if (action === 'openProjectPlan') {
+    const planPath = await ensureProjectPlan(record)
+    output = await runCommand(`Start-Process code -ArgumentList ${quotePowerShell(planPath)}`, record.projectPath, 20)
+    return { record: await patchProject(id, { lastAction: 'Opened project plan.', lastLog: output }), output }
   }
   if (action === 'runInstall') {
     if (!record.installCommand) throw new Error('This project does not have an install command.')

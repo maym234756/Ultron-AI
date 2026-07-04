@@ -13,11 +13,11 @@ a native connector action planner, a self-healing system, Self-Upgrade 2.0,
 an OpenAI-compatible API layer, a Health Command Center, and an intelligence
 pipeline that rivals commercially available products from Anthropic and OpenAI.
 It now also includes a Project Memory layer that remembers generated programming
-projects and exposes programmer actions for opening folders, VS Code, terminals,
-dependency installs, checks, repairs, dev servers, previews, and dev-server
-shutdowns, plus a Reference Builder that learns public URLs or screenshots and
-turns them into original website build blueprints and checked starter projects
-with visual comparison reports.
+projects and exposes programmer actions for opening folders, VS Code, project
+plans, terminals, dependency installs, checks, repairs, dev servers, previews,
+and dev-server shutdowns, plus a Reference Builder that learns public URLs or
+screenshots and turns them into original website build blueprints and checked
+starter projects with visual comparison reports.
 
 Estimated Replacement / Rebuild Cost:  $275,000 – $430,000
 Estimated Strategic / Market Value:    $950,000 – $2,600,000+
@@ -113,6 +113,7 @@ Prompt Enhancer (AI rewrites draft) ⚡ Yes     ❌ No          ❌ No
 Project Builder templates/workflow ⚡ Yes     ❌ No          ❌ No
 Project Memory + run/open actions  ⚡ Yes     ❌ No          ❌ No
 Generated project planning briefs   ⚡ Yes     ❌ No          ❌ No
+Remembered project plan open        ⚡ Yes     ❌ No          ❌ No
 Remembered project terminal open    ⚡ Yes     ❌ No          ❌ No
 Remembered dependency install       ⚡ Yes     ❌ No          ❌ No
 Remembered dev server stop          ⚡ Yes     ❌ No          ❌ No
@@ -153,10 +154,10 @@ Credential vault                    ⚡ Yes     ❌ No          ❌ No
 Network capture (XHR recording)     ⚡ Yes     ❌ No          ❌ No
 Whisper audio transcription         ⚡ Yes     ❌ No          ❌ No
 
-SCORE (out of 80 features evaluated):
-   Ultron:        80/80 (⚡55 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
-   ChatGPT-4o:    30/80 (several require Plus @ $20/mo or Enterprise @ $200/mo)
-   Claude 3.7:    28/80 (several require Pro @ $20/mo or Team @ $30/mo)
+SCORE (out of 81 features evaluated):
+   Ultron:        81/81 (⚡56 exclusive to Ultron, ✅ 25 parity, ❌0 missing)
+   ChatGPT-4o:    30/81 (several require Plus @ $20/mo or Enterprise @ $200/mo)
+   Claude 3.7:    28/81 (several require Pro @ $20/mo or Team @ $30/mo)
 
 ================================================================================
 SECTION 3 — REBUILD COST ANALYSIS (REPLACEMENT VALUE)
@@ -392,8 +393,8 @@ Each of these components has independent value as a licensable or buildable asse
     - Deterministic starter project generation across browser, React/Vite,
        Express API, and Python CLI templates
     - Generated ULTRON_PROJECT_PLAN.md file for every scaffold
-    - Persistent Project Memory with folder, VS Code, terminal, install, check,
-       repair, dev-server start/stop, and preview actions
+    - Persistent Project Memory with folder, VS Code, project-plan, terminal,
+       install, check, repair, dev-server start/stop, and preview actions
     - Guarded check-fix-check loop that applies repairs only inside the remembered
        project folder
 
@@ -552,7 +553,7 @@ CONCLUSION
 Ultron is not a prototype or a demo. It is a production-quality, feature-
 complete AI platform that:
 
-   • Matches or exceeds ChatGPT and Claude on 80 evaluated features
+   • Matches or exceeds ChatGPT and Claude on 81 evaluated features
   • Uniquely beats both on OS automation, privacy, and cost
   • Contains genuinely novel capabilities (self-healer, screen observer,
       154-tool agent loop, 52-connector registry, scored auto-router,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Code2, ExternalLink, FolderOpen, Loader, Play, RefreshCw, Terminal, X } from 'lucide-react'
+import { Code2, ExternalLink, FileText, FolderOpen, Loader, Play, RefreshCw, Terminal, X } from 'lucide-react'
 
 type ProjectTemplate = {
   id: string
@@ -21,7 +21,7 @@ type ProjectBuildResult = {
   nextCommands: string[]
 }
 
-type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
+type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
 
 type ProjectRecord = {
   id: string
@@ -271,6 +271,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
                 <div className="project-builder-actions">
                   <button type="button" onClick={() => void runProjectAction(project, 'openExplorer')} disabled={Boolean(actionBusy)}><FolderOpen size={13} /> Folder</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openVsCode')} disabled={Boolean(actionBusy)}><Code2 size={13} /> Code</button>
+                  <button type="button" onClick={() => void runProjectAction(project, 'openProjectPlan')} disabled={Boolean(actionBusy)}><FileText size={13} /> Plan</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openTerminal')} disabled={Boolean(actionBusy)}><Terminal size={13} /> Terminal</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runInstall')} disabled={Boolean(actionBusy) || !project.installCommand}><Terminal size={13} /> Install</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runBuild')} disabled={Boolean(actionBusy) || !project.buildCommand}><Terminal size={13} /> Check</button>
