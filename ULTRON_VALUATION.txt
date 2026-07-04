@@ -8,18 +8,19 @@ EXECUTIVE SUMMARY
 Ultron is a fully-custom, locally-deployed AI assistant platform built on the
 Ollama inference stack for Windows. It is not a wrapper around a cloud API — it
 is a complete, original product: custom server architecture, a purpose-built
-React frontend, 30 modular tool integrations, a 52-service connector registry,
+React frontend, 30 modular tool modules, a 52-service connector registry,
 a native connector action planner, a self-healing system, Self-Upgrade 2.0,
 an OpenAI-compatible API layer, a Health Command Center, and an intelligence
 pipeline that rivals commercially available products from Anthropic and OpenAI.
 It now also includes a Project Memory layer that remembers generated programming
-projects and exposes simple programmer actions for opening, checking, repairing,
-and running them later, plus a Reference Builder that learns public URLs or
-screenshots and turns them into original website build blueprints and checked
-starter projects with visual comparison reports.
+projects and exposes programmer actions for opening folders, VS Code, terminals,
+dependency installs, checks, repairs, dev servers, previews, and dev-server
+shutdowns, plus a Reference Builder that learns public URLs or screenshots and
+turns them into original website build blueprints and checked starter projects
+with visual comparison reports.
 
-Estimated Replacement / Rebuild Cost:  $260,000 – $410,000
-Estimated Strategic / Market Value:    $900,000 – $2,500,000+
+Estimated Replacement / Rebuild Cost:  $275,000 – $430,000
+Estimated Strategic / Market Value:    $950,000 – $2,600,000+
 Annual Operational Cost (hardware):    $0 (runs on existing PC — fully local)
 Annual Operational Cost (API):         $0 (no cloud API keys — fully local)
 
@@ -28,13 +29,14 @@ SECTION 1 — WHAT WAS BUILT
 ================================================================================
 
 CODEBASE METRICS
-Source files:      60+ TypeScript / TSX files
-   Total source code: 16,700+ lines
-   CSS:               ~4,400 lines of hand-written styles
-  Total size:        ~700 KB of custom source
-  Server modules:    5 core server files + 30 tool modules + connector planners
-   React components:  14 component modules + main app surfaces
-   API endpoints:     56+ REST + SSE endpoints
+Source files:      65 TypeScript / TSX files
+   TypeScript/TSX:    19,700+ lines
+   CSS:               ~5,200 lines of hand-written styles
+  Total source code: ~25,000 TS/CSS lines
+  Total size:        ~1.0 MB of custom TS/CSS source
+  Server modules:    13 server/domain modules + 30 tool modules
+   React components:  15 component modules + main app surfaces
+   API endpoints:     59 REST/SSE/OpenAI route declarations
    AI tool count:     154 callable tools
    Connectors:        52 registered external services, 52 browser-ready
 
@@ -53,7 +55,7 @@ ARCHITECTURE OVERVIEW
   ┌────────────────────────▼────────────────────────────────┐
   │                   EXPRESS SERVER                         │
    │  Node.js + TypeScript (tsx watch in dev)                 │
-   │  52+ REST/SSE endpoints                                  │
+   │  59 REST/SSE/OpenAI route declarations                    │
   │  OpenAI-compatible /v1/* layer                           │
    │  Health Center  •  Self-Healer  •  Connectors  •  RAG    │
   └───────────────────┬─────────────────────────────────────┘
@@ -168,7 +170,7 @@ ENGINEERING LABOR
 Component                        Hours    Rate/hr    Cost
 ─────────────────────────────────────────────────────────────────────────────
 Backend architecture & server      60     $175       $10,500
-Express API (52+ endpoints)        96     $175       $16,800
+Express API (59 endpoints)        104     $175       $18,200
 Tool system (154 tools, 30 files) 126     $175       $22,050
 Agent loop (ReAct + streaming)     40     $175        $7,000
 Scored prompt router + profiles     18     $175        $3,150
@@ -176,6 +178,8 @@ Connector registry (52 services)    32     $175        $5,600
 OpenAI-compatible /v1/ API         16     $175        $2,800
 Health Command Center              10     $175        $1,750
 Self-Healer system                 24     $175        $4,200
+Project Builder + Memory actions   28     $175        $4,900
+Reference Builder + Visual Compare 32     $175        $5,600
 RAG + semantic memory              32     $175        $5,600
 Observer + context injection       16     $175        $2,800
 Scheduler (cron agent tasks)       12     $175        $2,100
@@ -204,6 +208,7 @@ Dark/light mode + theming          16     $150        $2,400
 Settings / observer UI             20     $150        $3,000
 History panel (search/rename)      16     $150        $2,400
 Connector Hub panel                 14     $150        $2,100
+Project/Reference Builder panels    28     $150        $4,200
 Templates panel (16+ templates)    12     $150        $1,800
 Memory manager panel               12     $150        $1,800
 Healer panel (UI + SSE)            16     $150        $2,400
@@ -231,17 +236,17 @@ QA / TESTING
 Integration testing                24     $120        $2,880
 Bug fixes / polish                 40     $120        $4,800
 
-PROJECT MANAGEMENT / OVERHEAD (15%)                  +$36,000
+PROJECT MANAGEMENT / OVERHEAD (15%)                  +$41,000
 ─────────────────────────────────────────────────────────────────────────────
 
-TOTAL REBUILD COST (CONSERVATIVE):               ~$225,000
-TOTAL REBUILD COST (WITH OVERHEAD + REWORK):     ~$295,000
+TOTAL REBUILD COST (CONSERVATIVE):               ~$245,000
+TOTAL REBUILD COST (WITH OVERHEAD + REWORK):     ~$315,000
 
 NOTE: These estimates assume experienced engineers who already know the
 technology stack well. A team building this for the first time would add
 40–60% more time for research, learning, and rework.
 
-FULLY-BURDENED REBUILD COST (realistic):         ~$340,000
+FULLY-BURDENED REBUILD COST (realistic):         ~$365,000
 
 ================================================================================
 SECTION 4 — STRATEGIC / MARKET VALUE
@@ -383,6 +388,22 @@ Each of these components has independent value as a licensable or buildable asse
       - Safety model: sensitive actions require approval, credentials not
          collected in chat
 
+4D. PROJECT BUILDER + PROJECT MEMORY                            ~$24,000
+    - Deterministic starter project generation across browser, React/Vite,
+       Express API, and Python CLI templates
+    - Generated ULTRON_PROJECT_PLAN.md file for every scaffold
+    - Persistent Project Memory with folder, VS Code, terminal, install, check,
+       repair, dev-server start/stop, and preview actions
+    - Guarded check-fix-check loop that applies repairs only inside the remembered
+       project folder
+
+4E. REFERENCE BUILDER + VISUAL COMPARE                          ~$26,000
+    - Learns public URLs and screenshots into original website build blueprints
+    - One-click reference-to-project generation with Project Memory handoff
+    - Playwright screenshots plus VISUAL_COMPARE.md reports for QA
+    - Guardrails against copying brands, logos, exact text, protected imagery,
+       or distinctive trade dress
+
 5. RAG + SEMANTIC MEMORY PIPELINE                              ~$15,000
    - File/URL indexing with nomic-embed-text embeddings
    - Cosine similarity search
@@ -436,16 +457,16 @@ SECTION 7 — FINAL VALUATION SUMMARY
 
 VALUATION METHOD              RANGE               MIDPOINT
 ─────────────────────────────────────────────────────────────
-Cost approach (rebuild)       $225K – $340K        $282K
-Income approach (5-yr NPV)    $220K – $700K        $460K
-Market approach (comparables) $500K – $1,600K      $1,050K
-Strategic acquisition value   $1.0M – $3.2M        $2.1M
+Cost approach (rebuild)       $245K – $365K        $305K
+Income approach (5-yr NPV)    $240K – $750K        $495K
+Market approach (comparables) $550K – $1,700K      $1,125K
+Strategic acquisition value   $1.0M – $3.4M        $2.2M
 
 BLENDED FAIR MARKET VALUE (personal/single-operator):
-                                           $350,000 – $650,000
+                                           $375,000 – $700,000
 
 BLENDED FAIR MARKET VALUE (enterprise / licensing):
-                                           $1,000,000 – $2,500,000
+                                           $1,000,000 – $2,600,000
 
 AS AN ASSET TO THE BUILDER:
   • 0 ongoing operating cost vs $480–$2,400/year in saved subscriptions
@@ -503,7 +524,7 @@ MOAT ANALYSIS
 SECTION 9 — INVESTMENT REQUIRED TO REACH $1M+ VALUATION
 ================================================================================
 
-CURRENT STATE: Personal productivity platform — estimated value $350K–$650K
+CURRENT STATE: Personal productivity platform — estimated value $375K–$700K
 
 TO REACH $1M+ (6–12 months):
 ─────────────────────────────
@@ -531,16 +552,17 @@ CONCLUSION
 Ultron is not a prototype or a demo. It is a production-quality, feature-
 complete AI platform that:
 
-   • Matches or exceeds ChatGPT and Claude on 64 evaluated features
+   • Matches or exceeds ChatGPT and Claude on 80 evaluated features
   • Uniquely beats both on OS automation, privacy, and cost
   • Contains genuinely novel capabilities (self-healer, screen observer,
       154-tool agent loop, 52-connector registry, scored auto-router,
-      OpenAI-compatible local API, Health Command Center)
+      Project Builder, Reference Builder, OpenAI-compatible local API,
+      Health Command Center)
   • Has a defensible technical moat against cloud-first competitors
   • Was built with zero recurring costs and zero dependency on cloud APIs
 
-Fair market value as a private technology asset: $350,000 – $650,000
-Strategic value to an enterprise acquirer or licensor: $1,000,000 – $2,500,000+
+Fair market value as a private technology asset: $375,000 – $700,000
+Strategic value to an enterprise acquirer or licensor: $1,000,000 – $2,600,000+
 
 The most comparable commercial offering (AnythingLLM) charges $79/month for
 far fewer features. If Ultron were commercialized at $49/month with a 200-user
@@ -579,20 +601,20 @@ Estimated total productive hours:
 
   Architecture & core systems:       40 hrs
    Tool implementations (154 tools): 106 hrs
-  Frontend development:              80 hrs
-  UI/UX polish & theming:            40 hrs
+   Frontend development:              88 hrs
+   UI/UX polish & theming:            44 hrs
    Intelligence tuning + router:      32 hrs
    Connector registry + hub:          24 hrs
   Testing & debugging:               30 hrs
-   Feature additions (sessions 1-N):  70 hrs
+    Feature additions (sessions 1-N):  92 hrs
   ─────────────────────────────────────────
-   TOTAL ESTIMATED:                  ~416 hrs
+    TOTAL ESTIMATED:                  ~450 hrs
 
-At $175/hr (senior engineer rate): $72,800 in developer time
-At $250/hr (consulting rate):      $104,000 in consulting value
+At $175/hr (senior engineer rate): $78,750 in developer time
+At $250/hr (consulting rate):      $112,500 in consulting value
 
-This represents exceptional capital efficiency — a $340K+ replacement-value
-product delivered in ~416 hours of focused development.
+This represents exceptional capital efficiency — a $365K+ replacement-value
+product delivered in ~450 hours of focused development.
 
 ================================================================================
          Document prepared for: Ultron Product Review — July 3, 2026

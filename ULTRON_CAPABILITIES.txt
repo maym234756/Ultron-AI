@@ -730,22 +730,26 @@ OTHER:
   workflow publishes installer artifacts and tagged public GitHub Releases
 
 --------------------------------------------------------------------------------
-API ENDPOINTS: 52+
+API ENDPOINTS: 59 route declarations
 --------------------------------------------------------------------------------
 /api/health           — Ollama status + best available model
 /api/capabilities/status — Full Ultron readiness report and operational health
 /api/connectors/status — External connector registry and readiness snapshot
 /api/connectors/actions — Native connector action schema registry
 /api/connectors/actions/dry-run — Dry-run a typed connector action plan
+/api/connectors/:id/setup — Connector setup guidance and readiness state
+/api/connectors/:id/test — Connector readiness test endpoint
 /api/latency/status    — Model warmup, fast model, and cache diagnostics
+/api/router/preview    — Explain Chat/Agent and intelligence routing decision
 /api/models           — List models with vision capability flag
 /api/agent            — Agent stream (SSE): tool calls, thinking, metrics
 /api/chat             — Chat stream (SSE) with RAG + memory injection
 /api/compare          — Multi-model side-by-side SSE comparison
 /api/tasks            — Task dashboard CRUD API
 /api/project-builder  — Template project creation + validation workflow
+/api/reference-builder — URL/screenshot learner + one-click project build
 /api/enhance          — Prompt enhancer
-/api/self-upgrade     — Guarded self-upgrade status + agent stream
+/api/self-upgrade     — Guarded self-upgrade status, backlog, and agent stream
 /api/run-code         — Execute Python/JS/TS/Bash/PS code, return output
 /api/local-file       — Securely serve local image files (screenshots, generated)
 /api/memories         — List / add long-term memories
@@ -831,7 +835,7 @@ HOW TO USE IT:
 4. API consumers can call GET /api/capabilities/status directly
 
 --------------------------------------------------------------------------------
-TOOL COUNT: 154 tools  |  API ENDPOINTS: 52+  |  CONNECTORS: 52
+TOOL COUNT: 154 tools  |  API ENDPOINTS: 59 routes  |  CONNECTORS: 52
 --------------------------------------------------------------------------------
 SYSTEM:       run_terminal, open_app, take_screenshot, clipboard_read,
               clipboard_write, speak, notify
