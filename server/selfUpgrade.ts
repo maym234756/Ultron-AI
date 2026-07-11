@@ -49,6 +49,16 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     requiredValidation: ['npm run test:router', 'npm run build'],
   },
   {
+    id: 'coding-mission-control',
+    label: 'Coding Mission Control Pack',
+    description: 'Improve project generation, toolchain readiness, build/repair loops, visual previews, and end-to-end coding orchestration.',
+    task: 'Improve Ultron as an end-to-end coding AI. Review server/projectBuilder.ts, server/projectMemory.ts, server/tools/coding.ts, server/tools/preview.ts, server/tools/playwright.ts, and src/components/ProjectBuilderPanel.tsx. Add one focused improvement that makes project creation, validation, repair, preview, or toolchain setup stronger. Use preview_write for any file changes and validate with npm run build.',
+    risk: 'medium',
+    impact: 'More reliable start-to-finish software creation with clearer project status and stronger build loops.',
+    filesAffected: ['server/projectBuilder.ts', 'server/projectMemory.ts', 'server/tools/coding.ts', 'server/tools/preview.ts', 'server/tools/playwright.ts', 'src/components/ProjectBuilderPanel.tsx'],
+    requiredValidation: ['npm run build', 'project-builder smoke test'],
+  },
+  {
     id: 'connector-pack',
     label: 'Connector Pack',
     description: 'Improve connector setup, approvals, auditability, and native action reliability.',
@@ -121,8 +131,9 @@ function packToBacklogItem(pack: UpgradePack): SelfUpgradeBacklogItem {
 }
 
 function ensureSeedBacklog(store: SelfUpgradeStore): SelfUpgradeStore {
-  if (store.backlog.length > 0) return store
-  const seeded = UPGRADE_PACKS.map(packToBacklogItem)
+  const missingPacks = UPGRADE_PACKS.filter(pack => !store.backlog.some(item => item.packId === pack.id))
+  if (store.backlog.length > 0 && missingPacks.length === 0) return store
+  const seeded = [...missingPacks.map(packToBacklogItem), ...store.backlog]
   const next = { backlog: seeded }
   writeStore(next)
   return next

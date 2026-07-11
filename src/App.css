@@ -21,6 +21,18 @@
   overflow: hidden;
 }
 
+.sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right: 0;
+  pointer-events: none;
+}
+
+.sidebar.collapsed > * {
+  visibility: hidden;
+}
+
 .brand-lockup,
 .status-pill,
 .control-block span,
@@ -106,6 +118,108 @@
   color: #7c2d12;
   background: #fff7ed;
   font-size: 14px;
+}
+
+.auth-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(15, 118, 110, 0.16), transparent 32rem),
+    linear-gradient(135deg, #f8fafc, #eef4f2);
+}
+
+.auth-card {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 22px 70px rgba(15, 23, 42, 0.12);
+}
+
+.auth-mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: white;
+  background: #0f766e;
+}
+
+.auth-card h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(30px, 6vw, 48px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.auth-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.auth-switch {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.identity-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.identity-card div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.identity-card strong,
+.identity-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-card strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.identity-card span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.identity-card button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 .control-block {
@@ -1313,6 +1427,29 @@ html.dark .app-shell.quiet-ui {
   border-color: var(--accent);
 }
 
+.question-folder-button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.question-folder-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 .agent-question-trace {
   display: flex;
   align-items: center;
@@ -1429,6 +1566,66 @@ html.dark .app-shell.quiet-ui {
   color: var(--muted);
 }
 
+.project-builder-field small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.project-toolchain {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.project-toolchain.ready {
+  border-color: color-mix(in srgb, #0f766e 42%, var(--border));
+}
+
+.project-toolchain.needs-attention {
+  border-color: color-mix(in srgb, #d97706 48%, var(--border));
+}
+
+.project-toolchain-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.project-toolchain-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.project-toolchain-item.ok {
+  border-color: color-mix(in srgb, #16a34a 30%, var(--border));
+}
+
+.project-toolchain-item.missing {
+  border-color: color-mix(in srgb, #d97706 40%, var(--border));
+}
+
+.project-toolchain-item strong {
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.project-toolchain-item span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .project-builder-field input {
   min-height: 36px;
   border: 1px solid var(--border);
@@ -1436,6 +1633,33 @@ html.dark .app-shell.quiet-ui {
   color: var(--fg);
   padding: 0 10px;
   border-radius: 8px;
+}
+
+.project-builder-path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.project-builder-path-row button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0 12px;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.project-builder-path-row button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .project-template-list {
@@ -1585,6 +1809,47 @@ html.dark .app-shell.quiet-ui {
   line-height: 1.35;
 }
 
+.project-mission-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, #0f766e 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #0f766e 7%, var(--bg));
+}
+
+.project-mission-card > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.project-mission-card strong {
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.project-mission-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.project-mission-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.project-mission-statuses span {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
 .project-builder-actions {
   flex-wrap: wrap;
 }
@@ -1612,6 +1877,12 @@ html.dark .app-shell.quiet-ui {
   cursor: not-allowed;
 }
 
+.project-builder-actions .project-next-action {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: white;
+}
+
 .project-builder-action-log {
   margin: 0;
   max-height: 180px;
@@ -1621,6 +1892,62 @@ html.dark .app-shell.quiet-ui {
   background: color-mix(in srgb, black 8%, var(--surface));
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+.credential-hero {
+  background: color-mix(in srgb, #155e75 9%, var(--surface));
+}
+
+.credential-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.credential-form .credential-notes,
+.credential-form .project-builder-run {
+  grid-column: 1 / -1;
+}
+
+.credential-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.credential-card > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.credential-card strong {
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.credential-card span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.credential-card code {
+  overflow-wrap: anywhere;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--fg);
+  background: color-mix(in srgb, black 7%, var(--surface));
+  font-size: 12px;
 }
 
 .reference-upload {
@@ -1758,6 +2085,10 @@ html.dark .app-shell.quiet-ui {
 @media (max-width: 760px) {
   .project-builder-grid,
   .project-builder-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .project-builder-path-row {
     grid-template-columns: 1fr;
   }
 }

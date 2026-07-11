@@ -80,7 +80,7 @@ function cleanProjectName(value: string | undefined): string {
 }
 
 function resolveBasePath(value: string | undefined): string {
-  const fallback = path.join(os.homedir(), 'Ultron Projects')
+  const fallback = os.homedir()
   if (!value?.trim()) return fallback
   const expanded = value.trim().replace(/^~(?=[/\\]|$)/, os.homedir())
   return path.resolve(expanded)
@@ -96,6 +96,11 @@ function escapeHtml(value: string): string {
 
 function js(value: unknown): string {
   return JSON.stringify(value).replace(/<\//g, '<\\/')
+}
+
+function markdownList(values: string[], fallback: string): string {
+  const items = values.length ? values : [fallback]
+  return items.map(item => `- ${item}`).join('\n')
 }
 
 function stripTags(value: string): string {
@@ -312,8 +317,185 @@ async function buildBlueprint(facts: ReferenceSourceFacts, request: ReferenceSca
   }
 }
 
+function buildApiContracts(facts: ReferenceSourceFacts): Array<{ name: string; purpose: string; mockFile: string; endpoint: string }> {
+  const lookupLabel = facts.forms[0] || 'primary lookup form'
+  const sections = facts.headings.slice(0, 4).join(', ') || 'page sections and report cards'
+  return [
+    {
+      name: 'getPrimaryReport',
+      purpose: `Return mock results for the ${lookupLabel}. Replace this with the real provider/search API.`,
+      mockFile: 'mockReport',
+      endpoint: 'GET /api/report/:id',
+    },
+    {
+      name: 'getLandingContent',
+      purpose: `Load navigation, hero content, CTAs, and sections inspired by: ${sections}.`,
+      mockFile: 'mockLandingContent',
+      endpoint: 'GET /api/content/landing',
+    },
+    {
+      name: 'getPricingPlans',
+      purpose: 'Return plan cards, billing labels, and feature limits. Replace with billing/product catalog data.',
+      mockFile: 'mockPricingPlans',
+      endpoint: 'GET /api/pricing',
+    },
+    {
+      name: 'getDashboardSummary',
+      purpose: 'Return saved searches, recent reports, account status, and next actions for a signed-in user.',
+      mockFile: 'mockDashboardSummary',
+      endpoint: 'GET /api/dashboard',
+    },
+  ]
+}
+
+function referenceDiffFile(projectName: string, reference: ReferenceBlueprint, facts: ReferenceSourceFacts): string {
+  return `# Reference Diff - ${projectName}
+
+This project is an original build generated from a reference scan. Use this file to keep the implementation useful without copying protected brand assets, exact copy, logos, or distinctive trade dress.
+
+## Learned From The Reference
+
+${markdownList([
+    ...facts.navigation.slice(0, 5).map(item => `Navigation pattern: ${item}`),
+    ...facts.headings.slice(0, 6).map(item => `Content section: ${item}`),
+    ...facts.callsToAction.slice(0, 4).map(item => `Action pattern: ${item}`),
+  ], reference.summary)}
+
+## Intentionally Changed
+
+- Original color, spacing, and component treatment should be adjusted before launch.
+- Copy is generated as placeholder/product copy and should be rewritten for the final brand.
+- Any logos, screenshots, proprietary imagery, icons, and exact phrases from the source are excluded.
+- Data flows are mocked until real provider APIs are supplied.
+
+## Missing Real Integrations
+
+${markdownList(buildApiContracts(facts).map(item => `${item.name}: ${item.endpoint}`), 'No integration requirements were detected yet.')}
+
+## Guardrails
+
+${reference.guardrails.map(item => `- ${item}`).join('\n')}
+`
+}
+
+function mockDataGuideFile(projectName: string, facts: ReferenceSourceFacts): string {
+  return `# Mock Data - ${projectName}
+
+The generated site uses mock data so the UI can be built before paid/private APIs are available.
+
+## Mock Modules
+
+- \`src/data/mockData.js\`: static data for landing content, reports, pricing, and dashboard states.
+- \`src/services/apiClient.js\`: async functions that simulate future API calls.
+
+## Replace Later
+
+${markdownList(buildApiContracts(facts).map(item => `${item.mockFile} -> ${item.name} -> ${item.endpoint}`), 'Add provider-specific records as the product requirements become clear.')}
+
+## Notes
+
+- Keep mock response shapes close to the future API contract.
+- Do not hard-code real customer, payment, credential, or provider data in mock files.
+- When real APIs arrive, update \`src/services/apiClient.js\` first and leave UI components mostly unchanged.
+`
+}
+
+function apiTodoFile(projectName: string, facts: ReferenceSourceFacts): string {
+  const contracts = buildApiContracts(facts)
+  return `# API TODO - ${projectName}
+
+Use this checklist when replacing mock data with real integrations.
+
+${contracts.map(item => `## ${item.name}
+
+- Purpose: ${item.purpose}
+- Planned endpoint: \`${item.endpoint}\`
+- Current mock: \`${item.mockFile}\`
+- Needed from provider: auth method, rate limits, request schema, response schema, error states, test credentials, and production credentials.
+`).join('\n')}
+## Environment Variables To Define Later
+
+- \`VITE_API_BASE_URL\`
+- \`API_PROVIDER_KEY\`
+- \`API_PROVIDER_SECRET\`
+- \`PAYMENTS_SECRET_KEY\` if checkout is added
+- \`AUTH_PROVIDER_CLIENT_ID\` if third-party login is added
+`
+}
+
+function mockDataJs(projectName: string, facts: ReferenceSourceFacts): string {
+  const sectionTitles = facts.headings.length ? facts.headings.slice(0, 6) : ['Instant search', 'Report timeline', 'Trust signals', 'Pricing options']
+  const nav = facts.navigation.length ? facts.navigation.slice(0, 5) : ['Home', 'Reports', 'Pricing', 'Dashboard']
+  const actions = facts.callsToAction.length ? facts.callsToAction.slice(0, 4) : ['Start search', 'View sample', 'Compare plans']
+  return `export const mockLandingContent = ${js({
+    projectName,
+    nav,
+    hero: {
+      eyebrow: 'Original reference build',
+      title: projectName,
+      description: facts.description || 'A production-ready interface inspired by a reference scan, powered by mock data until real APIs are connected.',
+      actions,
+    },
+    sections: sectionTitles.map((title, index) => ({ id: `section-${index + 1}`, title, body: 'Original placeholder content. Replace with final product copy and real data when available.' })),
+  })}
+
+export const mockReport = ${js({
+    id: 'sample-report-001',
+    status: 'Ready for review',
+    score: 92,
+    summary: 'Mock report data is shaping the UI before provider APIs are connected.',
+    timeline: ['Search submitted', 'Provider records checked', 'Risk flags reviewed', 'Report ready'],
+    cards: ['Ownership history', 'Status checks', 'Market signals', 'Saved notes'],
+  })}
+
+export const mockPricingPlans = ${js([
+    { name: 'Starter', price: '$19', detail: 'Single report workflow', features: ['Instant mock lookup', 'Printable summary', 'Email-ready output'] },
+    { name: 'Pro', price: '$49', detail: 'Repeat users and teams', features: ['Saved reports', 'Dashboard view', 'Priority support'] },
+    { name: 'Business', price: 'Custom', detail: 'API-backed operations', features: ['Bulk workflows', 'Team seats', 'Provider integrations'] },
+  ])}
+
+export const mockDashboardSummary = ${js({
+    savedReports: 8,
+    recentSearches: ['AB12-CD34', 'ZX98-YT76', 'LM45-PQ12'],
+    nextActions: ['Connect real provider API', 'Add authentication', 'Replace mock checkout'],
+  })}
+`
+}
+
+function apiClientJs(): string {
+  return `import { mockDashboardSummary, mockLandingContent, mockPricingPlans, mockReport } from '../data/mockData.js'
+
+const wait = (value) => new Promise(resolve => setTimeout(() => resolve(value), 180))
+
+export async function getLandingContent() {
+  return wait(mockLandingContent)
+}
+
+export async function getPrimaryReport(_lookupValue) {
+  return wait(mockReport)
+}
+
+export async function getPricingPlans() {
+  return wait(mockPricingPlans)
+}
+
+export async function getDashboardSummary() {
+  return wait(mockDashboardSummary)
+}
+`
+}
+
+function pageModuleJs(pageName: string, purpose: string): string {
+  return `export const page = {
+  name: ${js(pageName)},
+  purpose: ${js(purpose)},
+}
+`
+}
+
 function referenceSiteFiles(projectName: string, reference: ReferenceBlueprint): Record<string, string> {
   const facts = reference.sourceFacts
+  const apiContracts = buildApiContracts(facts)
   const nav = facts.navigation.length ? facts.navigation.slice(0, 5) : ['Overview', 'Workflow', 'Reports', 'Pricing', 'Contact']
   const sections = facts.headings.length ? facts.headings.slice(0, 8) : ['Fast lookup', 'Clear report cards', 'Timeline view', 'Account dashboard']
   const actions = facts.callsToAction.length ? facts.callsToAction.slice(0, 4) : ['Start lookup', 'View sample', 'Compare plans']
@@ -321,7 +503,7 @@ function referenceSiteFiles(projectName: string, reference: ReferenceBlueprint):
   const colors = facts.colors.length ? facts.colors.slice(0, 5) : ['#0f766e', '#111827', '#f8fafc']
   const title = reference.summary || projectName
   const description = facts.description || `An original ${projectName} experience generated from a reference blueprint.`
-  const brief = `# ${projectName}\n\nGenerated by Ultron Reference Builder.\n\n## Reference Summary\n\n${reference.summary}\n\n## Guardrails\n\n${reference.guardrails.map(item => `- ${item}`).join('\n')}\n\n## Blueprint\n\n${reference.blueprint}\n`
+  const brief = `# ${projectName}\n\nGenerated by Ultron Reference Builder.\n\n## Reference Summary\n\n${reference.summary}\n\n## Guardrails\n\n${reference.guardrails.map(item => `- ${item}`).join('\n')}\n\n## Blueprint\n\n${reference.blueprint}\n\n## Mock/API Contract\n\n${apiContracts.map(item => `- ${item.name}: ${item.purpose}`).join('\n')}\n`
 
   return {
     'package.json': JSON.stringify({
@@ -331,12 +513,21 @@ function referenceSiteFiles(projectName: string, reference: ReferenceBlueprint):
       type: 'module',
       scripts: { dev: 'node scripts/dev-server.mjs', build: 'node scripts/check.mjs', check: 'node scripts/check.mjs' },
     }, null, 2) + '\n',
-    'README.md': `# ${projectName}\n\nOriginal website generated from a reference scan.\n\n## Commands\n\n- npm run dev\n- npm run build\n`,
+    'README.md': `# ${projectName}\n\nOriginal website generated from a reference scan.\n\n## Commands\n\n- npm run dev\n- npm run build\n\n## Handoff Files\n\n- PROJECT_BRIEF.md\n- REFERENCE_DIFF.md\n- MOCK_DATA.md\n- API_TODO.md\n`,
     'PROJECT_BRIEF.md': brief,
+    'REFERENCE_DIFF.md': referenceDiffFile(projectName, reference, facts),
+    'MOCK_DATA.md': mockDataGuideFile(projectName, facts),
+    'API_TODO.md': apiTodoFile(projectName, facts),
     'index.html': `<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>${escapeHtml(projectName)}</title>\n    <link rel="stylesheet" href="./src/styles.css" />\n  </head>\n  <body>\n    <main id="app"></main>\n    <script type="module" src="./src/main.js"></script>\n  </body>\n</html>\n`,
     'src/main.js': `const reference = ${js({ title, description, nav, sections, actions, forms, colors, screenshotSummary: facts.screenshotSummary })}\n\nfunction el(tag, className, text) {\n  const node = document.createElement(tag)\n  if (className) node.className = className\n  if (text) node.textContent = text\n  return node\n}\n\nfunction render() {\n  const app = document.querySelector('#app')\n  const topbar = el('nav', 'topbar')\n  topbar.append(el('strong', '', reference.title))\n  const links = el('div')\n  reference.nav.forEach(item => links.append(el('a', '', item)))\n  topbar.append(links)\n\n  const hero = el('section', 'hero')\n  const heroCopy = el('div')\n  heroCopy.append(el('p', 'eyebrow', 'Original reference build'))\n  heroCopy.append(el('h1', '', reference.title))\n  heroCopy.append(el('p', '', reference.description))\n  const form = el('form', 'lookup')\n  form.onsubmit = event => { event.preventDefault(); document.body.classList.add('searched') }\n  const input = el('input')\n  input.setAttribute('aria-label', 'Lookup')\n  input.setAttribute('placeholder', reference.forms[0] || 'Enter lookup value')\n  form.append(input, el('button', '', reference.actions[0] || 'Start lookup'))\n  heroCopy.append(form)\n  const preview = el('aside', 'report-preview')\n  preview.append(el('span', '', 'Live preview'), el('strong', '', 'Clear status'), el('p', '', 'Timeline, trust signals, and report cards are ready for real data.'))\n  hero.append(heroCopy, preview)\n\n  const grid = el('section', 'grid')\n  reference.sections.forEach((item, index) => {\n    const card = el('article', 'feature-card')\n    card.style.setProperty('--card-accent', reference.colors[index % reference.colors.length] || '#0f766e')\n    card.append(el('span', '', String(index + 1).padStart(2, '0')), el('h3', '', item), el('p', '', 'Designed as an original workflow module inspired by the reference structure, with new copy and visual treatment.'))\n    grid.append(card)\n  })\n\n  const blueprint = el('section', 'blueprint')\n  const blueprintCopy = el('div')\n  blueprintCopy.append(el('p', 'eyebrow', 'Workflow'), el('h2', '', 'Built around the reference pattern, not copied from it.'))\n  const steps = el('ol')\n  ;['Collect a user input or intent.', 'Show a credible preview state.', 'Guide the user into a next action.'].forEach(item => steps.append(el('li', '', item)))\n  blueprint.append(blueprintCopy, steps)\n  app.append(topbar, hero, grid, blueprint)\n}\n\nrender()\n`,
     'src/styles.css': `:root { color-scheme: light; font-family: 'Aptos', 'Segoe UI', sans-serif; background: #f7f8f4; color: #111827; }\n* { box-sizing: border-box; }\nbody { margin: 0; min-height: 100vh; background: radial-gradient(circle at top left, rgba(15,118,110,.16), transparent 34%), #f7f8f4; }\na { color: inherit; text-decoration: none; }\n.topbar { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 32px; border-bottom: 1px solid #d9ded4; background: rgba(255,255,255,.72); backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 2; }\n.topbar div { display: flex; gap: 16px; flex-wrap: wrap; color: #4b5563; font-size: 14px; }\n.hero { width: min(1180px, calc(100vw - 32px)); margin: 42px auto 28px; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 22px; align-items: stretch; }\n.hero > div, .report-preview, .blueprint { border: 1px solid #d9ded4; background: rgba(255,255,255,.86); border-radius: 8px; box-shadow: 0 22px 70px rgba(17,24,39,.09); }\n.hero > div { padding: 44px; }\n.eyebrow { margin: 0 0 12px; color: #0f766e; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; }\nh1 { max-width: 820px; margin: 0 0 18px; font-size: 64px; line-height: .94; letter-spacing: 0; }\nh2 { margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: 0; }\np { color: #4b5563; font-size: 17px; line-height: 1.6; }\n.lookup { display: flex; gap: 10px; margin-top: 28px; max-width: 620px; }\n.lookup input { flex: 1; min-width: 0; min-height: 46px; padding: 0 14px; border: 1px solid #c7cec2; border-radius: 7px; font: inherit; }\nbutton { min-height: 46px; border: 0; border-radius: 7px; background: #0f766e; color: white; padding: 0 18px; font-weight: 900; cursor: pointer; }\n.report-preview { padding: 28px; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(145deg, #10231f, #0f766e); color: white; }\n.report-preview span { color: #a7f3d0; font-size: 12px; text-transform: uppercase; font-weight: 900; }\n.report-preview strong { margin: 12px 0; font-size: 40px; line-height: 1; }\n.report-preview p { color: rgba(255,255,255,.78); }\n.grid { width: min(1180px, calc(100vw - 32px)); margin: 0 auto 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }\n.feature-card { min-height: 210px; padding: 22px; border: 1px solid #d9ded4; border-radius: 8px; background: white; border-top: 5px solid var(--card-accent); }\n.feature-card span { color: var(--card-accent); font-weight: 900; }\n.feature-card h3 { margin: 18px 0 8px; font-size: 21px; }\n.feature-card p { font-size: 14px; }\n.blueprint { width: min(1180px, calc(100vw - 32px)); margin: 0 auto 44px; padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }\n.blueprint ol { margin: 0; display: grid; gap: 10px; color: #374151; font-size: 16px; }\nbody.searched .report-preview strong::after { content: ' ready'; color: #a7f3d0; }\n@media (max-width: 860px) { .topbar, .topbar div { align-items: flex-start; flex-direction: column; padding: 16px; } .hero, .blueprint { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } .hero > div { padding: 28px; } h1 { font-size: 42px; } .lookup { flex-direction: column; } }\n`,
-    'scripts/check.mjs': `import fs from 'node:fs'\n\nconst required = ['index.html', 'src/main.js', 'src/styles.css', 'PROJECT_BRIEF.md']\nconst missing = required.filter(file => !fs.existsSync(file))\nif (missing.length) {\n  console.error('Missing files:', missing.join(', '))\n  process.exit(1)\n}\nconsole.log('Reference build structure valid:', required.join(', '))\n`,
+    'src/data/mockData.js': mockDataJs(projectName, facts),
+    'src/services/apiClient.js': apiClientJs(),
+    'src/pages/home.js': pageModuleJs('Home', 'Landing page, primary lookup, value proposition, and trust sections.'),
+    'src/pages/report.js': pageModuleJs('Report', 'Mock report detail view ready for provider data.'),
+    'src/pages/pricing.js': pageModuleJs('Pricing', 'Plan cards and checkout placeholders.'),
+    'src/pages/dashboard.js': pageModuleJs('Dashboard', 'Saved records, recent activity, and account workflow placeholders.'),
+    'scripts/check.mjs': `import fs from 'node:fs'\n\nconst required = ['index.html', 'src/main.js', 'src/styles.css', 'PROJECT_BRIEF.md', 'REFERENCE_DIFF.md', 'MOCK_DATA.md', 'API_TODO.md', 'src/data/mockData.js', 'src/services/apiClient.js', 'src/pages/home.js', 'src/pages/report.js', 'src/pages/pricing.js', 'src/pages/dashboard.js']\nconst missing = required.filter(file => !fs.existsSync(file))\nif (missing.length) {\n  console.error('Missing files:', missing.join(', '))\n  process.exit(1)\n}\nconsole.log('Reference build structure valid:', required.join(', '))\n`,
     'scripts/dev-server.mjs': `import { createServer } from 'node:http'\nimport { readFile } from 'node:fs/promises'\nimport path from 'node:path'\n\nconst types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }\nconst server = createServer(async (req, res) => {\n  const urlPath = req.url === '/' ? '/index.html' : req.url ?? '/index.html'\n  const file = path.join(process.cwd(), urlPath.replace(/^\\//, ''))\n  try {\n    const body = await readFile(file)\n    res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'text/plain' })\n    res.end(body)\n  } catch {\n    res.writeHead(404); res.end('Not found')\n  }\n})\nserver.listen(5174, () => console.log('Dev server: http://localhost:5174'))\n`,
   }
 }

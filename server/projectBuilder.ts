@@ -3,7 +3,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 
-export type ProjectTemplateId = 'vanilla-ts' | 'react-vite' | 'express-api' | 'python-cli'
+export type ProjectTemplateId = 'vanilla-ts' | 'react-vite' | 'electron-react' | 'fullstack-react-express' | 'express-api' | 'python-cli' | 'python-venv'
 
 export type ProjectTemplate = {
   id: ProjectTemplateId
@@ -36,6 +36,19 @@ export type ProjectBuildResult = {
   nextCommands: string[]
 }
 
+export type ToolchainStatus = {
+  checkedAt: number
+  ready: boolean
+  tools: Array<{
+    id: string
+    label: string
+    ok: boolean
+    command: string
+    version: string
+    installHint: string
+  }>
+}
+
 export const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
     id: 'vanilla-ts',
@@ -50,6 +63,24 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     label: 'React + Vite + TypeScript',
     description: 'Modern React starter with Vite scripts, TypeScript config, and a polished app shell.',
     stack: 'React + Vite + TypeScript',
+    installCommand: 'npm install',
+    buildCommand: 'npm run build',
+    devCommand: 'npm run dev',
+  },
+  {
+    id: 'electron-react',
+    label: 'Electron + React Desktop App',
+    description: 'Desktop-ready Electron shell with React/Vite renderer, typed main process, and local dev/build scripts.',
+    stack: 'Electron + React + Vite + TypeScript',
+    installCommand: 'npm install',
+    buildCommand: 'npm run build',
+    devCommand: 'npm run dev',
+  },
+  {
+    id: 'fullstack-react-express',
+    label: 'Full-stack React + Express App',
+    description: 'Single-repo full-stack starter with Express API, Vite React client, shared scripts, health route, and local validation.',
+    stack: 'React + Express + TypeScript',
     installCommand: 'npm install',
     buildCommand: 'npm run build',
     devCommand: 'npm run dev',
@@ -71,19 +102,38 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     buildCommand: 'python -m py_compile src/main.py',
     devCommand: 'python src/main.py --help',
   },
+  {
+    id: 'python-venv',
+    label: 'Python App with Virtual Environment',
+    description: 'Python project with pyproject.toml, requirements.txt, setup script, tests, and a venv-first workflow.',
+    stack: 'Python + venv + pytest-ready layout',
+    installCommand: 'python -m venv .venv; .\.venv\Scripts\python.exe -m pip install --upgrade pip; .\.venv\Scripts\python.exe -m pip install -r requirements.txt',
+    buildCommand: '.\.venv\Scripts\python.exe -m py_compile src/main.py',
+    devCommand: '.\.venv\Scripts\python.exe src/main.py --help',
+  },
 ]
 
 function templateById(id: string | undefined): ProjectTemplate {
   return PROJECT_TEMPLATES.find(template => template.id === id) ?? PROJECT_TEMPLATES[0]
 }
 
-function cleanProjectName(value: string | undefined): string {
+function cleanPackageName(value: string | undefined): string {
   const cleaned = (value ?? 'ultron-project').trim().toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '')
   return cleaned || 'ultron-project'
 }
 
+function cleanProjectFolderName(value: string | undefined): string {
+  const cleaned = (value ?? 'Ultron Project')
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.\s-]+|[.\s-]+$/g, '')
+  return cleaned || 'Ultron-Project'
+}
+
 function resolveBasePath(value: string | undefined): string {
-  const fallback = path.join(os.homedir(), 'Ultron Projects')
+  const fallback = os.homedir()
   if (!value?.trim()) return fallback
   const expanded = value.trim().replace(/^~(?=[/\\]|$)/, os.homedir())
   return path.resolve(expanded)
@@ -126,6 +176,29 @@ async function runCommand(command: string, cwd: string, timeoutSec = 180): Promi
   })
 }
 
+function firstVersionLine(output: string): string {
+  return output.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '(no version output)'
+}
+
+async function checkTool(id: string, label: string, command: string, installHint: string): Promise<ToolchainStatus['tools'][number]> {
+  const output = await runCommand(command, process.cwd(), 20)
+  const ok = !/\[exit code \d+\]|\bError:|not recognized|not found|CommandNotFoundException/i.test(output)
+  return { id, label, ok, command, version: firstVersionLine(output), installHint }
+}
+
+export async function getCodingToolchainStatus(): Promise<ToolchainStatus> {
+  const tools = await Promise.all([
+    checkTool('node', 'Node.js', 'node --version', 'Install Node.js 20+ from https://nodejs.org or winget install OpenJS.NodeJS.LTS'),
+    checkTool('npm', 'npm', 'npm --version', 'npm ships with Node.js; reinstall Node.js LTS if missing.'),
+    checkTool('git', 'Git', 'git --version', 'Install Git with winget install Git.Git'),
+    checkTool('python', 'Python', 'python --version', 'Install Python with winget install Python.Python.3.12'),
+    checkTool('pip', 'pip', 'python -m pip --version', 'Install or repair Python and ensure pip is enabled.'),
+    checkTool('code', 'VS Code CLI', 'code --version', 'In VS Code, run Shell Command: Install code command in PATH, or reinstall VS Code.'),
+    checkTool('winget', 'Windows Package Manager', 'winget --version', 'Install or update App Installer from Microsoft Store.'),
+  ])
+  return { checkedAt: Date.now(), ready: tools.every(tool => tool.ok), tools }
+}
+
 async function writeFiles(root: string, files: Record<string, string>): Promise<string[]> {
   const written: string[] = []
   for (const [relativePath, content] of Object.entries(files)) {
@@ -138,9 +211,10 @@ async function writeFiles(root: string, files: Record<string, string>): Promise<
 }
 
 function vanillaFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
   return {
     'package.json': JSON.stringify({
-      name,
+      name: packageName,
       version: '0.1.0',
       private: true,
       type: 'module',
@@ -161,8 +235,9 @@ function vanillaFiles(name: string): Record<string, string> {
 }
 
 function reactFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
   return {
-    'package.json': JSON.stringify({ name, version: '0.1.0', private: true, type: 'module', scripts: { dev: 'vite', build: 'tsc -b && vite build', preview: 'vite preview' }, dependencies: { '@vitejs/plugin-react': '^6.0.3', vite: '^8.1.1', typescript: '~6.0.2', react: '^19.2.7', 'react-dom': '^19.2.7', 'lucide-react': '^1.22.0' }, devDependencies: { '@types/react': '^19.2.17', '@types/react-dom': '^19.2.3' } }, null, 2) + '\n',
+    'package.json': JSON.stringify({ name: packageName, version: '0.1.0', private: true, type: 'module', scripts: { dev: 'vite', build: 'tsc -b && vite build', preview: 'vite preview' }, dependencies: { '@vitejs/plugin-react': '^6.0.3', vite: '^8.1.1', typescript: '~6.0.2', react: '^19.2.7', 'react-dom': '^19.2.7', 'lucide-react': '^1.22.0' }, devDependencies: { '@types/react': '^19.2.17', '@types/react-dom': '^19.2.3' } }, null, 2) + '\n',
     'index.html': '<div id="root"></div><script type="module" src="/src/main.tsx"></script>\n',
     'tsconfig.json': JSON.stringify({ compilerOptions: { target: 'ES2022', useDefineForClassFields: true, lib: ['ES2022', 'DOM', 'DOM.Iterable'], allowJs: false, skipLibCheck: true, esModuleInterop: true, allowSyntheticDefaultImports: true, strict: true, forceConsistentCasingInFileNames: true, module: 'ESNext', moduleResolution: 'Bundler', resolveJsonModule: true, isolatedModules: true, noEmit: true, jsx: 'react-jsx' }, include: ['src'] }, null, 2) + '\n',
     'src/main.tsx': `import React from 'react'\nimport { createRoot } from 'react-dom/client'\nimport { Sparkles } from 'lucide-react'\nimport './styles.css'\n\nfunction App() {\n  return <main className="shell"><Sparkles /><p>Ultron Project</p><h1>${name}</h1><button>Build the first workflow</button></main>\n}\n\ncreateRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)\n`,
@@ -170,9 +245,56 @@ function reactFiles(name: string): Record<string, string> {
   }
 }
 
-function expressFiles(name: string): Record<string, string> {
+function electronReactFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
   return {
-    'package.json': JSON.stringify({ name, version: '0.1.0', private: true, type: 'module', scripts: { dev: 'tsx watch src/server.ts', build: 'tsc -p tsconfig.json', start: 'node dist/server.js' }, dependencies: { express: '^5.2.1', cors: '^2.8.6' }, devDependencies: { '@types/express': '^5.0.6', '@types/cors': '^2.8.19', '@types/node': '^24.13.2', tsx: '^4.22.4', typescript: '~6.0.2' } }, null, 2) + '\n',
+    'package.json': JSON.stringify({
+      name: packageName,
+      version: '0.1.0',
+      private: true,
+      type: 'module',
+      main: 'dist-electron/main.js',
+      scripts: {
+        dev: 'concurrently -k -n renderer,electron -c green,yellow "vite --host 127.0.0.1" "npm:electron:dev"',
+        'electron:dev': 'tsx watch electron/main.ts',
+        build: 'tsc -b && vite build && tsc -p tsconfig.electron.json',
+        preview: 'vite preview',
+      },
+      dependencies: { '@vitejs/plugin-react': '^6.0.3', vite: '^8.1.1', typescript: '~6.0.2', react: '^19.2.7', 'react-dom': '^19.2.7', electron: '^43.0.0', concurrently: '^10.0.3', tsx: '^4.22.4', 'lucide-react': '^1.22.0' },
+      devDependencies: { '@types/node': '^24.13.2', '@types/react': '^19.2.17', '@types/react-dom': '^19.2.3' },
+    }, null, 2) + '\n',
+    'index.html': '<div id="root"></div><script type="module" src="/src/main.tsx"></script>\n',
+    'tsconfig.json': JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }, { path: './tsconfig.electron.json' }] }, null, 2) + '\n',
+    'tsconfig.app.json': JSON.stringify({ compilerOptions: { target: 'ES2022', useDefineForClassFields: true, lib: ['ES2022', 'DOM', 'DOM.Iterable'], allowJs: false, skipLibCheck: true, esModuleInterop: true, allowSyntheticDefaultImports: true, strict: true, forceConsistentCasingInFileNames: true, module: 'ESNext', moduleResolution: 'Bundler', resolveJsonModule: true, isolatedModules: true, noEmit: true, jsx: 'react-jsx' }, include: ['src'] }, null, 2) + '\n',
+    'tsconfig.electron.json': JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, esModuleInterop: true, outDir: 'dist-electron', rootDir: 'electron', skipLibCheck: true, types: ['node'] }, include: ['electron/**/*.ts'] }, null, 2) + '\n',
+    'vite.config.ts': `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({ plugins: [react()] })\n`,
+    'electron/main.ts': `import { app, BrowserWindow } from 'electron'\nimport { join } from 'node:path'\n\nconst isDev = !app.isPackaged\n\nfunction createWindow() {\n  const win = new BrowserWindow({ width: 1080, height: 760, minWidth: 760, minHeight: 520, autoHideMenuBar: true })\n  if (isDev) void win.loadURL('http://localhost:5173')\n  else void win.loadFile(join(app.getAppPath(), 'dist/index.html'))\n}\n\napp.whenReady().then(createWindow)\napp.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })\n`,
+    'src/main.tsx': `import React from 'react'\nimport { createRoot } from 'react-dom/client'\nimport { MonitorCog } from 'lucide-react'\nimport './styles.css'\n\nfunction App() {\n  return <main className="shell"><MonitorCog size={42} /><p>Desktop starter</p><h1>${name}</h1><button>Wire your first workflow</button></main>\n}\n\ncreateRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)\n`,
+    'src/styles.css': `body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f7f2; color: #17231d; font-family: Cambria, Georgia, serif; }\n.shell { width: min(760px, calc(100vw - 32px)); padding: 48px; border: 1px solid #b8c7ba; background: white; border-radius: 8px; }\nh1 { font-size: 64px; margin: 8px 0 22px; letter-spacing: 0; }\nbutton { min-height: 44px; border: 0; border-radius: 6px; padding: 0 16px; background: #166534; color: white; font-weight: 800; }\n`,
+    'README.md': `# ${name}\n\nElectron + React desktop app generated by Ultron.\n\n## Commands\n\n- npm install\n- npm run dev\n- npm run build\n`,
+  }
+}
+
+function fullstackFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
+  return {
+    'package.json': JSON.stringify({ name: packageName, version: '0.1.0', private: true, type: 'module', scripts: { dev: 'concurrently -k -n api,web -c cyan,green "tsx watch server/index.ts" "vite --host 127.0.0.1"', build: 'tsc -b && vite build && tsc -p tsconfig.server.json', start: 'node dist-server/index.js' }, dependencies: { '@vitejs/plugin-react': '^6.0.3', vite: '^8.1.1', typescript: '~6.0.2', react: '^19.2.7', 'react-dom': '^19.2.7', express: '^5.2.1', cors: '^2.8.6', concurrently: '^10.0.3', tsx: '^4.22.4' }, devDependencies: { '@types/node': '^24.13.2', '@types/react': '^19.2.17', '@types/react-dom': '^19.2.3', '@types/express': '^5.0.6', '@types/cors': '^2.8.19' } }, null, 2) + '\n',
+    'index.html': '<div id="root"></div><script type="module" src="/src/main.tsx"></script>\n',
+    'tsconfig.json': JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }, { path: './tsconfig.server.json' }] }, null, 2) + '\n',
+    'tsconfig.app.json': JSON.stringify({ compilerOptions: { target: 'ES2022', lib: ['ES2022', 'DOM', 'DOM.Iterable'], module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', strict: true, skipLibCheck: true, noEmit: true, isolatedModules: true, esModuleInterop: true }, include: ['src'] }, null, 2) + '\n',
+    'tsconfig.server.json': JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, esModuleInterop: true, outDir: 'dist-server', rootDir: 'server', skipLibCheck: true, types: ['node'] }, include: ['server/**/*.ts'] }, null, 2) + '\n',
+    'vite.config.ts': `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({ plugins: [react()], server: { proxy: { '/api': 'http://localhost:3001' } } })\n`,
+    'server/index.ts': `import cors from 'cors'\nimport express from 'express'\n\nconst app = express()\napp.use(cors())\napp.use(express.json())\napp.get('/api/health', (_req, res) => res.json({ ok: true, service: '${name}', at: new Date().toISOString() }))\napp.listen(3001, () => console.log('${name} API: http://localhost:3001'))\n`,
+    'src/main.tsx': `import React, { useEffect, useState } from 'react'\nimport { createRoot } from 'react-dom/client'\nimport './styles.css'\n\nfunction App() {\n  const [health, setHealth] = useState('checking')\n  useEffect(() => { void fetch('/api/health').then(response => response.json()).then(data => setHealth(data.ok ? 'API online' : 'API issue')).catch(() => setHealth('API offline')) }, [])\n  return <main className="shell"><p>Full-stack starter</p><h1>${name}</h1><strong>{health}</strong><button>Build first feature</button></main>\n}\n\ncreateRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)\n`,
+    'src/styles.css': `body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #eef5ff; color: #182033; font-family: Georgia, serif; }\n.shell { width: min(820px, calc(100vw - 32px)); padding: 48px; background: white; border: 1px solid #b8c6d9; border-radius: 8px; }\nh1 { font-size: 60px; line-height: 1; margin: 8px 0 20px; letter-spacing: 0; }\nbutton { display: block; margin-top: 24px; min-height: 44px; border: 0; border-radius: 6px; padding: 0 16px; background: #1d4ed8; color: white; font-weight: 800; }\n`,
+    'README.md': `# ${name}\n\nFull-stack React + Express starter generated by Ultron.\n\n## Commands\n\n- npm install\n- npm run dev\n- npm run build\n`,
+  }
+}
+
+function expressFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
+  return {
+    'package.json': JSON.stringify({ name: packageName, version: '0.1.0', private: true, type: 'module', scripts: { dev: 'tsx watch src/server.ts', build: 'tsc -p tsconfig.json', start: 'node dist/server.js' }, dependencies: { express: '^5.2.1', cors: '^2.8.6' }, devDependencies: { '@types/express': '^5.0.6', '@types/cors': '^2.8.19', '@types/node': '^24.13.2', tsx: '^4.22.4', typescript: '~6.0.2' } }, null, 2) + '\n',
     'tsconfig.json': JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, esModuleInterop: true, outDir: 'dist', rootDir: 'src', skipLibCheck: true }, include: ['src/**/*.ts'] }, null, 2) + '\n',
     'src/server.ts': `import express from 'express'\nimport cors from 'cors'\n\nconst app = express()\napp.use(cors())\napp.use(express.json())\napp.get('/health', (_req, res) => res.json({ ok: true, service: '${name}' }))\napp.listen(3000, () => console.log('${name} listening on http://localhost:3000'))\n`,
     'README.md': `# ${name}\n\nExpress API generated by Ultron Project Builder.\n`,
@@ -187,9 +309,27 @@ function pythonFiles(name: string): Record<string, string> {
   }
 }
 
+function pythonVenvFiles(name: string): Record<string, string> {
+  const packageName = cleanPackageName(name)
+  return {
+    'README.md': `# ${name}\n\nPython venv project generated by Ultron.\n\n## Commands\n\n\`\`\`powershell\npython -m venv .venv\n.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt\n.\\.venv\\Scripts\\python.exe src\\main.py --help\n\`\`\`\n`,
+    'pyproject.toml': `[project]\nname = "${packageName}"\nversion = "0.1.0"\ndescription = "Generated by Ultron"\nrequires-python = ">=3.10"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n`,
+    'requirements.txt': 'pytest>=8.0.0\nrequests>=2.32.0\n',
+    'scripts/setup.ps1': `python -m venv .venv\n.\\.venv\\Scripts\\python.exe -m pip install --upgrade pip\n.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt\n`,
+    'src/main.py': `import argparse\nimport json\n\ndef build_payload(name: str) -> dict:\n    return {"project": "${name}", "message": f"Hello, {name}.", "ok": True}\n\ndef main() -> None:\n    parser = argparse.ArgumentParser(description="${name} app")\n    parser.add_argument("--name", default="Ultron")\n    args = parser.parse_args()\n    print(json.dumps(build_payload(args.name), indent=2))\n\nif __name__ == "__main__":\n    main()\n`,
+    'tests/test_main.py': `from src.main import build_payload\n\ndef test_build_payload():\n    payload = build_payload("Tester")\n    assert payload["ok"] is True\n    assert payload["message"] == "Hello, Tester."\n`,
+  }
+}
+
 function projectPlanFile(name: string, template: ProjectTemplate): string {
   const nextIdeas = template.id === 'express-api'
     ? ['Add typed route modules for the main resources.', 'Add request validation and structured error responses.', 'Add integration tests for health and core API flows.']
+    : template.id === 'fullstack-react-express'
+      ? ['Define the first API-backed user workflow.', 'Add shared validation between client forms and server routes.', 'Add integration checks for the API and browser preview.']
+      : template.id === 'electron-react'
+        ? ['Add the first native desktop workflow.', 'Define IPC boundaries before touching local files or OS actions.', 'Add desktop build and renderer preview checks.']
+        : template.id === 'python-venv'
+          ? ['Add domain modules under src with tests beside each behavior.', 'Keep all package installs inside .venv.', 'Add pytest and CLI smoke checks to the project loop.']
     : template.id === 'python-cli'
       ? ['Add subcommands for the main workflows.', 'Add file/config input support.', 'Add tests for parser behavior and command output.']
       : template.id === 'react-vite'
@@ -216,6 +356,12 @@ This project is a working scaffold, not a throwaway demo. It includes the minimu
 
 ${nextIdeas.map(item => `- ${item}`).join('\n')}
 
+## Coding Mission Control
+
+- Check Coding Readiness before dependency-heavy builds.
+- Keep this project in Project Memory so Ultron can run Install, Check, Fix, Dev, Preview, and Stop from one place.
+- Use screenshots or reference URLs when visual output needs review.
+
 ## Recommended Loop
 
 1. Run the check/build command.
@@ -230,7 +376,10 @@ function filesForTemplate(template: ProjectTemplate, name: string): Record<strin
   const files = { 'ULTRON_PROJECT_PLAN.md': projectPlanFile(name, template) }
   switch (template.id) {
     case 'react-vite': return { ...files, ...reactFiles(name) }
+    case 'electron-react': return { ...files, ...electronReactFiles(name) }
+    case 'fullstack-react-express': return { ...files, ...fullstackFiles(name) }
     case 'express-api': return { ...files, ...expressFiles(name) }
+    case 'python-venv': return { ...files, ...pythonVenvFiles(name) }
     case 'python-cli': return { ...files, ...pythonFiles(name) }
     default: return { ...files, ...vanillaFiles(name) }
   }
@@ -239,7 +388,7 @@ function filesForTemplate(template: ProjectTemplate, name: string): Record<strin
 export async function buildProject(request: ProjectBuildRequest): Promise<ProjectBuildResult> {
   if (!request.approved) throw new Error('Project Builder requires approval before creating files or opening tools.')
   const template = templateById(request.template)
-  const projectName = cleanProjectName(request.name)
+  const projectName = cleanProjectFolderName(request.name)
   const basePath = resolveBasePath(request.basePath)
   const projectPath = path.join(basePath, projectName)
   const logs: string[] = []

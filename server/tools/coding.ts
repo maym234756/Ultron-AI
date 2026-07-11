@@ -159,14 +159,17 @@ export const codeSearchDefinition: ToolDefinition = {
   function: {
     name: 'code_search',
     description:
-      'Search for a text pattern or regex across all files in a directory. Returns matched lines with file paths and line numbers. Useful for finding usages, imports, or variable names across a codebase.',
+      'Fast codebase search using ripgrep when available. Can search matched lines or filenames with file paths and line numbers. Useful for finding usages, imports, symbols, filenames, routes, or config keys.',
     parameters: {
       type: 'object',
       properties: {
         pattern: { type: 'string', description: 'Text or regex pattern to search for' },
         directory: { type: 'string', description: 'Directory to search in (defaults to current workspace)' },
         include: { type: 'string', description: 'File glob filter, e.g. "*.ts" or "*.py" (optional)' },
+        mode: { type: 'string', description: '"content" (default) searches matched lines; "name" searches filenames only.' },
+        regex: { type: 'string', description: 'Set "true" to treat pattern as a regex. Default uses literal matching.' },
         case_sensitive: { type: 'string', description: 'Set to "true" for case-sensitive search (default is case-insensitive)' },
+        max_results: { type: 'string', description: 'Maximum returned matches (default 80, max 500).' },
       },
       required: ['pattern'],
     },
@@ -180,30 +183,46 @@ export const codeSearch: ToolHandler = async (args) => {
   const dir = args.directory?.trim() || process.cwd()
   const absDir = path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir)
   const caseSensitive = args.case_sensitive === 'true'
-  const include = args.include ? `-Include "${args.include}"` : ''
+  const mode = args.mode?.trim().toLowerCase() === 'name' ? 'name' : 'content'
+  const max = Math.min(500, Math.max(1, parseInt(args.max_results ?? '80', 10) || 80))
   const caseFlag = caseSensitive ? '' : '-CaseSensitive:$false'
+  const rgPattern = pattern.replace(/"/g, '\\"')
+  const rgDir = absDir.replace(/"/g, '\\"')
+  const fixedFlag = args.regex === 'true' ? '' : '--fixed-strings'
 
   // Try ripgrep first (faster), fall back to Select-String
-  const rgCmd = [
-    `rg`,
+  const rgBase = [
+    'rg',
+    '--hidden',
+    '--no-ignore-parent',
+    '--glob "!**/.git/**"',
+    '--glob "!**/node_modules/**"',
+    '--glob "!**/dist/**"',
+    '--glob "!**/desktop-release/**"',
     caseSensitive ? '' : '--ignore-case',
-    args.include ? `--glob "${args.include}"` : '',
-    `--line-number`,
-    `--max-count 5`,
-    `--max-filesize 1M`,
-    `"${pattern.replace(/"/g, '\\"')}"`,
-    `"${absDir}"`,
   ].filter(Boolean).join(' ')
 
-  const psCmd = `Select-String -Path "${absDir}\\${args.include ?? '*'}" -Pattern "${pattern.replace(/"/g, '`"')}" -Recurse ${caseFlag} ${include} | Select-Object -First 30 | ForEach-Object { "$($_.Filename):$($_.LineNumber): $($_.Line)" }`
+  const rgCmd = mode === 'name'
+    ? `${rgBase} --files ${args.include ? `--glob "${args.include}"` : ''} "${rgDir}" 2>$null | rg ${fixedFlag} ${caseSensitive ? '' : '--ignore-case'} -- "${rgPattern}" | Select-Object -First ${max}`
+    : `${rgBase} ${fixedFlag} ${args.include ? `--glob "${args.include}"` : ''} --line-number --no-heading --max-filesize 2M -- "${rgPattern}" "${rgDir}" 2>$null | Select-Object -First ${max}`
 
-  const rgResult = await runTerminal({ command: `${rgCmd} 2>&1` })
-  if (rgResult && !rgResult.includes('not recognized') && !rgResult.includes('Error:')) {
-    return rgResult.slice(0, 4000) || 'No matches found.'
+  const escapedPattern = pattern.replace(/"/g, '`"')
+  const includeFilter = args.include ? `-Include "${args.include}"` : ''
+  const psCmd = `Get-ChildItem -Path "${absDir}" -Recurse -File ${includeFilter} -ErrorAction SilentlyContinue | Select-String -Pattern "${escapedPattern}" ${caseFlag} | Select-Object -First ${max} | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }`
+
+  const rgResult = await runTerminal({ command: rgCmd, timeout_sec: args.timeout_sec ?? '30', max_output_chars: '60000' })
+  if (rgResult && !rgResult.includes('not recognized') && !rgResult.includes('Error:') && !rgResult.includes('[exit code 1]')) {
+    return rgResult.slice(0, 12000) || 'No matches found.'
   }
 
-  const psResult = await runTerminal({ command: psCmd })
-  return psResult.slice(0, 4000) || 'No matches found.'
+  if (mode === 'name') {
+    const nameCmd = `Get-ChildItem -Path "${absDir}" -Recurse -File ${includeFilter} -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*${escapedPattern}*" } | Select-Object -First ${max} -ExpandProperty FullName`
+    const nameResult = await runTerminal({ command: nameCmd, timeout_sec: args.timeout_sec ?? '30', max_output_chars: '60000' })
+    return nameResult.slice(0, 12000) || 'No matches found.'
+  }
+
+  const psResult = await runTerminal({ command: psCmd, timeout_sec: args.timeout_sec ?? '60', max_output_chars: '60000' })
+  return psResult.slice(0, 12000) || 'No matches found.'
 }
 
 // -- diff_files ----------------------------------------------------------------

@@ -29,6 +29,15 @@ function extensionFilter(extension: string | undefined): string {
   return clean.startsWith('*') ? clean : clean.startsWith('.') ? `*${clean}` : `*.${clean}`
 }
 
+function psSingle(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function rgGlob(extension: string | undefined): string {
+  const filter = extensionFilter(extension)
+  return filter === '*' ? '*' : filter
+}
+
 async function sha256File(filePath: string): Promise<string> {
   const hash = createHash('sha256')
   await new Promise<void>((resolve, reject) => {
@@ -207,13 +216,16 @@ export const fileSearchDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'file_search',
-    description: 'Search for text content across files in a directory (like grep).',
+    description: 'Fast search across user files. Can search file contents or filenames, using ripgrep when available and falling back to PowerShell.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Text or pattern to search for.' },
         path: { type: 'string', description: 'Directory to search (default ~/Documents).' },
         extension: { type: 'string', description: 'File extension filter, e.g. ".txt", ".md".' },
+        mode: { type: 'string', description: '"content" (default) searches inside files; "name" searches filenames only.' },
+        regex: { type: 'string', description: 'Set "true" to treat query as a regex. Default uses literal matching.' },
+        case_sensitive: { type: 'string', description: 'Set "true" for case-sensitive search. Default is case-insensitive.' },
         max_results: { type: 'string', description: 'Max results (default 20).' },
         max_file_kb: { type: 'string', description: 'Skip files larger than this many KB (default 1024, max 102400).' },
       },
@@ -224,13 +236,40 @@ export const fileSearchDefinition: ToolDefinition = {
 
 export const fileSearch: ToolHandler = async (args) => {
   if (!args.query) return 'Error: query required'
-  const dir = homePath(args.path ?? '~/Documents').replace(/'/g, "''")
+  const rawDir = homePath(args.path ?? '~/Documents')
+  const dir = rawDir.replace(/'/g, "''")
   const ext = extensionFilter(args.extension).replace(/'/g, "''")
+  const glob = rgGlob(args.extension).replace(/"/g, '\\"')
   const q = args.query.replace(/'/g, "''")
+  const rgQuery = args.query.replace(/"/g, '\\"')
   const max = boundedInt(args.max_results, 20, 1, 500)
   const maxFileBytes = boundedInt(args.max_file_kb, 1024, 1, 102400) * 1024
+  const mode = args.mode?.trim().toLowerCase() === 'name' ? 'name' : 'content'
+  const caseFlag = args.case_sensitive === 'true' ? '' : '--ignore-case'
+  const fixedFlag = args.regex === 'true' ? '' : '--fixed-strings'
+  const rgBase = `rg --hidden --no-ignore-parent --glob "!**/.git/**" --glob "!**/node_modules/**" --glob "!**/dist/**" --glob "!**/desktop-release/**" --max-filesize ${Math.ceil(maxFileBytes / 1024)}K ${caseFlag}`
+
+  if (mode === 'name') {
+    const rgCmd = `${rgBase} --files --glob "${glob}" "${rawDir.replace(/"/g, '\\"')}" 2>$null | rg ${fixedFlag} ${caseFlag} -- "${rgQuery}" | Select-Object -First ${max}`
+    const rg = await runTerminal({ command: rgCmd, timeout_sec: args.timeout_sec ?? '30', max_output_chars: '40000' })
+    if (rg.trim() && !rg.includes('not recognized') && !rg.includes('[exit code 1]')) return rg
+    return runTerminal({
+      command: `Get-ChildItem -Recurse '${dir}' -File -Filter '${ext}' -ErrorAction SilentlyContinue | Where-Object { $_.Name -like ${psSingle(args.case_sensitive === 'true' ? `*${args.query}*` : `*${args.query}*`)}} | Select-Object -First ${max} -ExpandProperty FullName | Out-String`,
+      timeout_sec: args.timeout_sec ?? '30',
+      max_output_chars: '40000',
+    })
+  }
+
+  const rgCmd = `${rgBase} ${fixedFlag} --line-number --no-heading --glob "${glob}" -- "${rgQuery}" "${rawDir.replace(/"/g, '\\"')}" 2>$null | Select-Object -First ${max}`
+  const rg = await runTerminal({ command: rgCmd, timeout_sec: args.timeout_sec ?? '30', max_output_chars: '40000' })
+  if (rg.trim() && !rg.includes('not recognized') && !rg.includes('[exit code 1]')) return rg
+
+  const selectStringFlags = args.regex === 'true' ? '' : '-SimpleMatch'
+  const caseOption = args.case_sensitive === 'true' ? '-CaseSensitive' : ''
   return runTerminal({
-    command: `Get-ChildItem -Recurse '${dir}' -File -Filter '${ext}' -ErrorAction SilentlyContinue | Where-Object { $_.Length -le ${maxFileBytes} } | Select-String -Pattern '${q}' -SimpleMatch | Select-Object -First ${max} | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" } | Out-String`,
+    command: `Get-ChildItem -Recurse '${dir}' -File -Filter '${ext}' -ErrorAction SilentlyContinue | Where-Object { $_.Length -le ${maxFileBytes} } | Select-String -Pattern '${q}' ${selectStringFlags} ${caseOption} | Select-Object -First ${max} | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" } | Out-String`,
+    timeout_sec: args.timeout_sec ?? '60',
+    max_output_chars: '40000',
   })
 }
 

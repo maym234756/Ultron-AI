@@ -51,7 +51,7 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
   const [url, setUrl] = useState('')
   const [goal, setGoal] = useState('')
   const [projectName, setProjectName] = useState('reference-site')
-  const [basePath, setBasePath] = useState('~/Ultron Projects')
+  const [basePath, setBasePath] = useState('~')
   const [imageBase64, setImageBase64] = useState('')
   const [imageName, setImageName] = useState('')
   const [approved, setApproved] = useState(false)
@@ -61,6 +61,15 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReferenceBlueprint | null>(null)
   const [buildResult, setBuildResult] = useState<ReferenceBuildResult | null>(null)
+  const [selectingFolder, setSelectingFolder] = useState(false)
+
+  const projectFolderName = projectName.trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.\s-]+|[.\s-]+$/g, '') || 'reference-site'
+  const displayBasePath = basePath.trim() === '~' ? 'your user folder' : basePath.trim().replace(/[\\/]$/, '')
+  const destinationPreview = `${displayBasePath}\\${projectFolderName}`
 
   function loadImage(file: File | undefined) {
     if (!file) return
@@ -136,6 +145,26 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
     }
   }
 
+  async function chooseDestinationFolder() {
+    if (selectingFolder || building || loading) return
+    setSelectingFolder(true)
+    setError('')
+    try {
+      const response = await fetch(`${apiBase}/api/project-builder/select-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ basePath }),
+      })
+      const data = await response.json() as { cancelled?: boolean; path?: string; error?: string }
+      if (!response.ok) throw new Error(data.error ?? `Folder picker failed (${response.status})`)
+      if (!data.cancelled && data.path) setBasePath(data.path)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not choose destination folder')
+    } finally {
+      setSelectingFolder(false)
+    }
+  }
+
   function usePrompt() {
     if (!result) return
     onUsePrompt(result.suggestedProject.buildPrompt)
@@ -183,8 +212,15 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
               <input value={projectName} onChange={event => setProjectName(event.target.value)} placeholder="reference-site" />
             </label>
             <label className="project-builder-field">
-              <span>Destination folder</span>
-              <input value={basePath} onChange={event => setBasePath(event.target.value)} placeholder="~/Ultron Projects" />
+              <span>Parent destination folder</span>
+              <div className="project-builder-path-row">
+                <input value={basePath} onChange={event => setBasePath(event.target.value)} placeholder="~" />
+                <button type="button" onClick={() => void chooseDestinationFolder()} disabled={selectingFolder || building || loading}>
+                  {selectingFolder ? <Loader size={13} className="spin" /> : <FolderOpen size={13} />}
+                  Choose
+                </button>
+              </div>
+              <small>Ultron will create: {destinationPreview}</small>
             </label>
           </div>
 

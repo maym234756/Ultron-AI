@@ -1,9 +1,10 @@
 import type { AppSettings, PromptRoute } from '../types'
 
-const AGENT_ACTION_RE = /\b(open|launch|start|connect|login|log in|sign in|click|type|browse|navigate|go to|download|upload|install|run|execute|terminal|shell|command|create file|edit file|write file|read file|delete file|rename|move file|folder|directory|screenshot|screen|clipboard|email|send|reply|calendar|schedule|task|apply|deploy|commit|push|pull|clone|restart|stop|kill|monitor)\b/i
+const AGENT_ACTION_RE = /\b(open|launch|start|connect|login|log in|sign in|click|type|browse|navigate|go to|download|upload|install|run|execute|terminal|shell|command|cmd|command prompt|powershell|create file|edit file|write file|read file|search file|find file|grep|delete file|rename|move file|folder|directory|screenshot|screen|clipboard|email|send|reply|calendar|schedule|task|apply|deploy|commit|push|pull|clone|restart|stop|kill|monitor)\b/i
 const CONNECTOR_NAME_RE = /\b(salesforce|gmail|google sheets|sheets|youtube|hubspot|slack|jira|github|notion|airtable|shopify|quickbooks|stripe|aws|azure|zapier|figma|teams|zoom|discord|dropbox|onedrive|trello|asana|zendesk|intercom|linkedin|twitter|instagram|tiktok|reddit|outlook|paypal|square|wordpress|webflow|mailchimp|calendly|docusign|canva|snowflake)\b/i
 const ACCOUNT_CONTEXT_RE = /\b(my|our|account|dashboard|records?|leads?|opportunities|inbox|sheet|workspace|channel|tickets?|payments?|orders?|files?|campaigns?|customers?|issues?|projects?|board|repo|repository|portal|console|drive|calendar|contacts?|deals?|pipeline|invoice|subscription)\b/i
 const RESEARCH_ROUTE_RE = /\b(research|latest|current|up[- ]?to[- ]?date|sources?|cite|citation|evidence|market|competitor|compare vendors|benchmark|news|recent|verify|fact[- ]?check|investigate|look up|web search|search web|find sources?)\b/i
+const FILE_SEARCH_ROUTE_RE = /\b(search|find|locate|grep|scan)\b[\s\S]{0,80}\b(files?|folders?|directory|directories|repo|repository|workspace|codebase|filename|path)\b|\b(files?|folders?|directory|directories|repo|repository|workspace|codebase|filename|path)\b[\s\S]{0,80}\b(search|find|locate|grep|scan)\b/i
 const DEEP_ROUTE_RE = /\b(deep|thorough|comprehensive|analyze|architecture|design|strategy|tradeoffs?|edge cases?|failure modes?|audit|review|debug|refactor|implement|plan|root cause|security|performance|optimize|diagnose|evaluate|critique|risk|scalable|production)\b/i
 const CODE_TASK_RE = /\b(code|typescript|javascript|python|react|server|api|endpoint|component|function|class|test|build|lint|compile|stack trace|error|bug|repo|repository|workspace|diff|pr|pull request)\b/i
 const URGENCY_RE = /\b(quick|quickly|fast|brief|short|one[- ]?liner|tl;dr|in one sentence|concise|just tell me)\b/i
@@ -41,6 +42,7 @@ export function routePrompt(
   const hasConnector = CONNECTOR_NAME_RE.test(trimmed)
   const hasAccountContext = ACCOUNT_CONTEXT_RE.test(trimmed)
   const hasResearchNeed = RESEARCH_ROUTE_RE.test(trimmed)
+  const hasFileSearchNeed = FILE_SEARCH_ROUTE_RE.test(trimmed)
   const hasDeepNeed = DEEP_ROUTE_RE.test(trimmed)
   const hasCodeTask = CODE_TASK_RE.test(trimmed)
   const hasUrgency = URGENCY_RE.test(trimmed)
@@ -61,6 +63,7 @@ export function routePrompt(
   if (hasProjectBuild) { agentScore += 6; complexityScore += 2; pushSignal(signals, 'project build workflow') }
   if (hasProjectReview) { agentScore += 5; complexityScore += 2; pushSignal(signals, 'project/path review task') }
   if (hasResearchNeed) { agentScore += 3; pushSignal(signals, 'research/web verification') }
+  if (hasFileSearchNeed) { agentScore += 4; complexityScore += 1; pushSignal(signals, 'local file search') }
   if (hasCodeTask && hasFiles) { agentScore += 2; pushSignal(signals, 'attached code/task context') }
   if (ambiguousAction && hasConnector && hasAccountContext) { agentScore += 1; pushSignal(signals, 'implied account action') }
 
@@ -107,6 +110,7 @@ export function routePrompt(
       : hasFiles ? 'attachment-aware task'
         : hasConnector && hasAccountContext ? 'connector account work'
           : hasResearchNeed ? 'research/web verification'
+            : hasFileSearchNeed ? 'local file search'
             : hasProjectBuild ? 'project builder workflow'
             : hasProjectReview ? 'project/path review'
           : 'tool/action intent'

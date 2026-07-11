@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Code2, ExternalLink, FileText, FolderOpen, Loader, Play, RefreshCw, Terminal, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Code2, ExternalLink, FileText, FolderOpen, Loader, Play, RefreshCw, Terminal, X } from 'lucide-react'
 
 type ProjectTemplate = {
   id: string
@@ -21,7 +21,17 @@ type ProjectBuildResult = {
   nextCommands: string[]
 }
 
-type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
+type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair' | 'runSmartNextStep' | 'runPreviewAudit'
+
+type ProjectMissionStatus = {
+  dependencyStatus: 'not_needed' | 'ready' | 'missing' | 'unknown'
+  checkStatus: 'passed' | 'failed' | 'needs_attention' | 'unknown'
+  devServerStatus: 'running' | 'stopped' | 'not_configured'
+  suggestedAction: ProjectAction | null
+  suggestedLabel: string
+  suggestedReason: string
+  blockers: string[]
+}
 
 type ProjectRecord = {
   id: string
@@ -35,13 +45,29 @@ type ProjectRecord = {
   previewUrl?: string
   updatedAt: number
   lastBuildStatus?: string
+  lastPreviewStatus?: string
+  lastPreviewScreenshot?: string
   lastAction?: string
   lastLog?: string
+  mission?: ProjectMissionStatus
 }
 
 type ProjectActionResult = {
   record: ProjectRecord
   output: string
+}
+
+type ToolchainStatus = {
+  checkedAt: number
+  ready: boolean
+  tools: Array<{
+    id: string
+    label: string
+    ok: boolean
+    command: string
+    version: string
+    installHint: string
+  }>
 }
 
 interface Props {
@@ -53,7 +79,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
   const [templates, setTemplates] = useState<ProjectTemplate[]>([])
   const [templateId, setTemplateId] = useState('vanilla-ts')
   const [name, setName] = useState('my-ultron-app')
-  const [basePath, setBasePath] = useState('~/Ultron Projects')
+  const [basePath, setBasePath] = useState('~')
   const [approved, setApproved] = useState(false)
   const [runInstall, setRunInstall] = useState(false)
   const [runBuild, setRunBuild] = useState(true)
@@ -67,6 +93,9 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [actionBusy, setActionBusy] = useState('')
   const [actionOutput, setActionOutput] = useState('')
+  const [toolchain, setToolchain] = useState<ToolchainStatus | null>(null)
+  const [toolchainLoading, setToolchainLoading] = useState(false)
+  const [selectingFolder, setSelectingFolder] = useState(false)
 
   async function loadTemplates() {
     setLoading(true)
@@ -98,14 +127,40 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
     }
   }
 
+  async function loadToolchain() {
+    setToolchainLoading(true)
+    try {
+      const response = await fetch(`${apiBase}/api/project-builder/toolchain`)
+      if (!response.ok) throw new Error(`Toolchain check failed (${response.status})`)
+      setToolchain(await response.json() as ToolchainStatus)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not check coding toolchain')
+    } finally {
+      setToolchainLoading(false)
+    }
+  }
+
   function refreshAll() {
+    setError('')
     void loadTemplates()
     void loadProjects()
+    void loadToolchain()
   }
 
   useEffect(() => { refreshAll() }, [apiBase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selected = templates.find(template => template.id === templateId)
+  const projectFolderName = name.trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.\s-]+|[.\s-]+$/g, '') || 'Ultron-Project'
+  const displayBasePath = basePath.trim() === '~' ? 'your user folder' : basePath.trim().replace(/[\\/]$/, '')
+  const destinationPreview = `${displayBasePath}\\${projectFolderName}`
+
+  function statusLabel(value: string) {
+    return value.replace(/_/g, ' ')
+  }
 
   async function buildProject() {
     if (!name.trim() || !approved || building) return
@@ -135,6 +190,26 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
       setError(err instanceof Error ? err.message : 'Project build failed')
     } finally {
       setBuilding(false)
+    }
+  }
+
+  async function chooseDestinationFolder() {
+    if (selectingFolder || building) return
+    setSelectingFolder(true)
+    setError('')
+    try {
+      const response = await fetch(`${apiBase}/api/project-builder/select-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ basePath }),
+      })
+      const data = await response.json() as { cancelled?: boolean; path?: string; error?: string }
+      if (!response.ok) throw new Error(data.error ?? `Folder picker failed (${response.status})`)
+      if (!data.cancelled && data.path) setBasePath(data.path)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not choose destination folder')
+    } finally {
+      setSelectingFolder(false)
     }
   }
 
@@ -186,9 +261,27 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
             <div>
               <span className="settings-section-title">Build Workflow</span>
               <h3>Template, create, validate, open</h3>
-              <p>Generate a programming project with repeatable scaffolds, then run the first validation pass and open the workspace tools you approve.</p>
+              <p>Generate a programming project with repeatable scaffolds, check the local toolchain, then run validation and open the tools you approve.</p>
             </div>
             <Terminal size={34} />
+          </section>
+
+          <section className={`project-toolchain ${toolchain?.ready ? 'ready' : 'needs-attention'}`}>
+            <div className="project-builder-section-head">
+              <span className="settings-section-title">Coding Readiness</span>
+              {toolchainLoading ? <Loader size={13} className="spin" /> : toolchain?.ready ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            </div>
+            {!toolchain && !toolchainLoading && <p className="panel-hint">Refresh to check local coding tools.</p>}
+            {toolchain && (
+              <div className="project-toolchain-grid">
+                {toolchain.tools.map(tool => (
+                  <div className={`project-toolchain-item ${tool.ok ? 'ok' : 'missing'}`} key={tool.id}>
+                    <strong>{tool.label}</strong>
+                    <span>{tool.ok ? tool.version : tool.installHint}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {error && <div className="project-builder-error">{error}</div>}
@@ -198,9 +291,16 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
               <span>Project name</span>
               <input value={name} onChange={event => setName(event.target.value)} placeholder="my-ultron-app" />
             </label>
-            <label className="project-builder-field">
-              <span>Destination folder</span>
-              <input value={basePath} onChange={event => setBasePath(event.target.value)} placeholder="~/Ultron Projects" />
+            <label className="project-builder-field project-builder-destination-field">
+              <span>Parent destination folder</span>
+              <div className="project-builder-path-row">
+                <input value={basePath} onChange={event => setBasePath(event.target.value)} placeholder="~" />
+                <button type="button" onClick={() => void chooseDestinationFolder()} disabled={selectingFolder || building}>
+                  {selectingFolder ? <Loader size={13} className="spin" /> : <FolderOpen size={13} />}
+                  Choose
+                </button>
+              </div>
+              <small>Ultron will create: {destinationPreview}</small>
             </label>
           </div>
 
@@ -266,9 +366,25 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
                 <div className="project-memory-meta">
                   <span>{project.templateLabel}</span>
                   <span>{project.stack}</span>
+                  {project.lastPreviewStatus && <span>{project.lastPreviewStatus}</span>}
+                  {project.lastPreviewScreenshot && <span>Screenshot: {project.lastPreviewScreenshot}</span>}
                   {project.lastAction && <span>{project.lastAction}</span>}
                 </div>
+                {project.mission && (
+                  <div className="project-mission-card">
+                    <div>
+                      <strong>{project.mission.suggestedLabel}</strong>
+                      <span>{project.mission.suggestedReason}</span>
+                    </div>
+                    <div className="project-mission-statuses">
+                      <span>Deps: {statusLabel(project.mission.dependencyStatus)}</span>
+                      <span>Check: {statusLabel(project.mission.checkStatus)}</span>
+                      <span>Dev: {statusLabel(project.mission.devServerStatus)}</span>
+                    </div>
+                  </div>
+                )}
                 <div className="project-builder-actions">
+                  <button type="button" className="project-next-action" onClick={() => void runProjectAction(project, 'runSmartNextStep')} disabled={Boolean(actionBusy) || !project.mission?.suggestedAction}><Play size={13} /> Next</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openExplorer')} disabled={Boolean(actionBusy)}><FolderOpen size={13} /> Folder</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openVsCode')} disabled={Boolean(actionBusy)}><Code2 size={13} /> Code</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'openProjectPlan')} disabled={Boolean(actionBusy)}><FileText size={13} /> Plan</button>
@@ -277,6 +393,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
                   <button type="button" onClick={() => void runProjectAction(project, 'runBuild')} disabled={Boolean(actionBusy) || !project.buildCommand}><Terminal size={13} /> Check</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runRepair')} disabled={Boolean(actionBusy) || !project.buildCommand}><RefreshCw size={13} /> Fix</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'runDevServer')} disabled={Boolean(actionBusy) || !project.devCommand}><Play size={13} /> Dev</button>
+                  <button type="button" onClick={() => void runProjectAction(project, 'runPreviewAudit')} disabled={Boolean(actionBusy) || !project.previewUrl}><CheckCircle2 size={13} /> Audit</button>
                   <button type="button" onClick={() => void runProjectAction(project, 'stopDevServer')} disabled={Boolean(actionBusy) || !project.devCommand}>Stop</button>
                   {project.previewUrl && <a href={project.previewUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Preview</a>}
                 </div>

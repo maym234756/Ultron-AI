@@ -28,6 +28,7 @@ release
 *.sw?
 
 # Ultron runtime data (local to each install — do not commit)
+.screen-context.json
 .chat-history/
 .long-memory.jsonl
 .rag-store.jsonl
@@ -36,6 +37,11 @@ release
 .env
 .env.local
 *.bak
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.cred-vault.json
 
 # Research / pulled projects (not part of Ultron)
 Project Pulled/

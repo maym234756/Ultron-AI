@@ -11,7 +11,7 @@ export const openAppDefinition: ToolDefinition = {
   function: {
     name: 'open_app',
     description:
-      'Open a Windows application or file by name. Supports: cmd, powershell, terminal (Windows Terminal), notepad, vscode, explorer, paint, calculator, taskmgr, chrome, edge, firefox, or any .exe path.',
+      'Open or focus a Windows application or file by name. Reuses an existing app window by default before launching a duplicate. Supports: cmd, powershell, terminal (Windows Terminal), notepad, vscode, explorer, paint, calculator, taskmgr, chrome, edge, firefox, or any .exe path.',
     parameters: {
       type: 'object',
       properties: {
@@ -22,6 +22,10 @@ export const openAppDefinition: ToolDefinition = {
         args: {
           type: 'string',
           description: 'Optional command-line arguments to pass to the app.',
+        },
+        reuse: {
+          type: 'string',
+          description: 'Set "false" to force a new window. Defaults to "true" and focuses an existing matching window when possible.',
         },
       },
       required: ['app'],
@@ -56,11 +60,93 @@ const APP_MAP: Record<string, string> = {
   snip: 'SnippingTool.exe',
 }
 
+const APP_PROCESS_HINTS: Record<string, string[]> = {
+  cmd: ['cmd'],
+  'command prompt': ['cmd'],
+  powershell: ['powershell', 'pwsh'],
+  ps: ['powershell', 'pwsh'],
+  terminal: ['WindowsTerminal'],
+  'windows terminal': ['WindowsTerminal'],
+  explorer: ['explorer'],
+  'file explorer': ['explorer'],
+  chrome: ['chrome'],
+  edge: ['msedge'],
+  firefox: ['firefox'],
+  vscode: ['Code'],
+  code: ['Code'],
+  notepad: ['notepad'],
+  taskmgr: ['Taskmgr'],
+}
+
+function focusExistingWindowCommand(processNames: string[]): string {
+  const names = processNames.map(name => `'${name.replace(/'/g, "''")}'`).join(',')
+  return `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class ExistingWindowFocus {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int n);
+}
+"@
+$names = @(${names})
+$ultronFocusedExistingWindow = $false
+$p = Get-Process -ErrorAction SilentlyContinue | Where-Object { $names -contains $_.ProcessName -and $_.MainWindowHandle -ne 0 } | Sort-Object StartTime -Descending | Select-Object -First 1
+if ($p) {
+  [ExistingWindowFocus]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+  Start-Sleep -Milliseconds 120
+  [ExistingWindowFocus]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+  Write-Output "Focused existing $($p.ProcessName): $($p.MainWindowTitle)"
+  $ultronFocusedExistingWindow = $true
+}
+`.trim()
+}
+
+function reuseExplorerPathCommand(exe: string, targetPath: string): string {
+  const safePath = targetPath.replace(/'/g, "''")
+  return `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class ExistingExplorerFocus {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int n);
+}
+"@
+$targetPath = '${safePath}'
+$shell = New-Object -ComObject Shell.Application
+$window = @($shell.Windows() | Where-Object { $_.FullName -like '*explorer.exe' }) | Select-Object -First 1
+if ($window) {
+  $window.Navigate2($targetPath)
+  Start-Sleep -Milliseconds 250
+  [ExistingExplorerFocus]::ShowWindow([IntPtr]$window.HWND, 9) | Out-Null
+  [ExistingExplorerFocus]::SetForegroundWindow([IntPtr]$window.HWND) | Out-Null
+  Write-Output "Reused File Explorer: $targetPath"
+} else {
+  Start-Process "${exe}" -ArgumentList "${targetPath.replace(/"/g, '\\"')}"
+  Write-Output "Opened ${exe}: $targetPath"
+}
+`.trim()
+}
+
 export const openApp: ToolHandler = (args) => {
   const raw = (args.app ?? '').trim().toLowerCase()
   const extra = (args.args ?? '').trim()
   const exe = APP_MAP[raw] ?? args.app?.trim() ?? ''
   if (!exe) return Promise.resolve('Error: no app specified')
+  if (args.reuse !== 'false' && extra && (raw === 'explorer' || raw === 'file explorer')) {
+    return runTerminal({ command: reuseExplorerPathCommand(exe, extra) })
+  }
+  if (args.reuse !== 'false' && !extra) {
+    const processNames = APP_PROCESS_HINTS[raw]
+    if (processNames?.length) {
+      return runTerminal({
+        command: `${focusExistingWindowCommand(processNames)}; if (-not $ultronFocusedExistingWindow) { ${extra
+          ? `Start-Process "${exe}" -ArgumentList "${extra.replace(/"/g, '\\"')}"`
+          : `Start-Process "${exe}"`}; Write-Output "Opened ${exe}" }`,
+      })
+    }
+  }
   const cmd = extra
     ? `Start-Process "${exe}" -ArgumentList "${extra.replace(/"/g, '\\"')}"`
     : `Start-Process "${exe}"`
@@ -218,7 +304,7 @@ export const notifyDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'notify',
-    description: 'Send a Windows balloon-tip notification to the system tray. Non-blocking — good for alerting when a long task finishes.',
+    description: 'Send a Windows balloon-tip notification to the system tray. Non-blocking ï¿½ good for alerting when a long task finishes.',
     parameters: {
       type: 'object',
       properties: {

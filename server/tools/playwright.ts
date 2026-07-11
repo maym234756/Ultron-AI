@@ -54,6 +54,47 @@ type ResolvedTarget = {
 
 const TARGET_TIMEOUT = 10_000
 
+const EDITABLE_SELECTOR = 'input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="textbox"], [role="searchbox"], [role="combobox"]'
+
+async function firstVisibleLocator(page: Page, selectors: string[], description: string): Promise<ResolvedTarget | null> {
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first()
+    const visible = await locator.isVisible({ timeout: 700 }).catch(() => false)
+    if (visible) return { locator, description }
+  }
+  return null
+}
+
+async function resolveInputTarget(page: Page, args: TargetArgs): Promise<ResolvedTarget | null> {
+  const explicit = resolveTarget(page, args)
+  if (explicit) return explicit
+
+  const focused = await firstVisibleLocator(page, [
+    `${EDITABLE_SELECTOR}:focus`,
+    '[aria-expanded="true"] input:not([type="hidden"]):focus',
+  ], 'focused editable element')
+  if (focused) return focused
+
+  return firstVisibleLocator(page, [
+    'input[type="search"]',
+    '[role="searchbox"]',
+    'input[placeholder*="Search" i]',
+    'textarea[placeholder*="Search" i]',
+    'input:not([type="hidden"]):not([disabled])',
+    'textarea:not([disabled])',
+    '[contenteditable="true"]',
+    '[role="textbox"]',
+  ], 'first visible editable/search field')
+}
+
+async function editableValue(target: ResolvedTarget): Promise<string> {
+  return target.locator.evaluate((el: any) => {
+    const anyEl = el as any
+    if ('value' in anyEl) return String(anyEl.value ?? '')
+    return anyEl.innerText || anyEl.textContent || ''
+  }).catch(() => '')
+}
+
 function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
   if (args.selector) return { locator: page.locator(args.selector).first(), description: `selector "${args.selector}"` }
   if (args.test_id) return { locator: page.getByTestId(args.test_id).first(), description: `test id "${args.test_id}"` }
@@ -67,8 +108,22 @@ function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
 async function visibleTargetHints(page: Page): Promise<string> {
   const hints = await page.evaluate(() => {
     const doc = (globalThis as any).document
-    return Array.from(doc.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [role="link"], [aria-label]'))
-      .slice(0, 12)
+    const css = (globalThis as any).CSS
+    const getStyle = (globalThis as any).getComputedStyle
+    const cssPath = (el: any) => {
+      if (el.id) return `#${css.escape(el.id)}`
+      if (el.name) return `${el.tagName.toLowerCase()}[name="${css.escape(el.name)}"]`
+      const label = el.getAttribute('aria-label') || el.getAttribute('title')
+      if (label) return `${el.tagName.toLowerCase()}[aria-label*="${css.escape(label.slice(0, 30))}" i]`
+      return el.tagName.toLowerCase()
+    }
+    return Array.from(doc.querySelectorAll('button, a[href], input, textarea, select, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="searchbox"], [role="combobox"], [aria-label]'))
+      .filter((el: any) => {
+        const rect = el.getBoundingClientRect()
+        const style = getStyle(el)
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+      })
+      .slice(0, 16)
       .map((el: any) => {
         const tag = el.tagName.toLowerCase()
         const role = el.getAttribute('role') ?? ''
@@ -76,7 +131,7 @@ async function visibleTargetHints(page: Page): Promise<string> {
         const text = (el.innerText ?? el.value ?? el.placeholder ?? '').trim().replace(/\s+/g, ' ').slice(0, 80)
         const id = el.id ? `#${el.id}` : ''
         const name = el.name ? `[name="${el.name}"]` : ''
-        return [tag + id + name, role && `role=${role}`, label && `aria-label="${label}"`, text && `text="${text}"`]
+        return [cssPath(el), tag + id + name, role && `role=${role}`, label && `aria-label="${label}"`, text && `text="${text}"`]
           .filter(Boolean)
           .join(' ')
       })
@@ -192,10 +247,12 @@ export const browserFill: ToolHandler = async (args) => {
   let target: ResolvedTarget | null = null
   try {
     page = await getPage()
-    target = resolveTarget(page, args)
-    if (!target) return 'Error: provide selector, label, placeholder, text, role + name, or test_id'
+    target = await resolveInputTarget(page, args)
+    if (!target) return 'Error: provide selector, label, placeholder, text, role + name, or test_id, or focus an editable field first'
     await target.locator.fill(value, { timeout: TARGET_TIMEOUT })
-    return `Filled ${target.description}`
+    const actual = await editableValue(target)
+    const verified = actual.includes(value) || actual === value
+    return `Filled ${target.description}${verified ? `\nVerified value: ${actual.slice(0, 160)}` : `\nWarning: typed value could not be verified; current value: ${actual.slice(0, 160)}`}`
   } catch (err) { return page ? browserTargetError(page, 'fill', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -394,6 +451,101 @@ export const browserSnapshot: ToolHandler = async (args) => {
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
+// ── browser_find_targets ─────────────────────────────────────────────────────
+
+export const browserFindTargetsDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_find_targets',
+    description: 'Find actionable page targets for clicking, typing, selecting, or searching. Returns stable selector hints, roles, labels, text, and scores. Use before browser_click/browser_fill/browser_type on complex pages such as Salesforce, Gmail, dashboards, and SPAs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional text to match against labels, placeholders, visible text, hrefs, names, ids, and roles.' },
+        kind: { type: 'string', description: 'Optional filter: any, input, button, link, select, text.' },
+        limit: { type: 'string', description: 'Maximum targets to return (default 25, max 80).' },
+      },
+    },
+  },
+}
+
+export const browserFindTargets: ToolHandler = async (args) => {
+  const query = (args.query ?? '').trim().toLowerCase()
+  const kind = (args.kind ?? 'any').trim().toLowerCase()
+  const limit = Math.min(80, Math.max(1, parseInt(args.limit ?? '25', 10) || 25))
+  try {
+    const page = await getPage()
+    await page.evaluate('globalThis.__name = globalThis.__name || ((value) => value)').catch(() => {})
+    const targets = await page.evaluate(({ query, kind, limit }) => {
+      const __name = (value: unknown) => value
+      void __name
+      const doc = (globalThis as any).document
+      const css = (globalThis as any).CSS
+      const getStyle = (globalThis as any).getComputedStyle
+      const clean = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim()
+      const cssPath = (el: any) => {
+        if (el.id) return `#${css.escape(el.id)}`
+        if (el.getAttribute('data-testid')) return `[data-testid="${css.escape(el.getAttribute('data-testid'))}"]`
+        if (el.name) return `${el.tagName.toLowerCase()}[name="${css.escape(el.name)}"]`
+        const aria = clean(el.getAttribute('aria-label')).slice(0, 40)
+        if (aria) return `${el.tagName.toLowerCase()}[aria-label*="${css.escape(aria)}" i]`
+        const text = clean(el.innerText || el.textContent).slice(0, 40)
+        if (text && (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button')) return `button:has-text("${text.replace(/"/g, '\\"')}")`
+        return el.tagName.toLowerCase()
+      }
+      const classify = (el: any) => {
+        const tag = el.tagName.toLowerCase()
+        const role = clean(el.getAttribute('role')).toLowerCase()
+        const type = clean(el.type).toLowerCase()
+        if (tag === 'a' || role === 'link') return 'link'
+        if (tag === 'button' || role === 'button' || type === 'button' || type === 'submit') return 'button'
+        if (tag === 'select' || role === 'combobox') return 'select'
+        if (tag === 'input' || tag === 'textarea' || role === 'textbox' || role === 'searchbox' || el.isContentEditable) return 'input'
+        return 'text'
+      }
+      const labelFor = (el: any) => {
+        const id = el.id ? doc.querySelector(`label[for="${css.escape(el.id)}"]`)?.textContent : ''
+        return clean(id || el.getAttribute('aria-label') || el.getAttribute('title') || el.placeholder || el.innerText || el.value || el.textContent)
+      }
+      const elements = Array.from(doc.querySelectorAll([
+        'button', 'a[href]', 'input:not([type="hidden"])', 'textarea', 'select', '[contenteditable="true"]',
+        '[role="button"]', '[role="link"]', '[role="textbox"]', '[role="searchbox"]', '[role="combobox"]', '[aria-label]', '[data-testid]',
+      ].join(','))) as any[]
+      return elements
+        .map((el: any, index: number) => {
+          const rect = el.getBoundingClientRect()
+          const style = getStyle(el)
+          const visible = rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+          if (!visible) return null
+          const targetKind = classify(el)
+          if (kind !== 'any' && kind && targetKind !== kind) return null
+          const label = labelFor(el)
+          const haystack = clean([label, el.placeholder, el.name, el.id, el.href, el.getAttribute('role'), el.getAttribute('data-testid')].join(' ')).toLowerCase()
+          if (query && !haystack.includes(query)) return null
+          let score = 1
+          if (query && label.toLowerCase().includes(query)) score += 4
+          if (query && clean(el.placeholder).toLowerCase().includes(query)) score += 3
+          if (targetKind === 'input' && /search|find|lookup|filter/.test(haystack)) score += 2
+          return {
+            index,
+            kind: targetKind,
+            selector: cssPath(el),
+            role: clean(el.getAttribute('role')) || undefined,
+            label: label.slice(0, 120) || undefined,
+            placeholder: clean(el.placeholder).slice(0, 120) || undefined,
+            text: clean(el.innerText || el.textContent).slice(0, 160) || undefined,
+            href: el.href || undefined,
+            score,
+          }
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, limit)
+    }, { query, kind, limit })
+    return JSON.stringify({ url: page.url(), title: await page.title(), query: args.query ?? '', kind, targets }, null, 2)
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
 // ── browser_screenshot ────────────────────────────────────────────────────────
 
 export const browserScreenshotDefinition: ToolDefinition = {
@@ -580,6 +732,44 @@ export const browserSwitchTab: ToolHandler = async (args) => {
   return `Switched to tab ${idx}: ${await _pages[idx].title()} (${_pages[idx].url()})`
 }
 
+// ── browser_use_tab ──────────────────────────────────────────────────────────
+
+export const browserUseTabDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_use_tab',
+    description: 'Reuse an existing browser automation tab by matching title or URL text. Use after browser_connect_chrome when the user wants to continue inside an already-open Gmail, Salesforce, GitHub, or other external page instead of opening a new tab.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Text to match in the tab title or URL, e.g. "Gmail", "Salesforce", "github.com".' },
+      },
+      required: ['query'],
+    },
+  },
+}
+
+export const browserUseTab: ToolHandler = async (args) => {
+  const query = (args.query ?? '').trim().toLowerCase()
+  if (!query) return 'Error: query is required'
+  _pages = _pages.filter((p) => !p.isClosed())
+  if (_pages.length === 0) return 'No automation tabs are available. Call browser_connect_chrome first to attach to existing browser tabs.'
+
+  for (let i = 0; i < _pages.length; i += 1) {
+    const page = _pages[i]
+    const title = await page.title().catch(() => '')
+    const url = page.url()
+    if (title.toLowerCase().includes(query) || url.toLowerCase().includes(query)) {
+      _currentTab = i
+      await page.bringToFront().catch(() => {})
+      return `Using existing tab ${i}: ${title || '(untitled)'} (${url})`
+    }
+  }
+
+  const lines = await Promise.all(_pages.map(async (p, i) => `  [${i}] ${await p.title().catch(() => '?')} — ${p.url()}`))
+  return `No existing tab matched "${args.query}". Current tabs:\n${lines.join('\n')}`
+}
+
 // ── browser_close_tab ─────────────────────────────────────────────────────────
 
 export const browserCloseTabDefinition: ToolDefinition = {
@@ -707,10 +897,12 @@ export const browserType: ToolHandler = async (args) => {
   let target: ResolvedTarget | null = null
   try {
     page = await getPage()
-    target = resolveTarget(page, args)
+    target = await resolveInputTarget(page, args)
     if (target) await target.locator.click({ timeout: TARGET_TIMEOUT })
     await page.keyboard.type(text, { delay })
-    return `Typed ${text.length} characters${target ? ` into ${target.description}` : ''}.`
+    const actual = target ? await editableValue(target) : ''
+    const verified = target ? (actual.includes(text) || actual.endsWith(text)) : false
+    return `Typed ${text.length} characters${target ? ` into ${target.description}` : ''}.${target ? `\n${verified ? 'Verified' : 'Could not verify'} current value: ${actual.slice(0, 160)}` : ''}`
   } catch (err) { return page ? browserTargetError(page, 'type into', target, err) : `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -976,6 +1168,8 @@ export const browserFindTextDefinition: ToolDefinition = {
       type: 'object',
       properties: {
         text: { type: 'string', description: 'Text to find.' },
+        limit: { type: 'string', description: 'Maximum matches to return (default 5, max 30).' },
+        scroll: { type: 'string', description: 'Set "true" to scroll the first match into view.' },
       },
       required: ['text'],
     },
@@ -984,15 +1178,23 @@ export const browserFindTextDefinition: ToolDefinition = {
 
 export const browserFindText: ToolHandler = async (args) => {
   if (!args.text) return 'Error: text required'
+  const limit = Math.min(30, Math.max(1, parseInt(args.limit ?? '5', 10) || 5))
   try {
     const page = await getPage()
-    const found = await page.getByText(args.text, { exact: false }).first().isVisible().catch(() => false)
-    if (!found) return `Text not found: "${args.text}"`
-    const ctx = await page.getByText(args.text, { exact: false }).first().evaluate(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (el: any) => (el.closest('p,li,div,td,h1,h2,h3,span') ?? el).innerText?.trim().slice(0, 300) ?? ''
-    ).catch(() => '')
-    return `Found: "${args.text}"\nContext: ${ctx}`
+    const locator = page.getByText(args.text, { exact: false })
+    const count = await locator.count().catch(() => 0)
+    if (count === 0) return `Text not found: "${args.text}"`
+    if (args.scroll === 'true') await locator.first().scrollIntoViewIfNeeded({ timeout: TARGET_TIMEOUT }).catch(() => {})
+    const matches: string[] = []
+    for (let i = 0; i < Math.min(limit, count); i += 1) {
+      const item = locator.nth(i)
+      const visible = await item.isVisible().catch(() => false)
+      const ctx = await item.evaluate(
+        (el: any) => (el.closest('p,li,div,td,h1,h2,h3,span,section,article') ?? el).innerText?.trim().replace(/\s+/g, ' ').slice(0, 360) ?? ''
+      ).catch(() => '')
+      matches.push(`[${i + 1}] ${visible ? 'visible' : 'hidden'}: ${ctx}`)
+    }
+    return `Found ${count} match(es) for "${args.text}".\n${matches.join('\n')}`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 

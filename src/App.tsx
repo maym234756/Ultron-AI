@@ -11,9 +11,12 @@ import {
   Download,
   Eye,
   EyeOff,
+  FolderOpen,
   Activity,
+  KeyRound,
   Loader,
   ListTodo,
+  LogOut,
   PhoneCall,
   PhoneOff,
   Cpu,
@@ -56,6 +59,9 @@ import { TemplatesPanel } from './components/TemplatesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
 import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
+import { AuthPanel } from './components/AuthPanel'
+import { CredentialVaultPanel } from './components/CredentialVaultPanel'
+import type { AuthUser } from './components/AuthPanel'
 import type { AgentEvent, AnswerStyle, AppSettings, AttachedFile, HistoryMeta, IntelligenceMode, Message, ObserverStatus, PendingQuestion, Prediction, PromptRoute, Task } from './types'
 import { routePrompt } from './lib/promptRouter'
 import { recordTelemetry } from './lib/telemetry'
@@ -64,6 +70,13 @@ import './App.css'
 
 type EngineStatus = 'checking' | 'online' | 'offline'
 type WorkspaceMode = 'chat' | 'build' | 'research' | 'debug' | 'review' | 'system'
+
+type AuthState = {
+  ready: boolean
+  configured: boolean
+  token: string
+  user: AuthUser | null
+}
 
 type QuickAction = {
   emoji: string
@@ -87,6 +100,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   numCtx: 8192,
   answerStyle: 'detailed',
 }
+
+const AUTH_TOKEN_KEY = 'ultron-auth-token'
 
 const ANSWER_STYLE_LABEL: Record<AnswerStyle, string> = {
   concise: 'Concise',
@@ -168,6 +183,9 @@ const SLASH_COMMANDS = [
   { cmd: 'improve',  emoji: '✍️', label: 'Improve Writing',  prompt: 'Improve this text for clarity and tone:\n\n' },
   { cmd: 'email',    emoji: '📧', label: 'Write Email',      prompt: 'Write a professional email for this situation:\n\n' },
   { cmd: 'search',   emoji: '🌐', label: 'Search Web',       prompt: 'Search the web and give me a comprehensive overview of:\n\n' },
+  { cmd: 'files',    emoji: '📂', label: 'Search Files',      prompt: 'Search my files for: ' },
+  { cmd: 'cmd',      emoji: '⌨️', label: 'Run CMD',           prompt: 'Run this in Command Prompt and summarize the output:\n\n' },
+  { cmd: 'ps',       emoji: '⚡', label: 'Run PowerShell',    prompt: 'Run this in PowerShell and summarize the output:\n\n' },
   { cmd: 'status',   emoji: '📊', label: 'System Status',    prompt: 'Show my full system status: CPU, RAM, disk, top processes, uptime.' },
   { cmd: 'brief',    emoji: '📅', label: 'Daily Briefing',   prompt: 'Give me my daily briefing: tasks, schedule, and what I should know today.' },
   { cmd: 'image',    emoji: '🎨', label: 'Generate Image',   prompt: 'Generate an image of: ' },
@@ -230,6 +248,7 @@ const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; headline: strin
 const QUICK_ACTIONS: QuickAction[] = [
   { emoji: '💻', label: 'Review my code', desc: 'Find bugs, suggestions, and best practices', prompt: 'Review the code I\'m working on and suggest improvements.' },
   { emoji: '🔍', label: 'Search the web', desc: 'Find up-to-date information online', prompt: 'Search the web for: ' },
+  { emoji: '📁', label: 'Search files', desc: 'Find filenames or matching text locally', prompt: 'Search my files for: ' },
   { emoji: '🐛', label: 'Debug an error', desc: 'Diagnose and fix errors in your code', prompt: 'Help me debug this error:\n\n' },
   { emoji: '📝', label: 'Explain this', desc: 'Clear explanations on any topic', prompt: 'Explain this clearly:\n\n' },
   { emoji: '⚙️', label: 'System stats', desc: 'CPU, RAM, disk, and running processes', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
@@ -238,6 +257,8 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 const AGENT_QUICK_ACTIONS: QuickAction[] = [
   { emoji: '📂', label: 'Explore project', desc: 'Map folder structure and purpose of each module', prompt: 'List this project\'s files and summarise what each top-level folder does.' },
+  { emoji: '🧭', label: 'Find in files', desc: 'Fast local filename/content search', prompt: 'Search this workspace for files or code related to: ' },
+  { emoji: '⌨️', label: 'Open shell', desc: 'Use CMD or PowerShell for local commands', prompt: 'Open or run the right Windows shell command for: ' },
   { emoji: '🔨', label: 'Build & fix errors', desc: 'Run the build, catch errors, auto-fix', prompt: 'Run the build, find any errors, and fix them.' },
   { emoji: '🌐', label: 'Latest Ollama news', desc: 'Find new models worth pulling locally', prompt: 'Search the web for the latest Ollama model releases and tell me which ones to pull.' },
   { emoji: '📊', label: 'System monitor', desc: 'Live CPU, RAM, and top processes', prompt: 'Show my system stats and top CPU/RAM processes.' },
@@ -293,6 +314,7 @@ function App() {
   const [agentMode, setAgentMode] = useState(false)
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
   const [questionDraft, setQuestionDraft] = useState('')
+  const [questionFolderLoading, setQuestionFolderLoading] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
@@ -323,7 +345,9 @@ function App() {
   const [showReferenceBuilder, setShowReferenceBuilder] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showProjectBuilder, setShowProjectBuilder] = useState(false)
+  const [showCredentialVault, setShowCredentialVault] = useState(false)
   const [showCommandCenter, setShowCommandCenter] = useState(false)
+  const [auth, setAuth] = useState<AuthState>({ ready: false, configured: false, token: '', user: null })
   const [commandQuery, setCommandQuery] = useState('')
   const [showComposerTools, setShowComposerTools] = useState(false)
   const [voiceConvMode, setVoiceConvMode] = useState(false)
@@ -355,6 +379,40 @@ function App() {
   const messageListRef = useRef<HTMLDivElement | null>(null)
   const atBottomRef = useRef(true)
   const deferredMessages = useDeferredValue(messages)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadAuth() {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY) ?? ''
+      try {
+        const statusResponse = await fetch(`${API_BASE}/api/auth/status`)
+        const statusData = await statusResponse.json() as { configured?: boolean }
+        let user: AuthUser | null = null
+        if (token) {
+          const meResponse = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+          if (meResponse.ok) user = ((await meResponse.json()) as { user: AuthUser | null }).user
+        }
+        if (!cancelled) setAuth({ ready: true, configured: Boolean(statusData.configured), token: user ? token : '', user })
+      } catch {
+        if (!cancelled) setAuth({ ready: true, configured: false, token: '', user: null })
+      }
+    }
+    void loadAuth()
+    return () => { cancelled = true }
+  }, [])
+
+  function handleAuthenticated(session: { token: string; user: AuthUser }) {
+    localStorage.setItem(AUTH_TOKEN_KEY, session.token)
+    setAuth({ ready: true, configured: true, token: session.token, user: session.user })
+  }
+
+  async function logout() {
+    if (auth.token) {
+      await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` } }).catch(() => undefined)
+    }
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+    setAuth(current => ({ ...current, token: '', user: null }))
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -1204,7 +1262,10 @@ function App() {
           question: payload.question as string,
           context: (payload.context as string) ?? '',
           kind: payload.kind === 'permission' ? 'permission' : 'question',
+          mode: payload.mode === 'project_setup' ? 'project_setup' : undefined,
+          defaultAnswer: typeof payload.defaultAnswer === 'string' ? payload.defaultAnswer : undefined,
         })
+        setQuestionDraft(typeof payload.defaultAnswer === 'string' ? payload.defaultAnswer : '')
         appendAgentEvent(assistantId, {
           type: 'user_question',
           id: payload.id as string,
@@ -1277,6 +1338,33 @@ function App() {
       })
     } catch {
       // answer sent best-effort
+    }
+  }
+
+  function answerWithDestinationPath(answer: string, destinationPath: string) {
+    const withoutLocation = answer
+      .replace(/\s+(?:at|in|inside|under|on)\s+.+$/i, '')
+      .replace(/\s*[,;]\s*(?:location|path|folder)\s*[:=]\s*.+$/i, '')
+      .trim()
+    return `${withoutLocation || pendingQuestion?.defaultAnswer || 'my-project'} at ${destinationPath}`
+  }
+
+  async function chooseQuestionDestinationFolder() {
+    if (!pendingQuestion || questionFolderLoading) return
+    setQuestionFolderLoading(true)
+    try {
+      const response = await fetch(`${API_BASE}/api/project-builder/select-folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ basePath: questionDraft }),
+      })
+      const data = await response.json() as { cancelled?: boolean; path?: string; error?: string }
+      if (!response.ok) throw new Error(data.error ?? `Folder picker failed (${response.status})`)
+      if (!data.cancelled && data.path) setQuestionDraft(current => answerWithDestinationPath(current, data.path as string))
+    } catch (err) {
+      setEngineError(err instanceof Error ? err.message : 'Could not choose destination folder')
+    } finally {
+      setQuestionFolderLoading(false)
     }
   }
 
@@ -1441,6 +1529,14 @@ function App() {
     }
   })()
 
+  if (!auth.ready) {
+    return <main className="auth-shell"><div className="auth-card"><Loader className="spin" /><p>Loading Ultron identity...</p></div></main>
+  }
+
+  if (!auth.user) {
+    return <AuthPanel apiBase={API_BASE} configured={auth.configured} onAuthenticated={handleAuthenticated} />
+  }
+
   return (
   <>
     <main className={`app-shell${quietMode ? ' quiet-ui' : ''}`}>
@@ -1497,6 +1593,9 @@ function App() {
           </button>
           <button type="button" className="sidebar-action-btn" onClick={() => setShowMemory(true)}>
             <Brain size={13} /> Memory
+          </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowCredentialVault(true)} title="Credential Vault — local encrypted usernames, emails, passwords, and tokens">
+            <KeyRound size={13} /> Vault
           </button>
           <button
             type="button"
@@ -1612,6 +1711,15 @@ function App() {
           </div>
         </div>
 
+        <div className="identity-card">
+          <UserRound size={15} />
+          <div>
+            <strong>{auth.user.displayName}</strong>
+            <span>{auth.user.email}</span>
+          </div>
+          <button type="button" onClick={() => void logout()} title="Sign out of Ultron" aria-label="Sign out of Ultron"><LogOut size={13} /></button>
+        </div>
+
       </section>
 
       <section className="chat-panel" aria-label="Chat with Ultron">
@@ -1654,7 +1762,7 @@ function App() {
               Command
             </button>
             {sidebarCollapsed && (
-              <button type="button" className="export-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar (Ctrl+B)">
+              <button type="button" className="export-btn" onClick={() => setSidebarCollapsed(false)} title="Show sidebar (Ctrl+B)" aria-label="Show tools sidebar">
                 <ChevronRight size={14} />
                 {quietMode && <span>Tools</span>}
               </button>
@@ -2039,6 +2147,12 @@ function App() {
                   placeholder="Type your answer…"
                   className="question-input"
                 />
+                {pendingQuestion.mode === 'project_setup' && (
+                  <button type="button" className="question-folder-button" onClick={() => void chooseQuestionDestinationFolder()} disabled={questionFolderLoading}>
+                    {questionFolderLoading ? <Loader size={14} className="spin" /> : <FolderOpen size={14} />}
+                    Choose folder
+                  </button>
+                )}
                 <button type="submit" className="icon-button" disabled={!questionDraft.trim()}>
                   <Send size={16} />
                 </button>
@@ -2407,6 +2521,13 @@ function App() {
       <MemoryPanel
         apiBase={API_BASE}
         onClose={() => setShowMemory(false)}
+      />
+    )}
+    {showCredentialVault && (
+      <CredentialVaultPanel
+        apiBase={API_BASE}
+        token={auth.token}
+        onClose={() => setShowCredentialVault(false)}
       />
     )}
     {showHealer && (

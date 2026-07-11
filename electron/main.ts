@@ -9,7 +9,7 @@
  *   npm run tray          (dev — requires npm run dev running)
  *   npm run desktop:dist  (build + package Windows installer)
  */
-import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, shell, screen as electronScreen } from 'electron'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { existsSync } from 'node:fs'
@@ -20,10 +20,12 @@ const API_PORT = 8787
 const SERVER_URL = `http://127.0.0.1:${API_PORT}`
 const WEB_URL = isDev ? 'http://localhost:5173' : SERVER_URL
 const HOTKEY = 'Ctrl+Shift+U'
+const OVERLAY_HOTKEY = 'Ctrl+Shift+Space'
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let isQuitting = false
+let isOverlayMode = false
 
 // ── Start backend server (production mode only) ────────────────────────────────
 
@@ -97,6 +99,46 @@ function createWindow(): BrowserWindow {
   return w
 }
 
+function positionOverlayWindow(w: BrowserWindow): void {
+  const display = electronScreen.getDisplayNearestPoint(electronScreen.getCursorScreenPoint())
+  const { x, y, width, height } = display.workArea
+  const [windowWidth, windowHeight] = w.getSize()
+  w.setPosition(
+    Math.round(x + (width - windowWidth) / 2),
+    Math.round(y + height - windowHeight - 24),
+  )
+}
+
+function applyWindowMode(): void {
+  if (!win || win.isDestroyed()) return
+
+  if (isOverlayMode) {
+    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    win.setSkipTaskbar(false)
+    win.setOpacity(0.96)
+    win.setSize(760, 320)
+    positionOverlayWindow(win)
+    win.show()
+    win.focus()
+    return
+  }
+
+  win.setAlwaysOnTop(false)
+  win.setVisibleOnAllWorkspaces(false)
+  win.setOpacity(1)
+  win.setSize(900, 700)
+  win.center()
+  win.show()
+  win.focus()
+}
+
+function toggleOverlayMode(): void {
+  if (!win || win.isDestroyed()) win = createWindow()
+  isOverlayMode = !isOverlayMode
+  applyWindowMode()
+}
+
 // ── Tray icon ──────────────────────────────────────────────────────────────────
 
 function createTray(): Tray {
@@ -117,6 +159,10 @@ function createTray(): Tray {
     {
       label: `Shortcut: ${HOTKEY}`,
       enabled: false,
+    },
+    {
+      label: `Overlay Mode: ${OVERLAY_HOTKEY}`,
+      click: () => toggleOverlayMode(),
     },
     { type: 'separator' },
     {
@@ -144,6 +190,7 @@ function toggleWindow(): void {
   if (win.isVisible() && win.isFocused()) {
     win.hide()
   } else {
+    if (isOverlayMode) positionOverlayWindow(win)
     win.show()
     win.focus()
   }
@@ -173,6 +220,8 @@ app.whenReady().then(async () => {
   // Register global shortcut
   const ok = globalShortcut.register(HOTKEY, toggleWindow)
   if (!ok) console.warn('[electron] Could not register hotkey:', HOTKEY)
+  const overlayOk = globalShortcut.register(OVERLAY_HOTKEY, toggleOverlayMode)
+  if (!overlayOk) console.warn('[electron] Could not register overlay hotkey:', OVERLAY_HOTKEY)
 
   app.on('activate', () => {
     if (!win || win.isDestroyed()) win = createWindow()

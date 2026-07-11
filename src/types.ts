@@ -62,6 +62,8 @@ export type PendingQuestion = {
   question: string
   context: string
   kind?: 'question' | 'permission'
+  mode?: 'project_setup'
+  defaultAnswer?: string
 }
 
 export type IntelligenceMode = 'instant' | 'balanced' | 'deep' | 'research'

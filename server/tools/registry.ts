@@ -31,6 +31,7 @@ import {
   browserRead, browserReadDefinition,
   browserAssert, browserAssertDefinition,
   browserSnapshot, browserSnapshotDefinition,
+  browserFindTargets, browserFindTargetsDefinition,
   browserScreenshot, browserScreenshotDefinition,
   browserEval, browserEvalDefinition,
   browserWait, browserWaitDefinition,
@@ -79,6 +80,7 @@ import {
   browserNewTab, browserNewTabDefinition,
   browserTabs, browserTabsDefinition,
   browserSwitchTab, browserSwitchTabDefinition,
+  browserUseTab, browserUseTabDefinition,
   browserCloseTab, browserCloseTabDefinition,
 } from './playwright.js'
 import {
@@ -201,6 +203,7 @@ export const toolDefinitions: ToolDefinition[] = [
   browserReadDefinition,
   browserAssertDefinition,
   browserSnapshotDefinition,
+  browserFindTargetsDefinition,
   browserScreenshotDefinition,
   browserEvalDefinition,
   browserWaitDefinition,
@@ -246,6 +249,7 @@ export const toolDefinitions: ToolDefinition[] = [
   browserNewTabDefinition,
   browserTabsDefinition,
   browserSwitchTabDefinition,
+  browserUseTabDefinition,
   browserCloseTabDefinition,
   // RAG
   ragIndexDefinition,
@@ -375,6 +379,7 @@ const handlers: Record<string, ToolHandler> = {
   browser_read: browserRead,
   browser_assert: browserAssert,
   browser_snapshot: browserSnapshot,
+  browser_find_targets: browserFindTargets,
   browser_screenshot: browserScreenshot,
   browser_eval: browserEval,
   browser_wait: browserWait,
@@ -420,6 +425,7 @@ const handlers: Record<string, ToolHandler> = {
   browser_new_tab: browserNewTab,
   browser_tabs: browserTabs,
   browser_switch_tab: browserSwitchTab,
+  browser_use_tab: browserUseTab,
   browser_close_tab: browserCloseTab,
   // RAG
   rag_index: ragIndex,

@@ -14,6 +14,9 @@
     "desktop:build": "npm run build && npm run build:electron",
     "desktop:dist": "node scripts/build-desktop.mjs",
     "desktop:pack": "npm run desktop:build && electron-builder --win dir --x64",
+    "db:generate": "prisma generate",
+    "db:push": "set DATABASE_URL=file:./ultron.db&& prisma db push --skip-generate",
+    "db:studio": "set DATABASE_URL=file:./ultron.db&& prisma studio",
     "test:router": "tsx scripts/router-eval.ts",
     "lint": "oxlint",
     "preview": "vite preview",
@@ -57,6 +60,7 @@
     }
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
     "@types/katex": "^0.16.8",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -87,6 +91,7 @@
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.71.0",
+    "prisma": "^6.19.0",
     "tsx": "^4.22.4",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"

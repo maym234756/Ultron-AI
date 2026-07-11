@@ -29,12 +29,16 @@ import { buildExternalConnectorAnswer, findConnectorsForText, getConnectorStatus
 import { addConnectorAuditEntry, getConnectorSetupSnapshot, getConnectorSetupState, updateConnectorSetup } from './connectorSetup.js'
 import { getConnectorActionSchemas, planConnectorAction } from './connectorActions.js'
 import { buildSelfUpgradePrompt, getSelfUpgradeSnapshot, getUpgradePack, recordSelfUpgradeRun, updateSelfUpgradeBacklogItem } from './selfUpgrade.js'
-import { PROJECT_TEMPLATES, buildProject } from './projectBuilder.js'
+import { PROJECT_TEMPLATES, buildProject, getCodingToolchainStatus } from './projectBuilder.js'
 import type { ProjectTemplateId } from './projectBuilder.js'
 import { listProjectRecords, rememberProject, runProjectAction } from './projectMemory.js'
 import type { ProjectAction } from './projectMemory.js'
 import { buildReferenceProject, scanReference } from './referenceBuilder.js'
 import { previewPromptRoute } from './promptRouter.js'
+import {
+  createCredential, currentUser, deleteCredential, identityStatus, listCredentials,
+  loginUser, logoutUser, registerUser, revealCredentialSecret,
+} from './identityVault.js'
 import {
   scanForIssues, getHealerState, canHeal, setHealingStatus, addHealLog,
   buildHealerPrompt,
@@ -498,8 +502,96 @@ app.get('/api/latency/status', (_request, response) => {
   })
 })
 
+function bearerToken(request: express.Request): string | undefined {
+  const header = request.header('authorization') ?? ''
+  const match = header.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]
+}
+
+app.get('/api/auth/status', async (_request, response) => {
+  response.json(await identityStatus())
+})
+
+app.get('/api/auth/me', async (request, response) => {
+  response.json({ user: await currentUser(bearerToken(request)) })
+})
+
+app.post('/api/auth/register', async (request, response) => {
+  try {
+    response.json(await registerUser(request.body ?? {}))
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Ultron identity' })
+  }
+})
+
+app.post('/api/auth/login', async (request, response) => {
+  try {
+    response.json(await loginUser(request.body ?? {}))
+  } catch (err) {
+    response.status(401).json({ error: err instanceof Error ? err.message : 'Login failed' })
+  }
+})
+
+app.post('/api/auth/logout', async (request, response) => {
+  await logoutUser(bearerToken(request))
+  response.json({ ok: true })
+})
+
+async function requireAuth(request: express.Request, response: express.Response): Promise<Awaited<ReturnType<typeof currentUser>> | null> {
+  const user = await currentUser(bearerToken(request))
+  if (!user) response.status(401).json({ error: 'Sign in to Ultron first.' })
+  return user
+}
+
+app.get('/api/credentials', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  response.json({ credentials: await listCredentials(user.id) })
+})
+
+app.post('/api/credentials', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    response.json({ id: await createCredential(user.id, request.body ?? {}) })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not save credential' })
+  }
+})
+
+app.post('/api/credentials/:id/reveal', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    response.json(await revealCredentialSecret(user.id, request.params.id))
+  } catch (err) {
+    response.status(404).json({ error: err instanceof Error ? err.message : 'Credential not found' })
+  }
+})
+
+app.delete('/api/credentials/:id', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  await deleteCredential(user.id, request.params.id)
+  response.json({ ok: true })
+})
+
 app.get('/api/project-builder/templates', (_request, response) => {
   response.json({ templates: PROJECT_TEMPLATES })
+})
+
+app.get('/api/project-builder/toolchain', async (_request, response) => {
+  response.json(await getCodingToolchainStatus())
+})
+
+app.post('/api/project-builder/select-folder', async (request, response) => {
+  try {
+    const body = request.body as { basePath?: string } | undefined
+    const selectedPath = await selectProjectDestinationFolder(body?.basePath)
+    response.json(selectedPath ? { cancelled: false, path: selectedPath } : { cancelled: true })
+  } catch (err) {
+    response.status(500).json({ error: err instanceof Error ? err.message : 'Folder picker failed' })
+  }
 })
 
 app.post('/api/project-builder/build', async (request, response) => {
@@ -1436,6 +1528,55 @@ app.post('/api/followups', async (req, res) => {
 // Supports: Python, JavaScript, TypeScript, Bash, PowerShell
 const execAsync = promisify(exec)
 
+type ExecError = Error & { code?: number | string; stdout?: string; stderr?: string }
+
+function expandLocalPath(value: string | undefined): string {
+  const fallback = os.homedir()
+  if (!value?.trim()) return fallback
+  return path.resolve(value.trim().replace(/^~(?=[/\\]|$)/, fallback))
+}
+
+function nearestExistingDirectory(value: string | undefined): string {
+  let candidate = expandLocalPath(value)
+  while (!fs.existsSync(candidate) && path.dirname(candidate) !== candidate) candidate = path.dirname(candidate)
+  if (!fs.existsSync(candidate)) return os.homedir()
+  const stat = fs.statSync(candidate)
+  return stat.isDirectory() ? candidate : path.dirname(candidate)
+}
+
+async function selectProjectDestinationFolder(basePath: string | undefined): Promise<string | null> {
+  const initialPath = nearestExistingDirectory(basePath)
+  const script = `
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Choose where Ultron should create the project folder'
+$dialog.ShowNewFolderButton = $true
+if ($env:ULTRON_INITIAL_DIR -and (Test-Path -LiteralPath $env:ULTRON_INITIAL_DIR)) {
+  $dialog.SelectedPath = (Resolve-Path -LiteralPath $env:ULTRON_INITIAL_DIR).Path
+}
+$result = $dialog.ShowDialog()
+if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
+  [Console]::Out.WriteLine($dialog.SelectedPath)
+  exit 0
+}
+exit 2
+`
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  try {
+    const { stdout } = await execAsync(`powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, {
+      env: { ...process.env, ULTRON_INITIAL_DIR: initialPath },
+      timeout: 5 * 60 * 1000,
+      windowsHide: false,
+    })
+    return stdout.trim().split(/\r?\n/).find(Boolean) ?? null
+  } catch (err) {
+    const execError = err as ExecError
+    if (Number(execError.code) === 2) return null
+    const detail = (execError.stderr || execError.stdout || execError.message).trim()
+    throw new Error(detail || 'Could not open the Windows folder picker')
+  }
+}
+
 // ── Serve local image files (Desktop screenshots, generated images) ──────────
 // Security: restricted to home directory, image extensions only
 const IMAGE_MIME: Record<string, string> = {
@@ -2343,10 +2484,10 @@ async function askSsePermission(response: express.Response, question: string, co
   return isApprovalText(answer)
 }
 
-async function askSseText(response: express.Response, question: string, context: string): Promise<string> {
+async function askSseText(response: express.Response, question: string, context: string, mode?: string, defaultAnswer?: string): Promise<string> {
   const id = `ask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   sendEvent(response, 'agent_task_state', { status: 'needs_user_input', detail: question })
-  sendEvent(response, 'question', { id, question, context, kind: 'question' })
+  sendEvent(response, 'question', { id, question, context, kind: 'question', mode, defaultAnswer })
   return new Promise<string>((resolve) => {
     const timeout = setTimeout(() => {
       pendingAnswers.delete(id)
@@ -2369,7 +2510,18 @@ function templateForProjectPrompt(text: string): ProjectTemplateId {
   return 'vanilla-ts'
 }
 
-const DEFAULT_PROJECT_BASE = '~/Ultron Projects'
+const DEFAULT_PROJECT_BASE = '~'
+
+function inferProjectNameFromPrompt(text: string): string {
+  const explicit = text.match(/\b(?:called|named|titled|name it|title it)\s+["']?([a-z0-9][a-z0-9 ._-]{1,60})["']?/i)
+  const positional = text.match(/\b(?:build|create|make|start|scaffold|set up)\s+(?:a|an|the)?\s*([a-z0-9][a-z0-9._-]{1,60})\s+(?:website|web site|web app|app|application|project|dashboard|api|tool|program)\b/i)
+  const raw = explicit?.[1] ?? positional?.[1] ?? ''
+  const cleaned = raw
+    .replace(/\b(?:website|web site|web app|app|application|project|dashboard|api|tool|program)\b.*$/i, '')
+    .replace(/\b(?:with|for|that|which|where|and)\b.*$/i, '')
+    .trim()
+  return cleaned || 'my-project'
+}
 
 function normalizeProjectLocationHint(value: string): string {
   const hint = value.trim().replace(/^['"]|['"]$/g, '')
@@ -2407,6 +2559,7 @@ function parseProjectSetupAnswer(answer: string): { projectName: string; basePat
 async function streamProjectBuilderKickoff(response: express.Response, prompt: string): Promise<void> {
   const templateId = templateForProjectPrompt(prompt)
   const template = PROJECT_TEMPLATES.find(item => item.id === templateId) ?? PROJECT_TEMPLATES[0]
+  const suggestedName = inferProjectNameFromPrompt(prompt)
   sendEvent(response, 'agent_plan', {
     plan: {
       goal: 'Create a new programming project',
@@ -2422,8 +2575,10 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
 
   const projectSetupAnswer = await askSseText(
     response,
-    'What should I call it, and where should I put it?',
-    `Template: ${template.label}\nDefault: ${DEFAULT_PROJECT_BASE}\nExamples: customer-portal | landing-page on Desktop | api-service at C:\\Projects | choose for me.`
+    'What should I call it, and which parent folder should I put it inside?',
+    `Template: ${template.label}\nDefault parent: ${DEFAULT_PROJECT_BASE}\nUltron will create a new folder named after the project inside the parent folder you choose. Examples: ${suggestedName} | landing-page on Desktop | api-service at C:\\Projects.`,
+    'project_setup',
+    suggestedName
   )
   if (!projectSetupAnswer) {
     sendEvent(response, 'set_content', { content: 'No project name received, so I did not create anything.' })
@@ -2520,10 +2675,10 @@ async function streamDirectConnectorOpen(response: express.Response, target: { l
     plan: {
       goal: `Open ${target.label}`,
       assumptions: ['The user asked for a simple connector launch.'],
-      steps: [`Open ${target.url} in the default browser.`],
-      toolsNeeded: ['open_browser'],
-      verificationMethod: 'Tool result confirms the browser launch command was issued.',
-      doneCondition: `${target.label} URL has been opened.`,
+      steps: [`Focus an existing ${target.label} browser tab if one is already open.`, `Open ${target.url} only if no matching tab exists.`],
+      toolsNeeded: ['focus_tab', 'open_browser'],
+      verificationMethod: 'Tool result confirms an existing tab was focused or the browser launch command was issued.',
+      doneCondition: `${target.label} is visible in the browser.`,
       taskSize: 'simple',
       toolBudget: 1,
     },
@@ -2541,12 +2696,22 @@ async function streamDirectConnectorOpen(response: express.Response, target: { l
     response.end()
     return
   }
-  sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Opening ${target.label} directly; skipping model inference.` })
-  sendEvent(response, 'tool_call', { id: toolCallId, name: 'open_browser', args: { url: target.url } })
-  const result = await executeTool('open_browser', { url: target.url })
-  sendEvent(response, 'tool_result', { id: toolCallId, name: 'open_browser', result })
+  sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Looking for an existing ${target.label} tab before opening a new one.` })
+  sendEvent(response, 'tool_call', { id: toolCallId, name: 'focus_tab', args: { title: target.label } })
+  let result = await executeTool('focus_tab', { title: target.label })
+  let toolName = 'focus_tab'
+  if (/^No tab found/i.test(result) || /timed out/i.test(result)) {
+    sendEvent(response, 'tool_result', { id: toolCallId, name: 'focus_tab', result })
+    const openCallId = crypto.randomUUID()
+    sendEvent(response, 'tool_call', { id: openCallId, name: 'open_browser', args: { url: target.url } })
+    result = await executeTool('open_browser', { url: target.url })
+    toolName = 'open_browser'
+    sendEvent(response, 'tool_result', { id: openCallId, name: 'open_browser', result })
+  } else {
+    sendEvent(response, 'tool_result', { id: toolCallId, name: 'focus_tab', result })
+  }
   sendEvent(response, 'agent_task_state', { status: 'done', detail: 'Single-action connector launch completed.' })
-  sendEvent(response, 'token', { token: result })
+  sendEvent(response, 'token', { token: toolName === 'focus_tab' ? `${result}\nReused existing ${target.label} tab.` : result })
   sendEvent(response, 'done', { ok: true, fastPath: 'direct_connector_open' })
   response.end()
 }
@@ -2557,10 +2722,10 @@ async function streamDirectWindowsAppOpen(response: express.Response, target: { 
     plan: {
       goal: `Open ${target.label}`,
       assumptions: ['The user asked for a simple local app launch.'],
-      steps: [`Open ${target.label} directly without model inference.`],
+      steps: [`Focus an existing ${target.label} window if one is already open.`, `Launch ${target.label} only if no matching window exists.`],
       toolsNeeded: ['open_app'],
-      verificationMethod: 'Tool result confirms the app launch command was issued.',
-      doneCondition: `${target.label} has been opened.`,
+      verificationMethod: 'Tool result confirms an existing window was focused or the app launch command was issued.',
+      doneCondition: `${target.label} is visible.`,
       taskSize: 'simple',
       toolBudget: 1,
     },
@@ -2581,6 +2746,7 @@ async function streamDirectWindowsAppOpen(response: express.Response, target: { 
   sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Opening ${target.label} directly; skipping model inference.` })
   const toolArgs: Record<string, string> = { app: target.app }
   if (target.args) toolArgs.args = target.args
+  toolArgs.reuse = 'true'
   sendEvent(response, 'tool_call', { id: toolCallId, name: 'open_app', args: toolArgs })
   const result = await executeTool('open_app', toolArgs)
   sendEvent(response, 'tool_result', { id: toolCallId, name: 'open_app', result })

@@ -4,7 +4,17 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { ProjectBuildResult } from './projectBuilder.js'
 
-export type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair'
+export type ProjectAction = 'openExplorer' | 'openVsCode' | 'openTerminal' | 'openProjectPlan' | 'runInstall' | 'runBuild' | 'runDevServer' | 'stopDevServer' | 'runRepair' | 'runSmartNextStep' | 'runPreviewAudit'
+
+export type ProjectMissionStatus = {
+  dependencyStatus: 'not_needed' | 'ready' | 'missing' | 'unknown'
+  checkStatus: 'passed' | 'failed' | 'needs_attention' | 'unknown'
+  devServerStatus: 'running' | 'stopped' | 'not_configured'
+  suggestedAction: ProjectAction | null
+  suggestedLabel: string
+  suggestedReason: string
+  blockers: string[]
+}
 
 export type ProjectRecord = {
   id: string
@@ -20,8 +30,11 @@ export type ProjectRecord = {
   createdAt: number
   updatedAt: number
   lastBuildStatus?: string
+  lastPreviewStatus?: string
+  lastPreviewScreenshot?: string
   lastAction?: string
   lastLog?: string
+  mission?: ProjectMissionStatus
 }
 
 type ProjectStore = {
@@ -118,6 +131,94 @@ async function patchProject(id: string, patch: Partial<ProjectRecord>): Promise<
   store.projects[index] = next
   await writeStore(store)
   return next
+}
+
+async function pathExists(value: string): Promise<boolean> {
+  try {
+    await fs.access(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function lastActionSucceeded(record: ProjectRecord, command: string | undefined): boolean {
+  if (!command || !record.lastAction?.includes(command)) return false
+  return !commandFailed(record.lastLog ?? '')
+}
+
+async function dependencyStatus(record: ProjectRecord): Promise<ProjectMissionStatus['dependencyStatus']> {
+  if (!record.installCommand) return 'not_needed'
+  if (lastActionSucceeded(record, record.installCommand)) return 'ready'
+  if (/python/i.test(record.stack) || /\.venv/i.test(record.installCommand)) {
+    return await pathExists(path.join(record.projectPath, '.venv', 'Scripts', 'python.exe')) ? 'ready' : 'missing'
+  }
+  if (/npm|pnpm|yarn/i.test(record.installCommand)) {
+    return await pathExists(path.join(record.projectPath, 'node_modules')) ? 'ready' : 'missing'
+  }
+  return 'unknown'
+}
+
+function checkStatus(record: ProjectRecord): ProjectMissionStatus['checkStatus'] {
+  const status = `${record.lastBuildStatus ?? ''} ${record.lastAction ?? ''} ${record.lastLog ?? ''}`
+  if (/check passed|repaired|check already passes|second check passed/i.test(status)) return 'passed'
+  if (/check failed|repair needs attention|second check still needs attention|\[exit code \d+\]|\bError:/i.test(status)) return 'failed'
+  if (/needs attention/i.test(status)) return 'needs_attention'
+  return 'unknown'
+}
+
+function actionLabel(action: ProjectAction | null): string {
+  if (action === 'runInstall') return 'Install dependencies'
+  if (action === 'runBuild') return 'Run check'
+  if (action === 'runRepair') return 'Fix build'
+  if (action === 'runDevServer') return 'Start dev server'
+  if (action === 'runPreviewAudit') return 'Audit preview'
+  if (action === 'openProjectPlan') return 'Open plan'
+  return 'Ready for feature work'
+}
+
+async function buildMissionStatus(record: ProjectRecord): Promise<ProjectMissionStatus> {
+  const dependencies = await dependencyStatus(record)
+  const checks = checkStatus(record)
+  const devServerStatus: ProjectMissionStatus['devServerStatus'] = record.devCommand
+    ? devServers.has(record.id) ? 'running' : 'stopped'
+    : 'not_configured'
+  const blockers: string[] = []
+  if (dependencies === 'missing') blockers.push('Dependencies are not installed yet.')
+  if (!record.buildCommand) blockers.push('No build/check command is configured.')
+  if (!record.devCommand) blockers.push('No dev server command is configured.')
+
+  let suggestedAction: ProjectAction | null = null
+  let suggestedReason = 'Build/check is passing and the latest preview audit is available or not needed.'
+  if (dependencies === 'missing' && record.installCommand) {
+    suggestedAction = 'runInstall'
+    suggestedReason = 'Install dependencies before running checks or previews.'
+  } else if ((checks === 'failed' || checks === 'needs_attention') && record.buildCommand) {
+    suggestedAction = 'runRepair'
+    suggestedReason = 'The last check needs attention, so run the automatic repair loop.'
+  } else if (checks === 'unknown' && record.buildCommand) {
+    suggestedAction = 'runBuild'
+    suggestedReason = 'Run the first check so Ultron has a reliable baseline.'
+  } else if (devServerStatus === 'stopped' && record.devCommand) {
+    suggestedAction = 'runDevServer'
+    suggestedReason = 'Checks look usable; start the dev server for preview work.'
+  } else if (devServerStatus === 'running' && record.previewUrl && record.lastPreviewStatus !== 'Preview audit passed') {
+    suggestedAction = 'runPreviewAudit'
+    suggestedReason = 'The preview is available; inspect the page for browser errors and capture screenshots.'
+  } else if (!record.buildCommand && !record.devCommand) {
+    suggestedAction = 'openProjectPlan'
+    suggestedReason = 'No runnable commands are configured, so open the plan and define the next implementation step.'
+  }
+
+  return {
+    dependencyStatus: dependencies,
+    checkStatus: checks,
+    devServerStatus,
+    suggestedAction,
+    suggestedLabel: actionLabel(suggestedAction),
+    suggestedReason,
+    blockers,
+  }
 }
 
 async function runCommand(command: string, cwd: string, timeoutSec = 240): Promise<string> {
@@ -343,6 +444,57 @@ async function runRepair(record: ProjectRecord): Promise<string> {
   ].join('\n')
 }
 
+async function runPreviewAudit(record: ProjectRecord): Promise<{ output: string; screenshotPath?: string; ok: boolean }> {
+  if (!record.previewUrl) return { ok: false, output: 'No preview URL is known yet. Start the dev server first.' }
+  const { chromium } = await import('playwright')
+  const screenshotDir = path.join(record.projectPath, '.ultron', 'screenshots')
+  await fs.mkdir(screenshotDir, { recursive: true })
+  const timestamp = Date.now()
+  const desktopPath = path.join(screenshotDir, `preview-desktop-${timestamp}.png`)
+  const mobilePath = path.join(screenshotDir, `preview-mobile-${timestamp}.png`)
+  const browser = await chromium.launch({ headless: true })
+  const issues: string[] = []
+  try {
+    const desktop = await browser.newPage({ viewport: { width: 1366, height: 768 } })
+    desktop.on('console', message => {
+      if (['error', 'warning'].includes(message.type())) issues.push(`console ${message.type()}: ${message.text()}`)
+    })
+    desktop.on('pageerror', error => issues.push(`page error: ${error.message}`))
+    const response = await desktop.goto(record.previewUrl, { waitUntil: 'networkidle', timeout: 20_000 })
+    const title = await desktop.title().catch(() => '')
+    const bodyText = (await desktop.locator('body').innerText({ timeout: 3_000 }).catch(() => '')).trim().slice(0, 800)
+    await desktop.screenshot({ path: desktopPath, fullPage: true })
+
+    const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true })
+    mobile.on('console', message => {
+      if (['error', 'warning'].includes(message.type())) issues.push(`mobile console ${message.type()}: ${message.text()}`)
+    })
+    mobile.on('pageerror', error => issues.push(`mobile page error: ${error.message}`))
+    await mobile.goto(record.previewUrl, { waitUntil: 'networkidle', timeout: 20_000 })
+    await mobile.screenshot({ path: mobilePath, fullPage: true })
+
+    const status = response?.status() ?? 0
+    const ok = status >= 200 && status < 400 && bodyText.length > 0 && issues.length === 0
+    return {
+      ok,
+      screenshotPath: desktopPath,
+      output: [
+        `Preview URL: ${record.previewUrl}`,
+        `HTTP status: ${status || 'unknown'}`,
+        `Title: ${title || '(none)'}`,
+        `Desktop screenshot: ${desktopPath}`,
+        `Mobile screenshot: ${mobilePath}`,
+        '',
+        bodyText ? `Visible text sample:\n${bodyText}` : 'Visible text sample: (empty page)',
+        '',
+        issues.length ? `Browser issues:\n${issues.slice(0, 12).map(item => `- ${item}`).join('\n')}` : 'Browser issues: none detected',
+      ].join('\n'),
+    }
+  } finally {
+    await browser.close().catch(() => undefined)
+  }
+}
+
 export async function rememberProject(result: ProjectBuildResult): Promise<ProjectRecord> {
   const store = await readStore()
   const id = projectId(result.projectPath)
@@ -372,7 +524,8 @@ export async function rememberProject(result: ProjectBuildResult): Promise<Proje
 
 export async function listProjectRecords(): Promise<ProjectRecord[]> {
   const store = await readStore()
-  return store.projects.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+  const sorted = store.projects.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+  return Promise.all(sorted.map(async project => ({ ...project, mission: await buildMissionStatus(project) })))
 }
 
 export async function runProjectAction(id: string, action: ProjectAction): Promise<{ record: ProjectRecord; output: string }> {
@@ -380,6 +533,29 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
   if (!record) throw new Error('Project is not in Ultron memory.')
 
   let output = ''
+  if (action === 'runSmartNextStep') {
+    const mission = record.mission ?? await buildMissionStatus(record)
+    if (!mission.suggestedAction) {
+      output = `No automatic next step is needed.\n\n${mission.suggestedReason}`
+      return { record: await patchProject(id, { lastAction: 'Smart Next Step found no required action.', lastLog: output }), output }
+    }
+    const result = await runProjectAction(id, mission.suggestedAction)
+    output = [
+      `Smart Next Step: ${mission.suggestedLabel}`,
+      mission.suggestedReason,
+      '',
+      result.output,
+    ].join('\n')
+    return {
+      record: await patchProject(id, {
+        lastAction: `Smart Next Step ran: ${mission.suggestedLabel}.`,
+        lastBuildStatus: result.record.lastBuildStatus,
+        previewUrl: result.record.previewUrl,
+        lastLog: output.slice(-6000),
+      }),
+      output,
+    }
+  }
   if (action === 'openExplorer') {
     output = await runCommand(`Start-Process explorer.exe -ArgumentList ${quotePowerShell(record.projectPath)}`, record.projectPath, 20)
     return { record: await patchProject(id, { lastAction: 'Opened project folder.', lastLog: output }), output }
@@ -426,6 +602,19 @@ export async function runProjectAction(id: string, action: ProjectAction): Promi
       record: await patchProject(id, {
         lastBuildStatus: commandFailed(output) ? 'Repair needs attention' : 'Repaired',
         lastAction: 'Ran automatic repair loop.',
+        lastLog: output.slice(-6000),
+      }),
+      output,
+    }
+  }
+  if (action === 'runPreviewAudit') {
+    const audit = await runPreviewAudit(record)
+    output = audit.output
+    return {
+      record: await patchProject(id, {
+        lastPreviewStatus: audit.ok ? 'Preview audit passed' : 'Preview audit needs attention',
+        lastPreviewScreenshot: audit.screenshotPath,
+        lastAction: 'Ran preview audit.',
         lastLog: output.slice(-6000),
       }),
       output,

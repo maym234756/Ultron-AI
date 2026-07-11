@@ -33,6 +33,13 @@ npm run desktop:dist
 
 The Windows installer is written to `desktop-release/Ultron-Setup-<version>.exe`.
 
+Overlay workflow:
+
+- `Ctrl+Shift+U` shows or hides Ultron from the tray.
+- `Ctrl+Shift+Space` toggles compact overlay mode. In overlay mode Ultron stays on top near the bottom of the screen, so you can type prompts while keeping File Explorer, PowerShell, a browser, or another app visible underneath.
+- Ultron uses a reuse-first workflow for external surfaces: if File Explorer, PowerShell, CMD, Gmail, Salesforce, or another browser tab/window is already open, follow-up actions should focus or navigate that existing surface before opening a duplicate.
+- Browser automation includes a target-discovery step for complex pages: `browser_find_targets` can list buttons, links, search boxes, inputs, selectors, and labels before Ultron clicks or types.
+
 GitHub downloads are produced by `.github/workflows/desktop-release.yml`:
 
 - Run the **Desktop Release** workflow manually to create a downloadable installer artifact.
@@ -48,13 +55,26 @@ Copy `.env.example` to `.env` or set environment variables in your shell:
 $env:PORT = "8787"
 $env:OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 $env:OLLAMA_MODEL = "llama3.2"
+$env:DATABASE_URL = "file:./ultron.db"
 npm run dev
 ```
+
+## Local Identity Vault
+
+Ultron includes a local Prisma + SQLite identity vault. On first launch, create a local Ultron login. After signing in, use the **Vault** panel to store usernames, emails, passwords, tokens, and notes for external apps/connectors.
+
+- Passwords for the Ultron login are hashed with Node `scrypt`.
+- Credential secrets and notes are encrypted locally with AES-256-GCM using a machine-specific key.
+- The SQLite database is local-only and ignored by Git.
+- Open Prisma Studio with `npm run db:studio` to inspect the local database.
 
 ## Scripts
 
 - `npm run dev` starts the API and web app together.
 - `npm run build` type-checks and builds both frontend and backend.
+- `npm run db:generate` regenerates the Prisma client.
+- `npm run db:push` syncs the Prisma schema into the local SQLite database.
+- `npm run db:studio` opens Prisma Studio for the local Ultron database.
 - `npm run start` runs the production server from `dist-server` and serves the built frontend from `dist`.
 - `npm run lint` runs Oxlint.
 

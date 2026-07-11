@@ -208,8 +208,8 @@ function inferToolsNeeded(prompt: string): string[] {
   const text = prompt.toLowerCase()
   const tools = new Set<string>()
   if (/\b(browser|website|web|gmail|salesforce|youtube|sheets|click|login|tab|page)\b/.test(text)) tools.add('browser tools')
-  if (/\b(file|folder|directory|read|write|edit|code|repo|workspace)\b/.test(text)) tools.add('file/code tools')
-  if (/\b(run|build|test|lint|terminal|command|install|execute)\b/.test(text)) tools.add('terminal tools')
+  if (/\b(file|folder|directory|read|write|edit|code|repo|workspace|find|grep|search files?|filename|where is)\b/.test(text)) tools.add('fast file/code search tools')
+  if (/\b(run|build|test|lint|terminal|command|install|execute|cmd|command prompt|powershell|shell)\b/.test(text)) tools.add('terminal tools')
   if (/\b(search|research|latest|current|source|cite|look up)\b/.test(text)) tools.add('search/RAG tools')
   if (/\b(screen|screenshot|desktop|window|app)\b/.test(text)) tools.add('desktop/screen tools')
   return tools.size > 0 ? [...tools] : ['no tool required unless verification is needed']
@@ -264,6 +264,7 @@ For agent tasks, follow the task plan and current tool budget from the runtime.
 State transitions are: Planning → Using tools → Verifying → Done, or Needs user input when blocked.
 If a tool fails:
 • Browser selector fails → try text locator, accessible label, or page read before retrying.
+• Browser target is unclear → call browser_find_targets with the visible label/query and choose the best selector before clicking or typing.
 • Command fails → parse the error, repair the likely cause, then rerun the narrowest check.
 • File missing → search nearby paths before giving up.
 • Tool unavailable → explain the fallback and use the next best tool.
@@ -297,6 +298,14 @@ To call a tool, output ONLY a JSON object on a single line — no code blocks, n
    • focus_tab   = switch to an ALREADY OPEN tab in the user's real browser (Chrome/Edge/etc.)
    • open_browser = open a NEW URL (only when no existing tab should be used)
    Never use open_browser if the user just wants to SEE or SWITCH TO an existing tab.
+
+  EXISTING SURFACE RULE: If the user has already opened an external surface (File Explorer,
+  PowerShell/CMD/Terminal, Salesforce, Gmail, GitHub, browser page, etc.) and then asks for
+  the next step inside it, reuse that existing surface. For browsers, use list_tabs/focus_tab
+  for visible switching, or browser_connect_chrome then browser_use_tab before browser_click,
+  browser_fill, browser_type, or browser_go. For local apps, use desktop_find_window or
+  open_app with reuse enabled. Only open a new tab/window when no matching existing surface
+  can be found or the user explicitly asks for a new one.
 
 4. Only call extra tools when the task genuinely requires more information. Do not "explore" after a task is done.
 
@@ -333,7 +342,7 @@ To call a tool, output ONLY a JSON object on a single line — no code blocks, n
     This executes both tools in parallel and saves significant time. Only use for genuinely independent operations.
 
 ── SYSTEM TOOLS ──────────────────────────────────────────────────────────────
-run_terminal      – {command, cwd?}            – run PowerShell
+run_terminal      – {command, shell?, cwd?}    – run PowerShell by default; use shell:"cmd" for Command Prompt commands
 open_app          – {app, args?}               – open cmd, powershell, notepad, vscode, calc, paint, explorer, chrome, edge…
 take_screenshot   – {filename?}               – capture screen to Desktop PNG
 clipboard_read/write – {text?}               – read/write clipboard
@@ -381,6 +390,7 @@ browser_scroll    – {direction?, amount?, selector?} – scroll page or to ele
 browser_check     – {selector, checked?}        – check/uncheck checkbox
 browser_select    – {selector, value?, label?}  – dropdown select
 browser_read      – {section?}                  – read page: text, fields, links
+browser_find_targets – {query?, kind?, limit?}  – find actionable controls/selectors for complex pages
 browser_get_text  – {selector, all?}            – get element text
 browser_get_attr  – {selector, attr}            – get HTML attribute (href, value…)
 browser_find_text – {text}                      – find text on page + context
@@ -399,6 +409,7 @@ browser_compose_reply – {body, send?}           – reply to open email
 browser_new_tab   – {url?}                      – new tab
 browser_tabs      – {}                          – list tabs
 browser_switch_tab– {index}                     – switch tab
+browser_use_tab   – {query}                     – reuse existing automation tab by title or URL
 browser_close_tab – {index?}                    – close tab
 browser_close     – {}                          – close browser
 
@@ -406,7 +417,7 @@ browser_close     – {}                          – close browser
 run_code          – {file, args?, cwd?}        – run .py .ts .js .ps1 .sh .go .rb
 lint_code         – {path, type?, fix?}        – tsc/eslint/pylint
 open_in_editor    – {path, line?, column?}     – open in VS Code
-code_search       – {pattern, directory?, include?} – grep codebase
+code_search       – {pattern, directory?, include?, mode?, regex?, max_results?} – fast rg-style code/filename search
 diff_files        – {file1, file2}            – unified diff
 patch_file        – {file, patch}             – apply patch
 
@@ -476,7 +487,7 @@ file_write        – {path, content, append?}   – write/create file anywhere 
 file_list         – {path?, recursive?}        – list directory (default: Desktop)
 file_move         – {from, to}                 – move or rename
 file_delete       – {path}                     – delete (confirm with user first!)
-file_search       – {query, path?, extension?, max_results?} – grep across files
+file_search       – {query, path?, extension?, mode?, regex?, max_results?} – fast content or filename search across user files
 file_info         – {path}                     – get size, dates, type
 folder_create     – {path, open?}             – create folder anywhere (~/Downloads/MyFolder, C:/Projects/App); set open:"true" to show it in Explorer immediately
 folder_delete     – {path}                    – delete folder recursively (confirm first!)
