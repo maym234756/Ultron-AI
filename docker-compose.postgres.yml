@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ultron-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ULTRON_POSTGRES_USER:-ultron}
+      POSTGRES_PASSWORD: ${ULTRON_POSTGRES_PASSWORD:-ultron_dev_password}
+      POSTGRES_DB: ${ULTRON_POSTGRES_DB:-ultron}
+    ports:
+      - "${ULTRON_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ULTRON_POSTGRES_USER:-ultron} -d ${ULTRON_POSTGRES_DB:-ultron}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - ultron-postgres-data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: ultron-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ULTRON_ADMINER_PORT:-8088}:8080"
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: ultron-mailpit
+    restart: unless-stopped
+    ports:
+      - "${ULTRON_MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${ULTRON_MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  ultron-postgres-data:

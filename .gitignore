@@ -34,6 +34,7 @@ release
 .rag-store.jsonl
 .schedule-logs/
 .healer-log.jsonl
+prisma/generated/
 .env
 .env.local
 *.bak

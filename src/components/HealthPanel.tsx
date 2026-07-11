@@ -135,6 +135,57 @@ export function HealthPanel({ apiBase, onClose }: Props) {
 
               <section className="diagnostics-panel">
                 <div className="diagnostics-header">
+                  <span className="settings-section-title">Deployment Readiness</span>
+                  <p>{status.runtime.readiness.summary}</p>
+                </div>
+
+                <div className="diagnostics-columns">
+                  {status.runtime.readiness.checks.map(check => (
+                    <div key={check.id} className="diagnostics-card">
+                      <strong>{check.label}</strong>
+                      <span>{check.ok ? 'Ready' : 'Needs work'} · {check.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="diagnostics-panel">
+                <div className="diagnostics-header">
+                  <span className="settings-section-title">Runtime Stack</span>
+                  <p>{status.runtime.database.provider === 'postgresql' ? 'Postgres-backed runtime' : 'SQLite-backed runtime'}</p>
+                </div>
+
+                <div className="diagnostics-columns">
+                  <div className="diagnostics-card">
+                    <strong>Database</strong>
+                    <span>{status.runtime.database.provider} · {status.runtime.database.target}</span>
+                  </div>
+                  <div className="diagnostics-card">
+                    <strong>Identity</strong>
+                    <span>{status.runtime.identity.userCount} account(s) · {status.runtime.identity.organizationCount} org(s) · {status.runtime.identity.platformAdminCount} platform admin(s)</span>
+                  </div>
+                  <div className="diagnostics-card">
+                    <strong>Auth Delivery</strong>
+                    <span>{status.runtime.auth.deliveryMode} · {status.runtime.auth.deliveryDetail}</span>
+                  </div>
+                  <div className="diagnostics-card">
+                    <strong>Session Cookie</strong>
+                    <span>{status.runtime.auth.sessionCookie} · SameSite {status.runtime.auth.sameSite} · {status.runtime.auth.secure ? 'secure' : 'local dev'}</span>
+                  </div>
+                </div>
+
+                <div className="diagnostics-card">
+                  <strong>Local Services</strong>
+                  {status.runtime.localServices.some(service => service.enabled)
+                    ? status.runtime.localServices.filter(service => service.enabled).map(service => (
+                      <a key={service.id} href={service.url} target="_blank" rel="noreferrer">{service.label} · {service.url}</a>
+                    ))
+                    : <span>No local service links are active for this runtime.</span>}
+                </div>
+              </section>
+
+              <section className="diagnostics-panel">
+                <div className="diagnostics-header">
                   <span className="settings-section-title">Local Diagnostics</span>
                   <p>{telemetry.totals.count} captured responses · {telemetry.totals.errors} error(s)</p>
                 </div>

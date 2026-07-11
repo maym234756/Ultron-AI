@@ -1950,6 +1950,165 @@ html.dark .app-shell.quiet-ui {
   font-size: 12px;
 }
 
+.org-hero {
+  background: color-mix(in srgb, #0f766e 10%, var(--surface));
+}
+
+.org-admin-hero {
+  background: color-mix(in srgb, #1d4ed8 9%, var(--surface));
+}
+
+.org-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.org-summary-card,
+.org-admin-org,
+.org-member-card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.org-summary-card {
+  display: grid;
+  gap: 4px;
+}
+
+.org-summary-card strong {
+  color: var(--fg);
+  font-size: 24px;
+}
+
+.org-summary-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.org-card-stack,
+.org-admin-members {
+  display: grid;
+  gap: 10px;
+}
+
+.org-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.org-invite-form {
+  grid-template-columns: minmax(0, 1.3fr) minmax(150px, 0.7fr) auto;
+}
+
+.org-member-card {
+  display: grid;
+  gap: 10px;
+}
+
+.org-member-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.org-member-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.org-member-meta strong {
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.org-member-meta span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.org-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.org-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.org-badge.owner {
+  border-color: color-mix(in srgb, #ca8a04 40%, var(--border));
+  background: color-mix(in srgb, #ca8a04 10%, var(--surface));
+  color: #854d0e;
+}
+
+.org-badge.member {
+  border-color: color-mix(in srgb, #0f766e 24%, var(--border));
+  background: color-mix(in srgb, #0f766e 7%, var(--surface));
+  color: #0f766e;
+}
+
+.org-badge.admin {
+  border-color: color-mix(in srgb, #1d4ed8 26%, var(--border));
+  background: color-mix(in srgb, #1d4ed8 8%, var(--surface));
+  color: #1d4ed8;
+}
+
+.org-badge.verified {
+  border-color: color-mix(in srgb, #15803d 24%, var(--border));
+  background: color-mix(in srgb, #15803d 8%, var(--surface));
+  color: #15803d;
+}
+
+.org-badge.invite {
+  border-color: color-mix(in srgb, #b45309 24%, var(--border));
+  background: color-mix(in srgb, #b45309 8%, var(--surface));
+  color: #b45309;
+}
+
+.org-invite-note {
+  overflow-wrap: anywhere;
+}
+
+.auth-invite-note {
+  border: 1px solid color-mix(in srgb, #0f766e 22%, var(--line));
+  background: color-mix(in srgb, #0f766e 8%, white);
+}
+
+.org-admin-org {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .org-inline-form,
+  .org-invite-form {
+    grid-template-columns: 1fr;
+  }
+
+  .org-member-head {
+    flex-direction: column;
+  }
+}
+
 .reference-upload {
   min-height: 40px;
   display: inline-flex;

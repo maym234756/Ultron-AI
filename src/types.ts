@@ -145,6 +145,41 @@ export type CapabilityStatus = {
   models: string[]
   defaultModel: string
   toolCount: number
+  runtime: {
+    database: {
+      provider: 'sqlite' | 'postgresql'
+      target: string
+    }
+    identity: {
+      configured: boolean
+      userCount: number
+      organizationCount: number
+      platformAdminCount: number
+    }
+    auth: {
+      deliveryMode: 'debug' | 'smtp'
+      deliveryDetail: string
+      sessionCookie: string
+      sameSite: 'lax' | 'strict' | 'none'
+      secure: boolean
+    }
+    readiness: {
+      ready: boolean
+      summary: string
+      checks: Array<{
+        id: string
+        label: string
+        ok: boolean
+        detail: string
+      }>
+    }
+    localServices: Array<{
+      id: string
+      label: string
+      url: string
+      enabled: boolean
+    }>
+  }
   statuses: CapabilityStatusRow[]
 }
 

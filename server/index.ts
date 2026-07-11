@@ -11,6 +11,9 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { sendEvent, pendingAnswers } from './shared.js'
 import { backendRuntimeMiddleware, backendRuntimeSnapshot, collectBackendRoutes, recordRuntimeEvent } from './backendStatus.js'
+import { authRateLimit } from './authRateLimit.js'
+import { AUTH_COOKIE_DOMAIN, AUTH_COOKIE_SAME_SITE, AUTH_COOKIE_SECURE, AUTH_SESSION_COOKIE, clearSessionCookie, readSessionCookie, setSessionCookie } from './authCookies.js'
+import { authDeliveryStatus } from './authMailer.js'
 import { runAgent, runAgentHeadless } from './agent.js'
 import type { AgentOptions } from './agent.js'
 import { startScheduler } from './tools/scheduler.js'
@@ -36,9 +39,35 @@ import type { ProjectAction } from './projectMemory.js'
 import { buildReferenceProject, scanReference } from './referenceBuilder.js'
 import { previewPromptRoute } from './promptRouter.js'
 import {
-  createCredential, currentUser, deleteCredential, identityStatus, listCredentials,
-  loginUser, logoutUser, registerUser, revealCredentialSecret,
+  acceptIncomingOrganizationInvite,
+  acceptOrganizationInvite,
+  cancelOrganizationInvite,
+  confirmEmailVerification,
+  createCredential,
+  createOrganizationInvite,
+  currentUser,
+  deleteCredential,
+  identityOverview,
+  identityStatus,
+  leaveOrganization,
+  listCredentials,
+  listIncomingOrganizationInvites,
+  loginUser,
+  logoutUser,
+  organizationOverview,
+  previewOrganizationInvite,
+  registerUser,
+  removeOrganizationMember,
+  renameOrganization,
+  requestEmailVerification,
+  requestPasswordReset,
+  resetPassword,
+  revealCredentialSecret,
+  setOrganizationMemberRole,
+  setPlatformAdmin,
+  transferOrganizationOwnership,
 } from './identityVault.js'
+import { databaseProvider, databaseUrl } from './prisma.js'
 import {
   scanForIssues, getHealerState, canHeal, setHealingStatus, addHealLog,
   buildHealerPrompt,
@@ -78,6 +107,48 @@ type OllamaModel = {
   }
 }
 
+function summarizeDatabaseTarget(url: string): string {
+  if (/^postgres(ql)?:\/\//i.test(url)) {
+    try {
+      const target = new URL(url)
+      const databaseName = target.pathname.replace(/^\//, '') || 'postgres'
+      return `${target.hostname}:${target.port || '5432'}/${databaseName}`
+    } catch {
+      return 'Postgres configured'
+    }
+  }
+
+  if (url.toLowerCase().startsWith('file:')) {
+    const pathname = url.slice('file:'.length)
+    const normalized = pathname.replace(/\\/g, '/').split('/').filter(Boolean)
+    return normalized.at(-1) ?? 'ultron.db'
+  }
+
+  return url
+}
+
+function isLocalHostname(value: string | null | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '0.0.0.0'
+}
+
+function isLocalOrigin(value: string | undefined): boolean {
+  if (!value?.trim()) return true
+  try {
+    return isLocalHostname(new URL(value).hostname)
+  } catch {
+    return true
+  }
+}
+
+function hasDeploySafeEncryptionKey(value: string | undefined): boolean {
+  const key = value?.trim()
+  if (!key) return false
+  if (key.length < 24) return false
+  return !/local-dev|change-before-deploy|replace-with-a-long-random-secret/i.test(key)
+}
+
 type OllamaTagsResponse = {
   models?: OllamaModel[]
 }
@@ -97,6 +168,7 @@ type OllamaChatChunk = {
 }
 
 const app = express()
+app.set('trust proxy', true)
 const port = Number(process.env.PORT ?? 8787)
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
 const defaultModel = process.env.OLLAMA_MODEL ?? 'qwen2.5:14b'
@@ -263,7 +335,26 @@ function buildInferenceOptions(
   }
 }
 
-app.use(cors())
+const configuredOrigins = (process.env.APP_ORIGIN ?? '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...configuredOrigins,
+])
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true)
+      return
+    }
+    callback(new Error('Origin not allowed by Ultron auth policy.'))
+  },
+  credentials: true,
+}))
 app.use(express.json({ limit: '8mb' }))
 app.use(backendRuntimeMiddleware())
 
@@ -394,6 +485,34 @@ app.get('/api/capabilities/status', async (_request, response) => {
     detail: `${runtime.traffic.activeRequests} active request(s), ${runtime.traffic.activeStreams} stream(s), ${runtime.traffic.recentErrorCount} recent error(s), ${runtime.inventory.apiRoutes} route(s) tracked`,
   })
 
+  const delivery = authDeliveryStatus()
+  const identity = await identityStatus()
+  const databaseLabel = databaseProvider === 'postgresql' ? 'Postgres runtime' : 'SQLite runtime'
+  statusRows.push({
+    id: 'database',
+    label: 'Database engine',
+    ok: true,
+    detail: `${databaseLabel} · ${summarizeDatabaseTarget(databaseUrl)}`,
+  })
+  statusRows.push({
+    id: 'identity',
+    label: 'Identity vault',
+    ok: true,
+    detail: `${identity.userCount} account(s) · ${identity.organizationCount} organization(s) · ${identity.platformAdminCount} platform admin(s)${identity.configured ? '' : ' · first account not created yet'}`,
+  })
+  statusRows.push({
+    id: 'auth-delivery',
+    label: 'Auth delivery',
+    ok: delivery.ok,
+    detail: delivery.detail,
+  })
+  statusRows.push({
+    id: 'auth-session',
+    label: 'Session cookie',
+    ok: true,
+    detail: `${AUTH_SESSION_COOKIE} · SameSite=${AUTH_COOKIE_SAME_SITE} · ${AUTH_COOKIE_SECURE ? 'Secure' : 'Not secure'}${AUTH_COOKIE_DOMAIN ? ` · domain ${AUTH_COOKIE_DOMAIN}` : ''}`,
+  })
+
   const connectorSnapshot = getConnectorStatusSnapshot(toolDefinitions.map(tool => tool.function.name), process.env)
   statusRows.push({
     id: 'connectors',
@@ -440,6 +559,60 @@ app.get('/api/capabilities/status', async (_request, response) => {
   }
 
   const healthy = statusRows.every(row => row.ok)
+  const localServices = [
+    { id: 'adminer', label: 'Adminer', url: `http://127.0.0.1:${process.env.ULTRON_ADMINER_PORT ?? '8088'}`, enabled: databaseProvider === 'postgresql' },
+    {
+      id: 'mailpit',
+      label: 'Mailpit',
+      url: `http://127.0.0.1:${process.env.ULTRON_MAILPIT_UI_PORT ?? '8025'}`,
+      enabled: delivery.resolvedMode === 'smtp' && (delivery.host === '127.0.0.1' || delivery.host === 'localhost'),
+    },
+  ]
+  const readinessChecks = [
+    {
+      id: 'database',
+      label: 'Production database',
+      ok: databaseProvider === 'postgresql',
+      detail: databaseProvider === 'postgresql'
+        ? `Postgres configured at ${summarizeDatabaseTarget(databaseUrl)}.`
+        : 'SQLite is still configured; switch DATABASE_URL to Postgres for deployed multi-user use.',
+    },
+    {
+      id: 'cookie-secure',
+      label: 'Secure session cookie',
+      ok: AUTH_COOKIE_SECURE,
+      detail: AUTH_COOKIE_SECURE
+        ? 'Secure cookie mode is enabled.'
+        : 'AUTH_COOKIE_SECURE is off; enable secure cookies behind HTTPS before public deployment.',
+    },
+    {
+      id: 'auth-delivery',
+      label: 'Public auth email delivery',
+      ok: delivery.resolvedMode === 'smtp' && !isLocalHostname(delivery.host),
+      detail: delivery.resolvedMode !== 'smtp'
+        ? 'Auth codes are not using SMTP; configure a mail provider before public launch.'
+        : isLocalHostname(delivery.host)
+          ? `SMTP is pointing to local inbox ${delivery.host}:${delivery.port ?? 1025}; switch to a real external provider.`
+          : delivery.detail,
+    },
+    {
+      id: 'app-origin',
+      label: 'Public app origin',
+      ok: !isLocalOrigin(process.env.APP_ORIGIN),
+      detail: !isLocalOrigin(process.env.APP_ORIGIN)
+        ? `APP_ORIGIN is set to ${process.env.APP_ORIGIN}.`
+        : 'APP_ORIGIN is local or unset; point it to your deployed app URL.',
+    },
+    {
+      id: 'encryption-key',
+      label: 'Credential encryption key',
+      ok: hasDeploySafeEncryptionKey(process.env.CREDENTIAL_ENCRYPTION_KEY),
+      detail: hasDeploySafeEncryptionKey(process.env.CREDENTIAL_ENCRYPTION_KEY)
+        ? 'Custom credential encryption key is configured.'
+        : 'CREDENTIAL_ENCRYPTION_KEY is missing or still using a local/dev placeholder.',
+    },
+  ]
+  const deploymentReady = readinessChecks.every(check => check.ok)
   response.json({
     healthy,
     checkedAt,
@@ -447,6 +620,33 @@ app.get('/api/capabilities/status', async (_request, response) => {
     models: modelNames,
     defaultModel,
     toolCount: toolDefinitions.length,
+    runtime: {
+      database: {
+        provider: databaseProvider,
+        target: summarizeDatabaseTarget(databaseUrl),
+      },
+      identity: {
+        configured: identity.configured,
+        userCount: identity.userCount,
+        organizationCount: identity.organizationCount,
+        platformAdminCount: identity.platformAdminCount,
+      },
+      auth: {
+        deliveryMode: delivery.resolvedMode,
+        deliveryDetail: delivery.detail,
+        sessionCookie: AUTH_SESSION_COOKIE,
+        sameSite: AUTH_COOKIE_SAME_SITE,
+        secure: AUTH_COOKIE_SECURE,
+      },
+      readiness: {
+        ready: deploymentReady,
+        summary: deploymentReady
+          ? 'Core deployment checks are satisfied.'
+          : `${readinessChecks.filter(check => !check.ok).length} deployment check(s) still need work.`,
+        checks: readinessChecks,
+      },
+      localServices,
+    },
     statuses: statusRows,
   })
 })
@@ -508,40 +708,365 @@ function bearerToken(request: express.Request): string | undefined {
   return match?.[1]
 }
 
+function authToken(request: express.Request): string | undefined {
+  return bearerToken(request) ?? readSessionCookie(request)
+}
+
+function sendSession(response: express.Response, session: { token: string; user: unknown; expiresAt: string }, extra: Record<string, unknown> = {}) {
+  setSessionCookie(response, session.token, new Date(session.expiresAt))
+  response.json({ user: session.user, expiresAt: session.expiresAt, ...extra })
+}
+
+async function finalizeSessionInvite(session: { token: string; user: { id: string }; expiresAt: string }, inviteTokenInput: unknown): Promise<{ session: { token: string; user: unknown; expiresAt: string }; inviteAccepted?: boolean; inviteError?: string }> {
+  const inviteToken = typeof inviteTokenInput === 'string' ? inviteTokenInput.trim() : ''
+  if (!inviteToken) return { session }
+
+  try {
+    await acceptOrganizationInvite(session.user.id, { token: inviteToken })
+    const user = await currentUser(session.token)
+    return {
+      session: { ...session, user: user ?? session.user },
+      inviteAccepted: true,
+    }
+  } catch (error) {
+    return {
+      session,
+      inviteAccepted: false,
+      inviteError: error instanceof Error ? error.message : 'Could not accept workspace invite.',
+    }
+  }
+}
+
+const registerRateLimit = authRateLimit({
+  id: 'register',
+  windowMs: 15 * 60_000,
+  max: 8,
+  key: request => String((request.body as { email?: string } | undefined)?.email ?? ''),
+})
+const loginRateLimit = authRateLimit({
+  id: 'login',
+  windowMs: 10 * 60_000,
+  max: 10,
+  key: request => String((request.body as { emailOrUsername?: string } | undefined)?.emailOrUsername ?? ''),
+})
+const verifyRateLimit = authRateLimit({
+  id: 'verify',
+  windowMs: 15 * 60_000,
+  max: 12,
+  key: request => String((request.body as { email?: string; emailOrUsername?: string } | undefined)?.email ?? (request.body as { emailOrUsername?: string } | undefined)?.emailOrUsername ?? ''),
+})
+const resetRateLimit = authRateLimit({
+  id: 'reset',
+  windowMs: 15 * 60_000,
+  max: 8,
+  key: request => String((request.body as { email?: string } | undefined)?.email ?? ''),
+})
+
 app.get('/api/auth/status', async (_request, response) => {
   response.json(await identityStatus())
 })
 
 app.get('/api/auth/me', async (request, response) => {
-  response.json({ user: await currentUser(bearerToken(request)) })
+  response.json({ user: await currentUser(authToken(request)) })
 })
 
-app.post('/api/auth/register', async (request, response) => {
+app.post('/api/auth/register', registerRateLimit, async (request, response) => {
   try {
-    response.json(await registerUser(request.body ?? {}))
+    const result = await registerUser(request.body ?? {})
+    response.status(202).json({
+      next: result.next,
+      email: result.email,
+      expiresAt: result.expiresAt,
+      delivery: result.delivery,
+      message: 'Enter the verification code to finish creating your account.',
+    })
   } catch (err) {
     response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Ultron identity' })
   }
 })
 
-app.post('/api/auth/login', async (request, response) => {
+app.post('/api/auth/login', loginRateLimit, async (request, response) => {
   try {
-    response.json(await loginUser(request.body ?? {}))
+    const result = await loginUser(request.body ?? {})
+    if (result.next === 'verify_email') {
+      response.status(403).json({
+        next: result.next,
+        email: result.email,
+        expiresAt: result.expiresAt,
+        delivery: result.delivery,
+        error: 'Verify your email before signing in.',
+      })
+      return
+    }
+    const finalized = await finalizeSessionInvite(result.session, (request.body as { inviteToken?: string } | undefined)?.inviteToken)
+    sendSession(response, finalized.session, {
+      inviteAccepted: finalized.inviteAccepted,
+      inviteError: finalized.inviteError,
+    })
   } catch (err) {
     response.status(401).json({ error: err instanceof Error ? err.message : 'Login failed' })
   }
 })
 
+app.post('/api/auth/verify/request', verifyRateLimit, async (request, response) => {
+  try {
+    const challenge = await requestEmailVerification(request.body ?? {})
+    response.json({
+      ok: true,
+      delivery: challenge?.delivery ?? null,
+      email: challenge?.email ?? null,
+      expiresAt: challenge?.expiresAt ?? null,
+      message: 'If the account exists and still needs verification, a code is ready.',
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not issue verification code' })
+  }
+})
+
+app.post('/api/auth/verify/confirm', verifyRateLimit, async (request, response) => {
+  try {
+    const session = await confirmEmailVerification(request.body ?? {})
+    const finalized = await finalizeSessionInvite(session, (request.body as { inviteToken?: string } | undefined)?.inviteToken)
+    sendSession(response, finalized.session, {
+      inviteAccepted: finalized.inviteAccepted,
+      inviteError: finalized.inviteError,
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Verification failed' })
+  }
+})
+
+app.post('/api/auth/password/request-reset', resetRateLimit, async (request, response) => {
+  try {
+    const challenge = await requestPasswordReset(request.body ?? {})
+    response.json({
+      ok: true,
+      delivery: challenge?.delivery ?? null,
+      email: challenge?.email ?? null,
+      expiresAt: challenge?.expiresAt ?? null,
+      message: 'If that email exists, a password reset code is ready.',
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not issue password reset code' })
+  }
+})
+
+app.post('/api/auth/password/reset', resetRateLimit, async (request, response) => {
+  try {
+    const session = await resetPassword(request.body ?? {})
+    const finalized = await finalizeSessionInvite(session, (request.body as { inviteToken?: string } | undefined)?.inviteToken)
+    sendSession(response, finalized.session, {
+      inviteAccepted: finalized.inviteAccepted,
+      inviteError: finalized.inviteError,
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not reset password' })
+  }
+})
+
 app.post('/api/auth/logout', async (request, response) => {
-  await logoutUser(bearerToken(request))
+  await logoutUser(authToken(request))
+  clearSessionCookie(response)
   response.json({ ok: true })
 })
 
 async function requireAuth(request: express.Request, response: express.Response): Promise<Awaited<ReturnType<typeof currentUser>> | null> {
-  const user = await currentUser(bearerToken(request))
+  const user = await currentUser(authToken(request))
   if (!user) response.status(401).json({ error: 'Sign in to Ultron first.' })
   return user
 }
+
+function canManageOrganization(user: NonNullable<Awaited<ReturnType<typeof currentUser>>>): boolean {
+  return Boolean(user.organizationId) && (user.isPlatformAdmin || user.organizationRole === 'owner')
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof Error && /not found/i.test(error.message)
+}
+
+function isPermissionError(error: unknown): boolean {
+  return error instanceof Error && /platform admin access is required|only organization owners or platform admins|only a current workspace owner|you can only /i.test(error.message)
+}
+
+app.post('/api/org/invites/preview', async (request, response) => {
+  try {
+    response.json({ invite: await previewOrganizationInvite(request.body ?? {}) })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not preview invite' })
+  }
+})
+
+async function requireOrganizationManager(request: express.Request, response: express.Response): Promise<NonNullable<Awaited<ReturnType<typeof currentUser>>> | null> {
+  const user = await requireAuth(request, response)
+  if (!user) return null
+  if (!canManageOrganization(user)) {
+    response.status(403).json({ error: 'Organization owner or platform admin access is required.' })
+    return null
+  }
+  return user
+}
+
+async function requirePlatformAdmin(request: express.Request, response: express.Response): Promise<NonNullable<Awaited<ReturnType<typeof currentUser>>> | null> {
+  const user = await requireAuth(request, response)
+  if (!user) return null
+  if (!user.isPlatformAdmin) {
+    response.status(403).json({ error: 'Platform admin access is required.' })
+    return null
+  }
+  return user
+}
+
+app.get('/api/org', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    response.json(await organizationOverview(user.id))
+  } catch (err) {
+    response.status(isNotFoundError(err) ? 404 : 400).json({ error: err instanceof Error ? err.message : 'Could not load organization' })
+  }
+})
+
+app.patch('/api/org', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json(await renameOrganization(user.id, request.body ?? {}))
+  } catch (err) {
+    response.status(isNotFoundError(err) ? 404 : 400).json({ error: err instanceof Error ? err.message : 'Could not update organization' })
+  }
+})
+
+app.post('/api/org/leave', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    const organization = await leaveOrganization(user.id)
+    response.json({
+      organization,
+      user: await currentUser(authToken(request)),
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not leave organization' })
+  }
+})
+
+app.post('/api/org/invites', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.status(201).json(await createOrganizationInvite(user.id, request.body ?? {}))
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create invite' })
+  }
+})
+
+app.delete('/api/org/invites/:id', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json(await cancelOrganizationInvite(user.id, request.params.id))
+  } catch (err) {
+    const status = isPermissionError(err) ? 403 : isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not cancel invite' })
+  }
+})
+
+app.delete('/api/org/members/:id', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json(await removeOrganizationMember(user.id, request.params.id))
+  } catch (err) {
+    const status = isPermissionError(err) ? 403 : isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not remove member' })
+  }
+})
+
+app.post('/api/org/members/:id/transfer-ownership', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    const organization = await transferOrganizationOwnership(user.id, request.params.id)
+    response.json({
+      organization,
+      user: await currentUser(authToken(request)),
+    })
+  } catch (err) {
+    const status = isPermissionError(err) ? 403 : isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not transfer ownership' })
+  }
+})
+
+app.get('/api/org/invites/incoming', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    response.json({ invites: await listIncomingOrganizationInvites(user.id) })
+  } catch (err) {
+    response.status(isNotFoundError(err) ? 404 : 400).json({ error: err instanceof Error ? err.message : 'Could not load incoming invites' })
+  }
+})
+
+app.post('/api/org/invites/accept', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    const organization = await acceptOrganizationInvite(user.id, request.body ?? {})
+    response.json({
+      organization,
+      user: await currentUser(authToken(request)),
+    })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not accept invite' })
+  }
+})
+
+app.post('/api/org/invites/:id/accept', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  try {
+    const organization = await acceptIncomingOrganizationInvite(user.id, request.params.id)
+    response.json({
+      organization,
+      user: await currentUser(authToken(request)),
+    })
+  } catch (err) {
+    const status = isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not accept invite' })
+  }
+})
+
+app.patch('/api/org/members/:id/role', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json({ member: await setOrganizationMemberRole(user.id, request.params.id, request.body ?? {}) })
+  } catch (err) {
+    const status = isPermissionError(err) ? 403 : isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not update member role' })
+  }
+})
+
+app.get('/api/admin/identity', async (request, response) => {
+  const user = await requirePlatformAdmin(request, response)
+  if (!user) return
+  try {
+    response.json(await identityOverview(user.id))
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not load identity overview' })
+  }
+})
+
+app.patch('/api/admin/users/:id/platform-admin', async (request, response) => {
+  const user = await requirePlatformAdmin(request, response)
+  if (!user) return
+  try {
+    response.json({ member: await setPlatformAdmin(user.id, request.params.id, request.body ?? {}) })
+  } catch (err) {
+    const status = isNotFoundError(err) ? 404 : 400
+    response.status(status).json({ error: err instanceof Error ? err.message : 'Could not update platform admin access' })
+  }
+})
 
 app.get('/api/credentials', async (request, response) => {
   const user = await requireAuth(request, response)

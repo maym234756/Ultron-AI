@@ -14,11 +14,10 @@ type Credential = {
 
 type Props = {
   apiBase: string
-  token: string
   onClose: () => void
 }
 
-export function CredentialVaultPanel({ apiBase, token, onClose }: Props) {
+export function CredentialVaultPanel({ apiBase, onClose }: Props) {
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -26,13 +25,11 @@ export function CredentialVaultPanel({ apiBase, token, onClose }: Props) {
   const [revealed, setRevealed] = useState<Record<string, string>>({})
   const [form, setForm] = useState({ label: '', site: '', username: '', email: '', secret: '', notes: '' })
 
-  const authHeaders = { Authorization: `Bearer ${token}` }
-
   async function loadCredentials() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/api/credentials`, { headers: authHeaders })
+      const response = await fetch(`${apiBase}/api/credentials`, { credentials: 'include' })
       const data = await response.json()
       if (!response.ok) throw new Error((data as { error?: string }).error ?? 'Could not load credentials')
       setCredentials((data as { credentials: Credential[] }).credentials ?? [])
@@ -43,7 +40,7 @@ export function CredentialVaultPanel({ apiBase, token, onClose }: Props) {
     }
   }
 
-  useEffect(() => { void loadCredentials() }, [apiBase, token]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadCredentials() }, [apiBase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveCredential(event: React.FormEvent) {
     event.preventDefault()
@@ -53,7 +50,8 @@ export function CredentialVaultPanel({ apiBase, token, onClose }: Props) {
     try {
       const response = await fetch(`${apiBase}/api/credentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
       const data = await response.json()
@@ -68,14 +66,14 @@ export function CredentialVaultPanel({ apiBase, token, onClose }: Props) {
   }
 
   async function reveal(id: string) {
-    const response = await fetch(`${apiBase}/api/credentials/${encodeURIComponent(id)}/reveal`, { method: 'POST', headers: authHeaders })
+    const response = await fetch(`${apiBase}/api/credentials/${encodeURIComponent(id)}/reveal`, { method: 'POST', credentials: 'include' })
     const data = await response.json()
     if (response.ok) setRevealed(current => ({ ...current, [id]: (data as { secret?: string }).secret ?? '' }))
     else setError((data as { error?: string }).error ?? 'Could not reveal secret')
   }
 
   async function remove(id: string) {
-    const response = await fetch(`${apiBase}/api/credentials/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders })
+    const response = await fetch(`${apiBase}/api/credentials/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' })
     if (response.ok) await loadCredentials()
     else setError('Could not delete credential')
   }

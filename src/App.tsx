@@ -60,7 +60,9 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
 import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
 import { AuthPanel } from './components/AuthPanel'
+import { AdminIdentityPanel } from './components/AdminIdentityPanel'
 import { CredentialVaultPanel } from './components/CredentialVaultPanel'
+import { OrganizationPanel } from './components/OrganizationPanel'
 import type { AuthUser } from './components/AuthPanel'
 import type { AgentEvent, AnswerStyle, AppSettings, AttachedFile, HistoryMeta, IntelligenceMode, Message, ObserverStatus, PendingQuestion, Prediction, PromptRoute, Task } from './types'
 import { routePrompt } from './lib/promptRouter'
@@ -74,7 +76,6 @@ type WorkspaceMode = 'chat' | 'build' | 'research' | 'debug' | 'review' | 'syste
 type AuthState = {
   ready: boolean
   configured: boolean
-  token: string
   user: AuthUser | null
 }
 
@@ -100,8 +101,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   numCtx: 8192,
   answerStyle: 'detailed',
 }
-
-const AUTH_TOKEN_KEY = 'ultron-auth-token'
 
 const ANSWER_STYLE_LABEL: Record<AnswerStyle, string> = {
   concise: 'Concise',
@@ -304,6 +303,24 @@ const WORKSPACE_QUICK_ACTIONS: Record<WorkspaceMode, QuickAction[]> = {
 // CORS is open on the Express server so this works fine.
 const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
 
+function inviteTokenFromLocation(): string {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get('invite')?.trim() ?? ''
+}
+
+function clearInviteTokenFromLocation() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.delete('invite')
+  const nextSearch = url.searchParams.toString()
+  window.history.replaceState({}, '', `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`)
+}
+
+function workspaceRoleLabel(user: AuthUser): string {
+  if (user.isPlatformAdmin) return 'Platform admin'
+  return user.organizationRole === 'owner' ? 'Workspace owner' : 'Workspace member'
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
@@ -346,8 +363,10 @@ function App() {
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showProjectBuilder, setShowProjectBuilder] = useState(false)
   const [showCredentialVault, setShowCredentialVault] = useState(false)
+  const [showOrganizationPanel, setShowOrganizationPanel] = useState(false)
+  const [showAdminIdentityPanel, setShowAdminIdentityPanel] = useState(false)
   const [showCommandCenter, setShowCommandCenter] = useState(false)
-  const [auth, setAuth] = useState<AuthState>({ ready: false, configured: false, token: '', user: null })
+  const [auth, setAuth] = useState<AuthState>({ ready: false, configured: false, user: null })
   const [commandQuery, setCommandQuery] = useState('')
   const [showComposerTools, setShowComposerTools] = useState(false)
   const [voiceConvMode, setVoiceConvMode] = useState(false)
@@ -380,39 +399,80 @@ function App() {
   const atBottomRef = useRef(true)
   const deferredMessages = useDeferredValue(messages)
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadAuth() {
-      const token = localStorage.getItem(AUTH_TOKEN_KEY) ?? ''
-      try {
-        const statusResponse = await fetch(`${API_BASE}/api/auth/status`)
-        const statusData = await statusResponse.json() as { configured?: boolean }
-        let user: AuthUser | null = null
-        if (token) {
-          const meResponse = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-          if (meResponse.ok) user = ((await meResponse.json()) as { user: AuthUser | null }).user
-        }
-        if (!cancelled) setAuth({ ready: true, configured: Boolean(statusData.configured), token: user ? token : '', user })
-      } catch {
-        if (!cancelled) setAuth({ ready: true, configured: false, token: '', user: null })
-      }
+  function addToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const id = crypto.randomUUID()
+    setToasts(p => [...p.slice(-3), { id, message, type }])
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000)
+  }
+
+  const refreshAuth = useCallback(async () => {
+    try {
+      const statusResponse = await fetch(`${API_BASE}/api/auth/status`)
+      const statusData = await statusResponse.json() as { configured?: boolean }
+      let user: AuthUser | null = null
+      const meResponse = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' })
+      if (meResponse.ok) user = ((await meResponse.json()) as { user: AuthUser | null }).user
+      setAuth({ ready: true, configured: Boolean(statusData.configured), user })
+    } catch {
+      setAuth({ ready: true, configured: false, user: null })
     }
-    void loadAuth()
-    return () => { cancelled = true }
   }, [])
 
-  function handleAuthenticated(session: { token: string; user: AuthUser }) {
-    localStorage.setItem(AUTH_TOKEN_KEY, session.token)
-    setAuth({ ready: true, configured: true, token: session.token, user: session.user })
+  useEffect(() => {
+    void refreshAuth()
+  }, [refreshAuth])
+
+  function handleAuthenticated(session: { user: AuthUser; inviteAccepted?: boolean; inviteError?: string }) {
+    setAuth({ ready: true, configured: true, user: session.user })
+    if (session.inviteAccepted) addToast(`Joined ${session.user.organizationName ?? 'workspace'}.`, 'success')
+    if (session.inviteError) addToast(session.inviteError, 'error')
   }
 
   async function logout() {
-    if (auth.token) {
-      await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` } }).catch(() => undefined)
-    }
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-    setAuth(current => ({ ...current, token: '', user: null }))
+    await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => undefined)
+    setAuth(current => ({ ...current, user: null }))
   }
+
+  useEffect(() => {
+    const inviteToken = inviteTokenFromLocation()
+    if (!auth.user || !inviteToken) return
+
+    let cancelled = false
+
+    async function acceptInvite() {
+      try {
+        const response = await fetch(`${API_BASE}/api/org/invites/accept`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: inviteToken }),
+        })
+        const data = await response.json() as {
+          user?: AuthUser
+          organization?: { organization: { name: string } }
+          error?: string
+        }
+        if (cancelled) return
+
+        clearInviteTokenFromLocation()
+        if (!response.ok || !data.user) {
+          addToast(data.error ?? 'Could not accept workspace invite.', 'error')
+          return
+        }
+
+        setAuth(current => ({ ...current, user: data.user ?? current.user }))
+        addToast(`Joined ${data.organization?.organization.name ?? data.user.organizationName ?? 'workspace'}.`, 'success')
+      } catch {
+        if (!cancelled) {
+          clearInviteTokenFromLocation()
+          addToast('Could not accept workspace invite.', 'error')
+        }
+      }
+    }
+
+    void acceptInvite()
+    return () => { cancelled = true }
+  }, [auth.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let isMounted = true
@@ -718,13 +778,6 @@ function App() {
   }
 
   function toggleDark() { setDarkMode(d => !d) }
-
-  // Toast notifications
-  function addToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-    const id = crypto.randomUUID()
-    setToasts(p => [...p.slice(-3), { id, message, type }])
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000)
-  }
 
   // Copy entire assistant message to clipboard
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -1597,6 +1650,11 @@ function App() {
           <button type="button" className="sidebar-action-btn" onClick={() => setShowCredentialVault(true)} title="Credential Vault — local encrypted usernames, emails, passwords, and tokens">
             <KeyRound size={13} /> Vault
           </button>
+          {auth.user && (
+            <button type="button" className="sidebar-action-btn" onClick={() => setShowOrganizationPanel(true)} title="Workspace Control — invites, members, ownership, and leave flow">
+              <UserRound size={13} /> Workspace
+            </button>
+          )}
           <button
             type="button"
             className="sidebar-action-btn"
@@ -1620,6 +1678,11 @@ function App() {
           <button type="button" className="sidebar-action-btn" onClick={() => setShowProjectBuilder(true)} title="Project Builder — scaffold, validate, and open programming projects">
             <Code2 size={13} /> Build
           </button>
+          {auth.user?.isPlatformAdmin && (
+            <button type="button" className="sidebar-action-btn" onClick={() => setShowAdminIdentityPanel(true)} title="Platform Identity Admin — organizations, members, and platform admin access">
+              <Scale size={13} /> Admin
+            </button>
+          )}
           <button type="button" className="sidebar-action-btn" onClick={() => setShowReferenceBuilder(true)} title="Reference Builder — learn a public URL or screenshot and create an original build blueprint">
             <Search size={13} /> Learn
           </button>
@@ -1716,6 +1779,7 @@ function App() {
           <div>
             <strong>{auth.user.displayName}</strong>
             <span>{auth.user.email}</span>
+            <span>{workspaceRoleLabel(auth.user)} · {auth.user.organizationName ?? 'Personal workspace'}</span>
           </div>
           <button type="button" onClick={() => void logout()} title="Sign out of Ultron" aria-label="Sign out of Ultron"><LogOut size={13} /></button>
         </div>
@@ -2526,8 +2590,25 @@ function App() {
     {showCredentialVault && (
       <CredentialVaultPanel
         apiBase={API_BASE}
-        token={auth.token}
         onClose={() => setShowCredentialVault(false)}
+      />
+    )}
+    {showOrganizationPanel && auth.user && (
+      <OrganizationPanel
+        apiBase={API_BASE}
+        currentUser={auth.user}
+        refreshAuth={refreshAuth}
+        onNotice={addToast}
+        onClose={() => setShowOrganizationPanel(false)}
+      />
+    )}
+    {showAdminIdentityPanel && auth.user?.isPlatformAdmin && (
+      <AdminIdentityPanel
+        apiBase={API_BASE}
+        currentUser={auth.user}
+        refreshAuth={refreshAuth}
+        onNotice={addToast}
+        onClose={() => setShowAdminIdentityPanel(false)}
       />
     )}
     {showHealer && (
