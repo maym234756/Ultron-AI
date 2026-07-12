@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:server:dev\" \"npm:web:dev\"",
     "web:dev": "vite",
-    "server:dev": "npm run db:generate && tsx watch server/index.ts",
+    "server:dev": "npm run db:generate && npm run db:push && tsx watch server/index.ts",
     "build:web": "tsc -p tsconfig.app.json && vite build",
     "build": "npm run db:generate && tsc -b && vite build && tsc -p tsconfig.server.json",
     "build:electron": "tsc -p tsconfig.electron.json",
