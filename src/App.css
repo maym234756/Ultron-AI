@@ -1054,7 +1054,7 @@ html.dark .app-shell.quiet-ui {
   }
 }
 
-/* iPad Pro 12.9" landscape (1366px) — treat like full desktop, no override needed */
+/* iPad Pro 12.9" in landscape (≈1366px) falls outside the 1024px cap above and receives full desktop styles — no override needed. */
 
 /* ── Agent mode toggle ── */
 .agent-toggle {

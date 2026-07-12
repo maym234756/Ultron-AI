@@ -10,7 +10,8 @@ type DeviceKind = 'iphone' | 'ipad' | 'android' | 'other'
 
 function detectDevice(): DeviceKind {
   const ua = navigator.userAgent
-  // iPad on iPadOS 13+ reports as Macintosh with touch support
+  // iPadOS 12 and earlier includes "iPad" in the UA string.
+  // iPadOS 13+ reports as "Macintosh" but has maxTouchPoints > 1.
   if (/ipad/i.test(ua)) return 'ipad'
   if (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return 'ipad'
   if (/iphone|ipod/i.test(ua)) return 'iphone'

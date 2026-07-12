@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import os from 'node:os'
+import path from 'node:path'
 import type { ToolDefinition, ToolHandler } from './types.js'
 
 // ── Platform helpers ──────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ interface RiskResult {
 }
 
 const DESTRUCTIVE_PATTERNS: Array<[RegExp, string]> = [
-  [/\brm\s+-rf?\b/, 'recursive delete (rm -rf)'],
+  [/\brm\s+-[rf]+\b/, 'recursive delete (rm -rf/-fr)'],
   [/\bdel\s+\/[sf]/i, 'force-delete (del /S or /F)'],
   [/\bformat\s+[a-z]:/i, 'disk format'],
   [/\brd\s+\/s\b/i, 'recursive directory remove (rd /S)'],
@@ -42,8 +43,8 @@ const DESTRUCTIVE_PATTERNS: Array<[RegExp, string]> = [
   [/\bshutdown\b|\breboot\b|\binit\s+[06]\b/, 'system shutdown/reboot'],
   [/\bchmod\s+[0-7]*777\b/, 'world-writable chmod 777'],
   [/\bchown\s+-R\b/, 'recursive ownership change'],
-  [/\bcurl\b.+\|\s*(ba)?sh\b/, 'piped remote script execution'],
-  [/\bwget\b.+\|\s*(ba)?sh\b/, 'piped remote script execution'],
+  [/\bcurl\b.*\|\s*(ba)?sh\b/, 'piped remote script execution'],
+  [/\bwget\b.*\|\s*(ba)?sh\b/, 'piped remote script execution'],
 ]
 
 const CAUTION_PATTERNS: Array<[RegExp, string]> = [
@@ -97,6 +98,19 @@ function buildSpawnSpec(shell: ShellKind, command: string): SpawnSpec {
   }
 }
 
+// ── cwd sanitization ──────────────────────────────────────────────────────────
+
+/** Resolves and validates the working directory. Falls back to cwd() on any problem. */
+function sanitizeCwd(rawCwd: string | undefined): string {
+  if (!rawCwd?.trim()) return process.cwd()
+  const resolved = path.resolve(rawCwd.trim())
+  // Block raw device paths and proc filesystem on Linux/macOS
+  if (/^\/dev\//i.test(resolved) || /^\/proc\//i.test(resolved) || /^\/sys\//i.test(resolved)) {
+    return process.cwd()
+  }
+  return resolved
+}
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
 export const terminalDefinition: ToolDefinition = {
@@ -123,8 +137,7 @@ export const terminalDefinition: ToolDefinition = {
         },
         env: {
           type: 'object',
-          description: 'Optional extra environment variables to inject (e.g. {"NODE_ENV":"production","DEBUG":"1"}). Merged with the current process environment.',
-          additionalProperties: { type: 'string' },
+          description: 'Optional extra environment variables to inject as a JSON object string, e.g. {"NODE_ENV":"production","DEBUG":"1"}. Merged with the current process environment.',
         },
         timeout_sec: {
           type: 'string',
@@ -145,7 +158,7 @@ export const runTerminal: ToolHandler = (args) => {
   if (!command) return Promise.resolve('Error: no command provided')
 
   const shell = normalizeShell(args.shell)
-  const cwd = args.cwd?.trim() || process.cwd()
+  const cwd = sanitizeCwd(args.cwd)
   const timeoutSec = Math.min(600, Math.max(1, parseInt(args.timeout_sec ?? '120', 10) || 120))
   const maxOutputChars = Math.min(200_000, Math.max(1000, parseInt(args.max_output_chars ?? '50000', 10) || 50_000))
 
