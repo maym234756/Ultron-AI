@@ -50,7 +50,6 @@ async function ddgHtmlSearch(query: string, limit: number): Promise<SearchResult
   const resultBlockRe = /<div[^>]+class="[^"]*result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?=<div|$)/g
   const linkRe = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/
   const snippetRe = /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/
-  const tagRe = /<[^>]+>/g
 
   let block: RegExpExecArray | null
   while ((block = resultBlockRe.exec(html)) !== null && results.length < limit) {
@@ -67,17 +66,19 @@ async function ddgHtmlSearch(query: string, limit: number): Promise<SearchResult
     } else if (href.startsWith('//')) {
       href = `https:${href}`
     }
-    // Strip HTML tags and then remove any residual < characters to prevent injection
-    const stripHtml = (s: string) => s.replace(tagRe, '').replace(/</g, '').trim()
+    // Strip HTML — single-pass regex removes both complete (<foo>) and incomplete (<script) tags,
+    // preventing multi-character sanitization bypass
+    const stripHtml = (s: string) => s.replace(/<[^>]*>?/g, '').trim()
     const title = stripHtml(linkMatch[2])
     const snippetMatch = snippetRe.exec(content)
     const snippet = snippetMatch ? stripHtml(snippetMatch[1]) : ''
-    // Only include external URLs — check hostname to avoid partial-match bypasses
+    // Only include external http(s) URLs; reject duckduckgo.com and all its subdomains
     let isExternal = false
     try {
       const parsed = new URL(href)
-      isExternal = parsed.protocol === 'http:' || parsed.protocol === 'https:'
-      isExternal = isExternal && !parsed.hostname.endsWith('duckduckgo.com')
+      const host = parsed.hostname
+      const isDDG = host === 'duckduckgo.com' || host.endsWith('.duckduckgo.com')
+      isExternal = (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !isDDG
     } catch { /* skip malformed URLs */ }
     if (title && isExternal) {
       results.push({ title, url: href, snippet })
