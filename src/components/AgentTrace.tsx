@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Brain, CheckCircle2, ChevronDown, ChevronRight, FileText, Globe, HelpCircle, Loader, Search, Terminal } from 'lucide-react'
 import type { AgentEvent, ToolCallEvent, ToolResultEvent } from '../types'
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const API_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 /** Extract an image URL or file path from a tool result string */
 function extractImageFromResult(result: string): string | null {

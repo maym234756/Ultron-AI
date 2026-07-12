@@ -9,7 +9,7 @@ import { Check, ChevronDown, ChevronRight, Copy, Hash, Loader, Monitor, Play } f
 import type { Components } from 'react-markdown'
 import type { ComponentProps } from 'react'
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const API_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 type PreProps = ComponentProps<'pre'> & { node?: unknown }
 
