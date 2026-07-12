@@ -27,6 +27,10 @@ services:
         generateValue: true
       - key: AUTH_CHALLENGE_DELIVERY
         value: debug
+      - key: MODEL_PROVIDER
+        value: ollama
+      - key: MODEL_NAME
+        value: llama3.2
       - key: OLLAMA_BASE_URL
         sync: false
       - key: OLLAMA_MODEL

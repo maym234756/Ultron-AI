@@ -50,13 +50,15 @@ Deploy steps:
 1. Push this repo to GitHub.
 2. In Render, choose **Blueprints** and connect the repo.
 3. Review the `astra-backend` and `astra-postgres` resources.
-4. Fill `OLLAMA_BASE_URL` with a backend-reachable model runtime URL.
+4. Choose a model runtime:
+   - Ollama/self-hosted: keep `MODEL_PROVIDER=ollama` and fill `OLLAMA_BASE_URL` with a backend-reachable Ollama URL.
+   - Hosted OpenAI-compatible provider: set `MODEL_PROVIDER=openai-compatible`, `MODEL_API_BASE_URL`, `MODEL_API_KEY`, and `MODEL_NAME`.
 5. Deploy the Blueprint.
 6. Open the backend URL and verify `/api/backend/status`.
 
 The Blueprint starts auth email delivery in debug mode so the first deployment can be tested without SMTP. Before a public beta, change `AUTH_CHALLENGE_DELIVERY` to `smtp` and add the SMTP variables from [.env.production.example](../.env.production.example).
 
-Render hosts the API and Postgres. It does not automatically host Ollama for this service. Chat and benchmark routes need `OLLAMA_BASE_URL` to point at a reachable Ollama/model runtime; auth, database, admin, backend status, and non-model routes can still be validated first.
+Render hosts the API and Postgres. It does not automatically host Ollama for this service. Chat and benchmark routes need either `OLLAMA_BASE_URL` to point at a reachable Ollama runtime or hosted-provider variables (`MODEL_PROVIDER`, `MODEL_API_BASE_URL`, `MODEL_API_KEY`, `MODEL_NAME`). Auth, database, admin, backend status, and non-model routes can still be validated first.
 
 ## Required Production Variables
 
@@ -71,6 +73,10 @@ AUTH_COOKIE_SAME_SITE="none"
 AUTH_COOKIE_SECURE="1"
 CREDENTIAL_ENCRYPTION_KEY="replace-with-a-long-random-secret"
 AUTH_CHALLENGE_DELIVERY="smtp"
+MODEL_PROVIDER="openai-compatible"
+MODEL_API_BASE_URL="https://api.openai.com/v1"
+MODEL_API_KEY="replace-me"
+MODEL_NAME="gpt-4o-mini"
 OLLAMA_BASE_URL="http://127.0.0.1:11434"
 OLLAMA_MODEL="llama3.2"
 ```

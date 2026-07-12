@@ -76,6 +76,8 @@ Copy `.env.example` to `.env` or set environment variables in your shell:
 
 ```powershell
 $env:PORT = "8787"
+$env:MODEL_PROVIDER = "ollama"
+$env:MODEL_NAME = "llama3.2"
 $env:OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 $env:OLLAMA_MODEL = "llama3.2"
 $env:DATABASE_URL = "file:./astra.db"
@@ -91,6 +93,15 @@ npm run build
 ```
 
 For public deployment, keep the Vercel frontend and Astra backend split. Vercel serves the static app, while a VPS/container host should run the Express backend with Postgres, SMTP, secure cookies, and access to the model runtime. This repo includes [render.yaml](render.yaml) for a Render backend plus managed Postgres Blueprint. See [docs/deployment.md](docs/deployment.md) and [.env.production.example](.env.production.example) for the production checklist.
+
+For public chat without hosting your own GPU server, point Astra at an OpenAI-compatible provider:
+
+```powershell
+$env:MODEL_PROVIDER = "openai-compatible"
+$env:MODEL_API_BASE_URL = "https://api.openai.com/v1"
+$env:MODEL_API_KEY = "replace-me"
+$env:MODEL_NAME = "gpt-4o-mini"
+```
 
 To send real auth emails instead of UI-visible debug codes, also configure SMTP:
 

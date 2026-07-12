@@ -172,11 +172,52 @@ const app = express()
 app.set('trust proxy', true)
 const port = Number(process.env.PORT ?? 8787)
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
-const defaultModel = process.env.OLLAMA_MODEL ?? 'qwen2.5:14b'
+const defaultModel = process.env.MODEL_NAME ?? process.env.OPENAI_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen2.5:14b'
+const modelProvider = normalizeModelProvider(process.env.MODEL_PROVIDER)
+const hostedModelBaseUrl = trimTrailingSlash(
+  process.env.MODEL_API_BASE_URL ?? process.env.OPENAI_API_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+)
+const hostedModelApiKey = process.env.MODEL_API_KEY ?? process.env.OPENAI_API_KEY ?? ''
 const serverDir = path.dirname(fileURLToPath(import.meta.url))
 const cwdDistDir = path.resolve(process.cwd(), 'dist')
 const bundledDistDir = path.resolve(serverDir, '../dist')
 const distDir = fs.existsSync(cwdDistDir) ? cwdDistDir : bundledDistDir
+
+type ModelProvider = 'ollama' | 'openai-compatible'
+
+function normalizeModelProvider(value: string | undefined): ModelProvider {
+  const provider = value?.trim().toLowerCase()
+  if (!provider || provider === 'ollama') return 'ollama'
+  if (['openai', 'openai-compatible', 'groq', 'openrouter', 'together', 'fireworks'].includes(provider)) {
+    return 'openai-compatible'
+  }
+  return 'ollama'
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.trim().replace(/\/+$/, '')
+}
+
+function isHostedModelProvider(): boolean {
+  return modelProvider === 'openai-compatible'
+}
+
+function modelProviderLabel(): string {
+  return isHostedModelProvider() ? `openai-compatible:${hostedModelBaseUrl}` : `ollama:${ollamaBaseUrl}`
+}
+
+function hostedModelHeaders(): Record<string, string> {
+  if (!hostedModelApiKey.trim()) {
+    throw new Error('MODEL_API_KEY or OPENAI_API_KEY is required when MODEL_PROVIDER uses an OpenAI-compatible provider.')
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${hostedModelApiKey}`,
+  }
+  if (process.env.OPENROUTER_SITE_URL) headers['HTTP-Referer'] = process.env.OPENROUTER_SITE_URL
+  if (process.env.OPENROUTER_APP_NAME) headers['X-Title'] = process.env.OPENROUTER_APP_NAME
+  return headers
+}
 
 // Ranked preference list — first match wins
 const MODEL_PREFERENCE = [
@@ -233,7 +274,7 @@ function bestAvailableModel(models: OllamaModel[]): string {
 }
 
 const defaultSystemPrompt = [
-  'You are Astra, a precise local AI assistant running through Ollama.',
+  'You are Astra, a precise AI assistant running through Astra\'s configured model runtime.',
   'You have broad knowledge, strong reasoning, and full tool access on the user\'s Windows machine.',
   'Be direct, confident, and accurate: say what you know, hedge what is uncertain, state clearly when you do not know.',
   'Answer contract: direct answer first, then only the reasoning, caveats, or steps needed for the user to act.',
@@ -402,15 +443,15 @@ app.get('/api/health', async (_request, response) => {
     response.json({
       ok: true,
       model: best,
-      ollamaBaseUrl,
+      modelProvider: modelProviderLabel(),
       models: tags.models ?? [],
     })
   } catch (error) {
     response.status(503).json({
       ok: false,
       model: defaultModel,
-      ollamaBaseUrl,
-      error: error instanceof Error ? error.message : 'Ollama is not reachable',
+      modelProvider: modelProviderLabel(),
+      error: error instanceof Error ? error.message : 'The model provider is not reachable',
     })
   }
 })
@@ -834,33 +875,7 @@ app.post('/api/engine/benchmark', async (request, response) => {
 
   const startedAt = Date.now()
   try {
-    const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: selectedModel,
-        prompt,
-        stream: false,
-        keep_alive: '60m',
-        options: { ...buildInferenceOptions(0.1, 2048, 'instant'), num_predict: maxTokens },
-      }),
-      signal: AbortSignal.timeout(90_000),
-    })
-    const raw = await ollamaResponse.text()
-    if (!ollamaResponse.ok) {
-      response.status(502).json({ error: raw || `Ollama returned ${ollamaResponse.status}` })
-      return
-    }
-
-    const data = JSON.parse(raw) as {
-      response?: string
-      total_duration?: number
-      load_duration?: number
-      prompt_eval_duration?: number
-      eval_duration?: number
-      prompt_eval_count?: number
-      eval_count?: number
-    }
+    const data = await runModelBenchmark(selectedModel, prompt, maxTokens)
     const totalMs = Date.now() - startedAt
     const evalMs = data.eval_duration ? Math.round(data.eval_duration / 1e6) : null
     const loadMs = data.load_duration ? Math.round(data.load_duration / 1e6) : null
@@ -870,6 +885,7 @@ app.post('/api/engine/benchmark', async (request, response) => {
 
     response.json({
       checkedAt: Date.now(),
+      provider: modelProviderLabel(),
       model: selectedModel,
       promptChars: prompt.length,
       totalMs,
@@ -1552,31 +1568,27 @@ app.post('/api/chat', async (request, response) => {
     : profiledCtx
 
   try {
-    const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: skipAutoContext
-          ? buildLeanKnowledgePrompt(enrichedMessages, body.answerStyle)
-          : buildPrompt(enrichedMessages, body.systemPrompt, intelligenceMode, body.answerStyle),
-        stream: true,
-        keep_alive: '60m',
-        options: buildInferenceOptions(clampTemperature(body.temperature), numCtx, intelligenceMode),
-      }),
+    const modelResponse = await fetchModelChat({
+      model: selectedModel,
+      messages: skipAutoContext
+        ? buildLeanKnowledgePrompt(enrichedMessages, body.answerStyle)
+        : buildPrompt(enrichedMessages, body.systemPrompt, intelligenceMode, body.answerStyle),
+      stream: true,
+      temperature: clampTemperature(body.temperature),
+      options: buildInferenceOptions(clampTemperature(body.temperature), numCtx, intelligenceMode),
       signal: abortController.signal,
     })
 
-    if (!ollamaResponse.ok || !ollamaResponse.body) {
-      const details = await ollamaResponse.text()
+    if (!modelResponse.ok || !modelResponse.body) {
+      const details = await modelResponse.text()
       sendEvent(response, 'error', {
-        error: details || `Ollama returned ${ollamaResponse.status}`,
+        error: details || `Model provider returned ${modelResponse.status}`,
       })
       response.end()
       return
     }
 
-    await streamOllamaResponse(ollamaResponse, response)
+    await streamModelResponse(modelResponse, response)
   } catch (error) {
     if (!abortController.signal.aborted) {
       sendEvent(response, 'error', {
@@ -2902,6 +2914,45 @@ app.post('/v1/chat/completions', async (req, res) => {
     })
     res.flushHeaders()
 
+    if (isHostedModelProvider()) {
+      try {
+        const providerRes = await fetchModelChat({
+          model,
+          messages,
+          stream: true,
+          temperature,
+          maxTokens: body.max_tokens,
+          signal: abortController.signal,
+        })
+
+        if (!providerRes.ok || !providerRes.body) {
+          const errText = await providerRes.text().catch(() => '')
+          res.write(`data: ${JSON.stringify({ error: { message: errText || 'Model provider error', type: 'server_error' } })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
+        const reader = providerRes.body.getReader()
+        const decoder = new TextDecoder()
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          res.write(decoder.decode(value, { stream: true }))
+        }
+        res.write(decoder.decode())
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          const msg = err instanceof Error ? err.message : 'Stream failed'
+          res.write(`data: ${JSON.stringify({ error: { message: msg, type: 'server_error' } })}\n\n`)
+          res.write('data: [DONE]\n\n')
+        }
+      } finally {
+        if (!res.writableEnded) res.end()
+      }
+      return
+    }
+
     // Send the initial role delta (OpenAI convention)
     const roleChunk = {
       id: completionId, object: 'chat.completion.chunk', created, model,
@@ -2978,6 +3029,22 @@ app.post('/v1/chat/completions', async (req, res) => {
   } else {
     // ── Non-streaming response ────────────────────────────────────────────────
     try {
+      if (isHostedModelProvider()) {
+        const providerRes = await fetchModelChat({
+          model,
+          messages,
+          stream: false,
+          temperature,
+          maxTokens: body.max_tokens,
+          signal: AbortSignal.timeout(180_000),
+        })
+        const raw = await providerRes.text()
+        res.status(providerRes.ok ? 200 : providerRes.status)
+          .type(providerRes.headers.get('content-type') ?? 'application/json')
+          .send(raw)
+        return
+      }
+
       const ollamaRes = await fetch(`${ollamaBaseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3044,7 +3111,7 @@ app.post('/v1/completions', async (req, res) => {
 
 app.listen(port, async () => {
   console.log(`Astra assistant server listening on http://localhost:${port}`)
-  console.log(`Ollama endpoint: ${ollamaBaseUrl}`)
+  console.log(`Model provider: ${modelProviderLabel()}`)
 
   // Start background scheduler — uses headless agent runner
   startScheduler((task: string, model: string) =>
@@ -3087,7 +3154,7 @@ app.listen(port, async () => {
   // Simultaneously detect a fast model for simple one-shot tool commands.
   void (async () => {
     warmupStatus.startedAt = Date.now()
-    warmupStatus.detail = 'Loading Ollama model cache.'
+    warmupStatus.detail = isHostedModelProvider() ? 'Hosted model provider configured.' : 'Loading Ollama model cache.'
     try {
       const tags = await fetchOllamaTags(3000).catch(() => ({ models: [] as OllamaModel[] }))
       const availableNames = (tags.models ?? []).map(m => m.name)
@@ -3104,6 +3171,12 @@ app.listen(port, async () => {
       const warmModel = bestAvailableModel(tags.models ?? [])
       warmupStatus.primaryModel = warmModel
       warmupStatus.fastModel = cachedFastModel
+      if (isHostedModelProvider()) {
+        warmupStatus.primaryOk = true
+        warmupStatus.completedAt = Date.now()
+        warmupStatus.detail = `Hosted model provider ready: ${warmModel}.`
+        return
+      }
       await fetch(`${ollamaBaseUrl}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3138,6 +3211,24 @@ app.listen(port, async () => {
 })
 
 async function fetchOllamaTags(timeoutMs: number): Promise<OllamaTagsResponse> {
+  if (isHostedModelProvider()) {
+    const response = await fetch(`${hostedModelBaseUrl}/models`, {
+      headers: hostedModelHeaders(),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Model provider returned ${response.status}`)
+    }
+
+    const data = await response.json() as { data?: Array<{ id?: string; created?: number }> }
+    const models = (data.data ?? [])
+      .map(model => model.id?.trim())
+      .filter((model): model is string => Boolean(model))
+      .map(name => ({ name, model: name }))
+    return { models: models.length ? models : [{ name: defaultModel, model: defaultModel }] }
+  }
+
   const response = await fetch(`${ollamaBaseUrl}/api/tags`, {
     signal: AbortSignal.timeout(timeoutMs),
   })
@@ -3265,6 +3356,107 @@ function buildLeanKnowledgePrompt(messages: ChatMessage[], answerStyle?: Assista
 function sanitizeModel(model?: string): string {
   const candidate = typeof model === 'string' ? model.trim() : ''
   return candidate || defaultModel
+}
+
+type ModelBenchmarkResult = {
+  response?: string
+  total_duration?: number
+  load_duration?: number
+  prompt_eval_duration?: number
+  eval_duration?: number
+  prompt_eval_count?: number
+  eval_count?: number
+}
+
+function hostedChatBody(input: {
+  model: string
+  messages: ChatMessage[]
+  stream: boolean
+  temperature?: number
+  maxTokens?: number
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: input.model,
+    messages: input.messages,
+    stream: input.stream,
+  }
+  if (typeof input.temperature === 'number') body.temperature = input.temperature
+  if (typeof input.maxTokens === 'number') body.max_tokens = input.maxTokens
+  return body
+}
+
+async function fetchModelChat(input: {
+  model: string
+  messages: ChatMessage[]
+  stream: boolean
+  temperature?: number
+  maxTokens?: number
+  options?: Record<string, unknown>
+  signal?: AbortSignal
+}): Promise<Response> {
+  if (isHostedModelProvider()) {
+    return fetch(`${hostedModelBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: hostedModelHeaders(),
+      body: JSON.stringify(hostedChatBody(input)),
+      signal: input.signal,
+    })
+  }
+
+  return fetch(`${ollamaBaseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      stream: input.stream,
+      keep_alive: '60m',
+      options: input.options,
+    }),
+    signal: input.signal,
+  })
+}
+
+async function runModelBenchmark(model: string, prompt: string, maxTokens: number): Promise<ModelBenchmarkResult> {
+  if (isHostedModelProvider()) {
+    const startedAt = Date.now()
+    const providerResponse = await fetchModelChat({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+      temperature: 0.1,
+      maxTokens,
+      signal: AbortSignal.timeout(90_000),
+    })
+    const raw = await providerResponse.text()
+    if (!providerResponse.ok) throw new Error(raw || `Model provider returned ${providerResponse.status}`)
+    const data = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string } }>
+      usage?: { prompt_tokens?: number; completion_tokens?: number }
+    }
+    return {
+      response: data.choices?.[0]?.message?.content ?? '',
+      total_duration: (Date.now() - startedAt) * 1e6,
+      prompt_eval_count: data.usage?.prompt_tokens,
+      eval_count: data.usage?.completion_tokens,
+    }
+  }
+
+  const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false,
+      keep_alive: '60m',
+      options: { ...buildInferenceOptions(0.1, 2048, 'instant'), num_predict: maxTokens },
+    }),
+    signal: AbortSignal.timeout(90_000),
+  })
+  const raw = await ollamaResponse.text()
+  if (!ollamaResponse.ok) throw new Error(raw || `Ollama returned ${ollamaResponse.status}`)
+  return JSON.parse(raw) as ModelBenchmarkResult
 }
 
 function getDirectConnectorOpenTarget(text: string): { label: string; url: string } | null {
@@ -3642,6 +3834,14 @@ function streamStaticAssistantResponse(response: express.Response, content: stri
   response.end()
 }
 
+async function streamModelResponse(modelResponse: Response, response: express.Response): Promise<void> {
+  if (isHostedModelProvider()) {
+    await streamHostedChatResponse(modelResponse, response)
+    return
+  }
+  await streamOllamaResponse(modelResponse, response)
+}
+
 async function streamOllamaResponse(ollamaResponse: Response, response: express.Response): Promise<void> {
   const reader = ollamaResponse.body?.getReader()
   if (!reader) {
@@ -3690,6 +3890,77 @@ async function streamOllamaResponse(ollamaResponse: Response, response: express.
       if (parsed.token && !sawToken) {
         sawToken = true
         sendEvent(response, 'stream_status', { status: 'streaming', firstTokenMs: Date.now() - startedAt })
+      }
+    }
+  } finally {
+    clearInterval(progressTimer)
+  }
+
+  sendEvent(response, 'stream_status', { status: 'done', totalMs: Date.now() - startedAt })
+  sendEvent(response, 'done', { ok: true })
+  response.end()
+}
+
+async function streamHostedChatResponse(providerResponse: Response, response: express.Response): Promise<void> {
+  const reader = providerResponse.body?.getReader()
+  if (!reader) {
+    sendEvent(response, 'error', { error: 'Model provider did not provide a response stream.' })
+    response.end()
+    return
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let sawToken = false
+  const startedAt = Date.now()
+  sendEvent(response, 'stream_status', { status: 'connected', detail: 'Connected to hosted model stream.' })
+  const progressTimer = setInterval(() => {
+    if (!response.writableEnded && !sawToken) {
+      sendEvent(response, 'stream_status', { status: 'waiting_for_first_token', elapsedMs: Date.now() - startedAt })
+    }
+  }, 2500)
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim()
+        if (!line || line.startsWith(':')) continue
+        if (!line.startsWith('data:')) continue
+        const data = line.slice('data:'.length).trim()
+        if (data === '[DONE]') continue
+        try {
+          const chunk = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string }; message?: { content?: string }; finish_reason?: string | null }>
+            usage?: { prompt_tokens?: number; completion_tokens?: number }
+            model?: string
+          }
+          const token = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? ''
+          if (token) {
+            sendEvent(response, 'token', { token })
+            if (!sawToken) {
+              sawToken = true
+              sendEvent(response, 'stream_status', { status: 'streaming', firstTokenMs: Date.now() - startedAt })
+            }
+          }
+          if (chunk.usage) {
+            sendEvent(response, 'metrics', {
+              model: chunk.model,
+              promptTokens: chunk.usage.prompt_tokens,
+              responseTokens: chunk.usage.completion_tokens,
+            })
+          }
+        } catch (error) {
+          sendEvent(response, 'error', {
+            error: error instanceof Error ? error.message : 'Could not parse hosted model stream.',
+          })
+        }
       }
     }
   } finally {
