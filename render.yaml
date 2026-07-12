@@ -47,6 +47,30 @@ services:
         sync: false
       - key: OLLAMA_MODEL
         value: llama3.2
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_STARTER
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_BUSINESS
+        sync: false
+      - key: STRIPE_APP_ORIGIN
+        value: https://lumivexai.com
+      - key: STRIPE_SUCCESS_URL
+        value: https://lumivexai.com/?billing=success
+      - key: STRIPE_CANCEL_URL
+        value: https://lumivexai.com/?billing=cancelled
+      - key: STRIPE_PORTAL_RETURN_URL
+        value: https://lumivexai.com
+      - key: OPENAI_INPUT_USD_PER_1M
+        value: "0.15"
+      - key: OPENAI_OUTPUT_USD_PER_1M
+        value: "0.60"
+      - key: BILLING_USAGE_MARKUP
+        value: "4"
 
 databases:
   - name: astra-postgres

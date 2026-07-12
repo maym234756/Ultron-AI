@@ -103,6 +103,28 @@ $env:MODEL_API_KEY = "replace-me"
 $env:MODEL_NAME = "gpt-4o-mini"
 ```
 
+## Stripe Billing
+
+Lumivex AI includes a Stripe billing foundation for deployed workspaces. Workspace owners can open Checkout or the Stripe billing portal from the **Workspace** panel, while the backend tracks hosted model token usage in the database for plan allowances and overage decisions.
+
+The launch plan defaults are Starter `$29/mo`, Pro `$99/mo`, and Business `$249/mo`. Each plan has an included hosted AI usage allowance, and usage cost is calculated from returned provider token counts using `OPENAI_INPUT_USD_PER_1M`, `OPENAI_OUTPUT_USD_PER_1M`, and `BILLING_USAGE_MARKUP`.
+
+Minimum backend variables:
+
+```powershell
+$env:STRIPE_SECRET_KEY = "sk_live_replace-me"
+$env:STRIPE_WEBHOOK_SECRET = "whsec_replace-me"
+$env:STRIPE_PRICE_STARTER = "price_replace-me"
+$env:STRIPE_PRICE_PRO = "price_replace-me"
+$env:STRIPE_PRICE_BUSINESS = "price_replace-me"
+$env:STRIPE_APP_ORIGIN = "https://lumivexai.com"
+$env:OPENAI_INPUT_USD_PER_1M = "0.15"
+$env:OPENAI_OUTPUT_USD_PER_1M = "0.60"
+$env:BILLING_USAGE_MARKUP = "4"
+```
+
+Configure the Stripe webhook endpoint at `/api/billing/webhook` on the public backend and listen for checkout/session and customer subscription events. Keep Stripe secrets only on the backend host.
+
 To send real auth emails instead of UI-visible debug codes, configure SMTP. Local development can use Mailpit; public client deployments should use a real provider such as Postmark, SendGrid, Resend SMTP, Mailgun, Brevo, or an equivalent transactional email service:
 
 ```powershell

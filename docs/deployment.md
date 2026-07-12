@@ -92,11 +92,69 @@ MODEL_PROVIDER="openai-compatible"
 MODEL_API_BASE_URL="https://api.openai.com/v1"
 MODEL_API_KEY="replace-me"
 MODEL_NAME="gpt-4o-mini"
+STRIPE_SECRET_KEY="sk_live_replace-me"
+STRIPE_WEBHOOK_SECRET="whsec_replace-me"
+STRIPE_PRICE_STARTER="price_replace-me"
+STRIPE_PRICE_PRO="price_replace-me"
+STRIPE_PRICE_BUSINESS="price_replace-me"
+STRIPE_APP_ORIGIN="https://lumivexai.com"
+STRIPE_SUCCESS_URL="https://lumivexai.com/?billing=success"
+STRIPE_CANCEL_URL="https://lumivexai.com/?billing=cancelled"
+STRIPE_PORTAL_RETURN_URL="https://lumivexai.com"
+OPENAI_INPUT_USD_PER_1M="0.15"
+OPENAI_OUTPUT_USD_PER_1M="0.60"
+BILLING_USAGE_MARKUP="4"
 OLLAMA_BASE_URL="http://127.0.0.1:11434"
 OLLAMA_MODEL="llama3.2"
 ```
 
 Use `AUTH_COOKIE_SAME_SITE="none"` and `AUTH_COOKIE_SECURE="1"` when the frontend and backend are on different public domains. Without those settings, browser login cookies will not survive cross-origin API calls.
+
+## Stripe Billing
+
+Lumivex AI supports workspace billing through Stripe Checkout, the Stripe customer portal, and a local usage ledger for hosted model calls. The backend exposes:
+
+- `GET /api/billing/status` for current plan and usage.
+- `POST /api/billing/checkout` to start a subscription checkout for `starter`, `pro`, or `business`.
+- `POST /api/billing/portal` to open the Stripe customer portal.
+- `POST /api/billing/webhook` for Stripe subscription events.
+
+Create three monthly recurring Stripe prices and map their price IDs into Render:
+
+```env
+STRIPE_PRICE_STARTER="price_..."
+STRIPE_PRICE_PRO="price_..."
+STRIPE_PRICE_BUSINESS="price_..."
+```
+
+Recommended launch pricing in the app is Starter at `$29/mo`, Pro at `$99/mo`, and Business at `$249/mo`. The current included hosted AI usage allowances are `$5`, `$25`, and `$75` per billing period, with hard limits of `$20`, `$100`, and `$300` respectively. These are usage accounting limits inside Lumivex AI; subscription charges are collected by Stripe.
+
+Add a Stripe webhook endpoint pointed at the public backend:
+
+```text
+https://astra-backend-pujo.onrender.com/api/billing/webhook
+```
+
+Listen for these events:
+
+```text
+checkout.session.completed
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+```
+
+Set `STRIPE_WEBHOOK_SECRET` in Render from the endpoint signing secret. Do not put Stripe secret keys in Vercel; only the backend needs them.
+
+Hosted model usage is recorded from OpenAI-compatible usage tokens when providers return token counts. The default OpenAI GPT-4o mini cost assumptions are:
+
+```env
+OPENAI_INPUT_USD_PER_1M="0.15"
+OPENAI_OUTPUT_USD_PER_1M="0.60"
+BILLING_USAGE_MARKUP="4"
+```
+
+The ledger stores provider cost and billable cost separately, so pricing can be changed later without losing the historical raw cost basis.
 
 ## Build And Run With Docker
 

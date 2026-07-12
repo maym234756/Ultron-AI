@@ -70,6 +70,14 @@ import {
 } from './identityVault.js'
 import { databaseProvider, databaseUrl } from './prisma.js'
 import {
+  billingConfigStatus,
+  billingStatus,
+  createBillingCheckoutSession,
+  createBillingPortalSession,
+  handleStripeWebhook,
+  recordModelUsage,
+} from './billing.js'
+import {
   scanForIssues, getHealerState, canHeal, setHealingStatus, addHealLog,
   buildHealerPrompt,
 } from './selfhealer.js'
@@ -398,6 +406,13 @@ app.use(cors({
   },
   credentials: true,
 }))
+app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (request, response) => {
+  try {
+    response.json(await handleStripeWebhook(request.body as Buffer, request.header('stripe-signature') ?? undefined))
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : 'Stripe webhook failed' })
+  }
+})
 app.use(express.json({ limit: '8mb' }))
 app.use(backendRuntimeMiddleware())
 
@@ -1240,6 +1255,40 @@ app.get('/api/org/invites/incoming', async (request, response) => {
   }
 })
 
+app.get('/api/billing/status', async (request, response) => {
+  const user = await requireAuth(request, response)
+  if (!user) return
+  if (!user.organizationId) {
+    response.json({ configured: billingConfigStatus(), account: null, usage: null })
+    return
+  }
+  try {
+    response.json(await billingStatus(user.organizationId))
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : 'Could not load billing status' })
+  }
+})
+
+app.post('/api/billing/checkout', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json(await createBillingCheckoutSession(user, typeof request.body?.planKey === 'string' ? request.body.planKey : undefined))
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : 'Could not start Stripe checkout' })
+  }
+})
+
+app.post('/api/billing/portal', async (request, response) => {
+  const user = await requireOrganizationManager(request, response)
+  if (!user) return
+  try {
+    response.json(await createBillingPortalSession(user))
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : 'Could not open Stripe billing portal' })
+  }
+})
+
 app.post('/api/org/invites/accept', async (request, response) => {
   const user = await requireAuth(request, response)
   if (!user) return
@@ -1610,7 +1659,13 @@ app.post('/api/chat', async (request, response) => {
       return
     }
 
-    await streamModelResponse(modelResponse, response)
+    await streamModelResponse(modelResponse, response, {
+      organizationId: user.organizationId,
+      userId: user.id,
+      source: 'api_chat',
+      provider: modelProviderLabel(),
+      model: selectedModel,
+    })
   } catch (error) {
     if (!abortController.signal.aborted) {
       sendEvent(response, 'error', {
@@ -2909,6 +2964,7 @@ app.post('/v1/chat/completions', async (req, res) => {
   const messages = (body.messages ?? []).filter(
     m => ['system', 'user', 'assistant'].includes(m.role) && typeof m.content === 'string',
   )
+  const billingUser = await currentUser(authToken(req)).catch(() => null)
 
   if (!messages.length) {
     res.status(400).json({ error: { message: 'messages is required', type: 'invalid_request_error' } })
@@ -3061,6 +3117,28 @@ app.post('/v1/chat/completions', async (req, res) => {
           signal: AbortSignal.timeout(180_000),
         })
         const raw = await providerRes.text()
+        if (providerRes.ok) {
+          try {
+            const data = JSON.parse(raw) as {
+              id?: string
+              model?: string
+              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+            }
+            await recordModelUsage({
+              organizationId: billingUser?.organizationId,
+              userId: billingUser?.id,
+              source: 'v1_chat_completions',
+              provider: modelProviderLabel(),
+              model: data.model ?? model,
+              promptTokens: data.usage?.prompt_tokens,
+              completionTokens: data.usage?.completion_tokens,
+              totalTokens: data.usage?.total_tokens,
+              requestId: data.id,
+            })
+          } catch {
+            // Preserve OpenAI-compatible behavior even if usage accounting cannot parse a response.
+          }
+        }
         res.status(providerRes.ok ? 200 : providerRes.status)
           .type(providerRes.headers.get('content-type') ?? 'application/json')
           .send(raw)
@@ -3404,6 +3482,7 @@ function hostedChatBody(input: {
   }
   if (typeof input.temperature === 'number') body.temperature = input.temperature
   if (typeof input.maxTokens === 'number') body.max_tokens = input.maxTokens
+  if (input.stream) body.stream_options = { include_usage: true }
   return body
 }
 
@@ -3856,9 +3935,15 @@ function streamStaticAssistantResponse(response: express.Response, content: stri
   response.end()
 }
 
-async function streamModelResponse(modelResponse: Response, response: express.Response): Promise<void> {
+async function streamModelResponse(modelResponse: Response, response: express.Response, usageContext?: {
+  organizationId?: string | null
+  userId?: string | null
+  source: string
+  provider: string
+  model: string
+}): Promise<void> {
   if (isHostedModelProvider()) {
-    await streamHostedChatResponse(modelResponse, response)
+    await streamHostedChatResponse(modelResponse, response, usageContext)
     return
   }
   await streamOllamaResponse(modelResponse, response)
@@ -3923,7 +4008,13 @@ async function streamOllamaResponse(ollamaResponse: Response, response: express.
   response.end()
 }
 
-async function streamHostedChatResponse(providerResponse: Response, response: express.Response): Promise<void> {
+async function streamHostedChatResponse(providerResponse: Response, response: express.Response, usageContext?: {
+  organizationId?: string | null
+  userId?: string | null
+  source: string
+  provider: string
+  model: string
+}): Promise<void> {
   const reader = providerResponse.body?.getReader()
   if (!reader) {
     sendEvent(response, 'error', { error: 'Model provider did not provide a response stream.' })
@@ -3934,6 +4025,9 @@ async function streamHostedChatResponse(providerResponse: Response, response: ex
   const decoder = new TextDecoder()
   let buffer = ''
   let sawToken = false
+  let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null = null
+  let usageModel = usageContext?.model
+  let requestId: string | null = null
   const startedAt = Date.now()
   sendEvent(response, 'stream_status', { status: 'connected', detail: 'Connected to hosted model stream.' })
   const progressTimer = setInterval(() => {
@@ -3959,10 +4053,13 @@ async function streamHostedChatResponse(providerResponse: Response, response: ex
         if (data === '[DONE]') continue
         try {
           const chunk = JSON.parse(data) as {
+            id?: string
             choices?: Array<{ delta?: { content?: string }; message?: { content?: string }; finish_reason?: string | null }>
-            usage?: { prompt_tokens?: number; completion_tokens?: number }
+            usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
             model?: string
           }
+          if (chunk.id) requestId = chunk.id
+          if (chunk.model) usageModel = chunk.model
           const token = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? ''
           if (token) {
             sendEvent(response, 'token', { token })
@@ -3972,6 +4069,7 @@ async function streamHostedChatResponse(providerResponse: Response, response: ex
             }
           }
           if (chunk.usage) {
+            usage = chunk.usage
             sendEvent(response, 'metrics', {
               model: chunk.model,
               promptTokens: chunk.usage.prompt_tokens,
@@ -3987,6 +4085,17 @@ async function streamHostedChatResponse(providerResponse: Response, response: ex
     }
   } finally {
     clearInterval(progressTimer)
+  }
+
+  if (usageContext && usage) {
+    await recordModelUsage({
+      ...usageContext,
+      model: usageModel ?? usageContext.model,
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+      requestId,
+    }).catch(error => recordRuntimeEvent('billing', error instanceof Error ? error.message : 'Could not record usage', 'warn'))
   }
 
   sendEvent(response, 'stream_status', { status: 'done', totalMs: Date.now() - startedAt })

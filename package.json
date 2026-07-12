@@ -90,7 +90,8 @@
     "rehype-highlight": "^7.0.2",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "stripe": "^22.3.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

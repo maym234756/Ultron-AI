@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRightLeft, Building2, Crown, Loader, LogOut, Mail, RefreshCw, Send, ShieldCheck, Trash2, UserRound, X } from 'lucide-react'
+import { ArrowRightLeft, Building2, CreditCard, Crown, Loader, LogOut, Mail, RefreshCw, Send, ShieldCheck, Trash2, UserRound, X } from 'lucide-react'
 import type { AuthUser } from './AuthPanel'
 
 type ToastType = 'success' | 'error' | 'info'
@@ -89,6 +89,40 @@ type CreatedOrganizationInvite = {
   delivery: OrganizationInviteDelivery
 }
 
+type BillingStatus = {
+  configured: {
+    stripeConfigured: boolean
+    webhookConfigured: boolean
+    plans: Array<{
+      key: string
+      name: string
+      monthlyPriceUsd: number
+      includedUsageCents: number
+      monthlyHardLimitCents: number | null
+      priceConfigured: boolean
+    }>
+  }
+  account: {
+    planKey: string
+    status: string
+    stripeCustomerReady: boolean
+    stripeSubscriptionReady: boolean
+    currentPeriodStart: string | null
+    currentPeriodEnd: string | null
+    cancelAtPeriodEnd: boolean
+    includedUsageCents: number
+    monthlyHardLimitCents: number | null
+  } | null
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    providerCostMicros: number
+    billableCostMicros: number
+    billableUsageCents: number
+  } | null
+}
+
 type Props = {
   apiBase: string
   currentUser: AuthUser
@@ -105,6 +139,10 @@ function relativeExpiry(value: string): string {
   return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function cents(value: number): string {
+  return new Intl.NumberFormat([], { style: 'currency', currency: 'USD' }).format(value / 100)
+}
+
 export function OrganizationPanel({ apiBase, currentUser, onClose, refreshAuth, onNotice }: Props) {
   const [overview, setOverview] = useState<OrganizationOverview | null>(null)
   const [incomingInvites, setIncomingInvites] = useState<IncomingOrganizationInviteSummary[]>([])
@@ -115,6 +153,7 @@ export function OrganizationPanel({ apiBase, currentUser, onClose, refreshAuth, 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<OrganizationRole>('member')
   const [inviteNote, setInviteNote] = useState('')
+  const [billing, setBilling] = useState<BillingStatus | null>(null)
 
   async function refresh() {
     setLoading(true)
@@ -134,6 +173,8 @@ export function OrganizationPanel({ apiBase, currentUser, onClose, refreshAuth, 
       setOverview(overviewData)
       setIncomingInvites(incomingData.invites ?? [])
       setWorkspaceName(overviewData.organization.name)
+      const billingResponse = await fetch(`${apiBase}/api/billing/status`, { credentials: 'include' })
+      if (billingResponse.ok) setBilling(await billingResponse.json() as BillingStatus)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load workspace')
     } finally {
@@ -193,6 +234,32 @@ export function OrganizationPanel({ apiBase, currentUser, onClose, refreshAuth, 
         : `Invite email sent to ${data.email}.`)
       await refresh()
       onNotice(data.delivery.mode === 'debug' ? 'Invite created in debug mode.' : 'Invite sent by email.', 'success')
+    })
+  }
+
+  async function openCheckout(planKey: string) {
+    await runAction(`billing-${planKey}`, async () => {
+      const response = await fetch(`${apiBase}/api/billing/checkout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planKey }),
+      })
+      const data = await response.json() as { url?: string; error?: string }
+      if (!response.ok || !data.url) throw new Error(data.error ?? 'Could not start checkout')
+      window.location.href = data.url
+    })
+  }
+
+  async function openBillingPortal() {
+    await runAction('billing-portal', async () => {
+      const response = await fetch(`${apiBase}/api/billing/portal`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await response.json() as { url?: string; error?: string }
+      if (!response.ok || !data.url) throw new Error(data.error ?? 'Could not open billing portal')
+      window.location.href = data.url
     })
   }
 
@@ -336,6 +403,57 @@ export function OrganizationPanel({ apiBase, currentUser, onClose, refreshAuth, 
                   <strong>{incomingInvites.length}</strong>
                   <span>Incoming invite{incomingInvites.length === 1 ? '' : 's'}</span>
                 </article>
+              </section>
+
+              <section className="project-builder-projects org-card-stack">
+                <div className="project-builder-section-head">
+                  <span className="settings-section-title">Billing</span>
+                  <span className="panel-hint">Stripe subscriptions and OpenAI usage allowance.</span>
+                </div>
+
+                {billing ? (
+                  <>
+                    <section className="org-summary-grid">
+                      <article className="org-summary-card">
+                        <strong>{billing.account?.status ?? 'not configured'}</strong>
+                        <span>{billing.account?.planKey ?? 'No plan'}</span>
+                      </article>
+                      <article className="org-summary-card">
+                        <strong>{cents(billing.usage?.billableUsageCents ?? 0)}</strong>
+                        <span>Billable AI usage this period</span>
+                      </article>
+                      <article className="org-summary-card">
+                        <strong>{cents(billing.account?.includedUsageCents ?? 0)}</strong>
+                        <span>Included AI usage</span>
+                      </article>
+                    </section>
+
+                    {!billing.configured.stripeConfigured && <p className="panel-hint">Stripe is not configured on this backend yet.</p>}
+                    {canManage ? (
+                      <div className="project-builder-actions">
+                        {billing.configured.plans.map(plan => (
+                          <button
+                            key={plan.key}
+                            type="button"
+                            onClick={() => void openCheckout(plan.key)}
+                            disabled={!plan.priceConfigured || busyAction === `billing-${plan.key}`}
+                          >
+                            {busyAction === `billing-${plan.key}` ? <Loader size={13} className="spin" /> : <CreditCard size={13} />}
+                            {plan.name} · ${plan.monthlyPriceUsd}/mo
+                          </button>
+                        ))}
+                        <button type="button" onClick={() => void openBillingPortal()} disabled={!billing.account?.stripeCustomerReady || busyAction === 'billing-portal'}>
+                          {busyAction === 'billing-portal' ? <Loader size={13} className="spin" /> : <CreditCard size={13} />}
+                          Billing Portal
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="panel-hint">Only workspace owners can manage billing.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="panel-hint">Loading billing status...</p>
+                )}
               </section>
 
               <section className="project-builder-projects org-card-stack">

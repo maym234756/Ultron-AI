@@ -27,6 +27,7 @@ model User {
   auditLogs    AuditLog[]
   authChallenges AuthChallenge[]
   organizationInvitesSent OrganizationInvite[] @relation("OrganizationInviteSentBy")
+  usageLedger UsageLedger[]
 
   @@index([organizationId])
 }
@@ -39,11 +40,54 @@ model Organization {
   updatedAt DateTime @updatedAt
   users     User[]
   invites   OrganizationInvite[]
+  billingAccount BillingAccount?
+  usageLedger UsageLedger[]
+}
+
+model BillingAccount {
+  id                    String       @id @default(cuid())
+  organizationId        String       @unique
+  stripeCustomerId      String?      @unique
+  stripeSubscriptionId  String?      @unique
+  stripePriceId         String?
+  planKey               String       @default("starter")
+  status                String       @default("not_configured")
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean      @default(false)
+  includedUsageCents    Int          @default(500)
+  monthlyHardLimitCents Int?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model UsageLedger {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  userId             String?
+  source             String
+  provider           String
+  model              String
+  promptTokens       Int          @default(0)
+  completionTokens   Int          @default(0)
+  totalTokens        Int          @default(0)
+  providerCostMicros Int          @default(0)
+  billableCostMicros Int          @default(0)
+  requestId          String?
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user               User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([requestId])
 }
 
 model OrganizationInvite {
   id             String       @id @default(cuid())
   organizationId String
+
   email          String
   tokenHash      String       @unique
   role           String       @default("member")
@@ -60,6 +104,7 @@ model OrganizationInvite {
 
 model Session {
   id         String   @id @default(cuid())
+
   tokenHash  String   @unique
   userId     String
   expiresAt  DateTime
@@ -77,6 +122,7 @@ model Credential {
   label        String
   site         String
   username     String?
+
   email        String?
   secretCipher String?
   notesCipher  String?
