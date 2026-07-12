@@ -265,6 +265,7 @@ function bestVisionModel(preferredModel: string): string {
 }
 
 function bestAvailableModel(models: OllamaModel[]): string {
+  if (isHostedModelProvider()) return defaultModel
   const names = models.map((m) => m.name)
   for (const preferred of MODEL_PREFERENCE) {
     const match = names.find((n) => n === preferred || n.startsWith(preferred.split(':')[0] + ':'))
@@ -469,7 +470,8 @@ app.get('/api/backend/status', (_request, response) => {
 
 app.get('/api/capabilities/status', async (_request, response) => {
   const checkedAt = Date.now()
-  const requiredModels = [defaultModel, 'nomic-embed-text']
+  const requiredModels = isHostedModelProvider() ? [defaultModel] : [defaultModel, 'nomic-embed-text']
+  const modelRuntimeLabel = isHostedModelProvider() ? 'Hosted model provider' : 'Ollama engine'
   const statusRows: Array<{ id: string; label: string; ok: boolean; detail: string }> = []
 
   let models: OllamaModel[] = []
@@ -480,16 +482,16 @@ app.get('/api/capabilities/status', async (_request, response) => {
     const missing = requiredModels.filter(required => !names.some(name => name === required || name.startsWith(required.split(':')[0] + ':')))
     statusRows.push({
       id: 'ollama',
-      label: 'Ollama engine',
+      label: modelRuntimeLabel,
       ok: true,
       detail: `${models.length} model(s) available${missing.length ? `; missing ${missing.join(', ')}` : ''}`,
     })
   } catch (err) {
     statusRows.push({
       id: 'ollama',
-      label: 'Ollama engine',
+      label: modelRuntimeLabel,
       ok: false,
-      detail: err instanceof Error ? err.message : 'Ollama is unreachable',
+      detail: err instanceof Error ? err.message : `${modelRuntimeLabel} is unreachable`,
     })
   }
 
@@ -497,9 +499,11 @@ app.get('/api/capabilities/status', async (_request, response) => {
   const visionCount = modelNames.filter(isVisionModel).length
   statusRows.push({
     id: 'vision',
-    label: 'Vision routing',
-    ok: visionCount > 0,
-    detail: visionCount > 0 ? `${visionCount} vision-capable model(s) detected` : 'No local vision model detected',
+    label: isHostedModelProvider() ? 'Hosted vision routing' : 'Vision routing',
+    ok: isHostedModelProvider() || visionCount > 0,
+    detail: isHostedModelProvider()
+      ? 'Handled by the configured hosted model provider.'
+      : visionCount > 0 ? `${visionCount} vision-capable model(s) detected` : 'No local vision model detected',
   })
 
   statusRows.push({
