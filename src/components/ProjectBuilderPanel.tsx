@@ -78,7 +78,7 @@ interface Props {
 export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
   const [templates, setTemplates] = useState<ProjectTemplate[]>([])
   const [templateId, setTemplateId] = useState('vanilla-ts')
-  const [name, setName] = useState('my-astra-app')
+  const [name, setName] = useState('my-lumivex-app')
   const [basePath, setBasePath] = useState('~')
   const [approved, setApproved] = useState(false)
   const [runInstall, setRunInstall] = useState(false)
@@ -154,7 +154,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
     .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^[.\s-]+|[.\s-]+$/g, '') || 'Astra-Project'
+    .replace(/^[.\s-]+|[.\s-]+$/g, '') || 'Lumivex-Project'
   const displayBasePath = basePath.trim() === '~' ? 'your user folder' : basePath.trim().replace(/[\\/]$/, '')
   const destinationPreview = `${displayBasePath}\\${projectFolderName}`
 
@@ -292,7 +292,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
           <div className="project-builder-grid">
             <label className="project-builder-field">
               <span>Project name</span>
-              <input value={name} onChange={event => setName(event.target.value)} placeholder="my-astra-app" />
+              <input value={name} onChange={event => setName(event.target.value)} placeholder="my-lumivex-app" />
             </label>
             <label className="project-builder-field project-builder-destination-field">
               <span>Parent destination folder</span>
@@ -303,7 +303,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
                   Choose
                 </button>
               </div>
-              <small>Astra will create: {destinationPreview}</small>
+              <small>Lumivex AI will create: {destinationPreview}</small>
             </label>
           </div>
 
@@ -334,7 +334,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
 
           <label className="project-builder-approval">
             <input type="checkbox" checked={approved} onChange={event => setApproved(event.target.checked)} />
-            <span>I approve Astra creating files, running selected commands, and opening selected local tools for this project build.</span>
+            <span>I approve Lumivex AI creating files, running selected commands, and opening selected local tools for this project build.</span>
           </label>
 
           <button type="button" className="project-builder-run" onClick={() => void buildProject()} disabled={!approved || !name.trim() || building || loading}>
@@ -356,7 +356,7 @@ export function ProjectBuilderPanel({ apiBase, onClose }: Props) {
               <span className="settings-section-title">Project Memory</span>
               {projectsLoading && <Loader size={13} className="spin" />}
             </div>
-            {!projectsLoading && projects.length === 0 && <p className="panel-hint">Built projects will appear here so Astra can open, check, and run them later.</p>}
+            {!projectsLoading && projects.length === 0 && <p className="panel-hint">Built projects will appear here so Lumivex AI can open, check, and run them later.</p>}
             {projects.map(project => (
               <article className="project-memory-card" key={project.id}>
                 <div className="project-memory-head">

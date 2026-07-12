@@ -1,5 +1,5 @@
 /**
- * Astra Electron tray app
+ * Lumivex AI Electron tray app
  * - Lives in the system tray
  * - Global shortcut Ctrl+Shift+U to show/hide
  * - Loads localhost:5173 (dev) or bundled production server (prod)
@@ -70,7 +70,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    title: 'Astra',
+    title: 'Lumivex AI',
     skipTaskbar: false,
     autoHideMenuBar: true,
   })
@@ -149,7 +149,7 @@ function createTray(): Tray {
     : nativeImage.createFromDataURL(getTrayIconDataURL())
 
   const t = new Tray(icon.resize({ width: 16, height: 16 }))
-  t.setToolTip(`Astra (${HOTKEY} to toggle)`)
+  t.setToolTip(`Lumivex AI (${HOTKEY} to toggle)`)
 
   const menu = Menu.buildFromTemplate([
     {
@@ -171,7 +171,7 @@ function createTray(): Tray {
     },
     { type: 'separator' },
     {
-      label: 'Quit Astra',
+      label: 'Quit Lumivex AI',
       click: () => {
         isQuitting = true
         app.quit()

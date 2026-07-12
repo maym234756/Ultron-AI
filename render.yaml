@@ -18,7 +18,7 @@ services:
           name: astra-postgres
           property: connectionString
       - key: AUTH_SESSION_COOKIE
-        value: astra_session
+        value: lumivex_session
       - key: AUTH_COOKIE_SAME_SITE
         value: none
       - key: AUTH_COOKIE_SECURE

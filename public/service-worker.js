@@ -1,4 +1,4 @@
-const CACHE_NAME = 'astra-app-shell-v1'
+const CACHE_NAME = 'lumivex-app-shell-v1'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', event => {

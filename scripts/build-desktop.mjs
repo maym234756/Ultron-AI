@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tempOut = path.join(os.tmpdir(), `astra-electron-release-${Date.now()}`)
+const tempOut = path.join(os.tmpdir(), `lumivex-electron-release-${Date.now()}`)
 const finalOut = path.join(root, 'desktop-release')
 
 function run(command, args) {
@@ -36,7 +36,7 @@ run('npx', ['electron-builder', '--win', 'nsis', '--x64', '--publish', 'never', 
 
 const entries = await fs.readdir(tempOut)
 for (const entry of entries) {
-  if (entry.startsWith('Astra-Setup-') || entry === 'latest.yml') {
+  if (entry.startsWith('Lumivex AI-Setup-') || entry === 'latest.yml') {
     await fs.copyFile(path.join(tempOut, entry), path.join(finalOut, entry))
   }
 }

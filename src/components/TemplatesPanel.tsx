@@ -33,7 +33,7 @@ const BUILT_IN_TEMPLATES: Template[] = [
   { id: 'find-docs', category: 'Research', label: '📖 Find Docs', prompt: 'Find the official documentation and show me the key APIs and usage examples for:\n\n' },
 ]
 
-const STORAGE_KEY = 'astra-custom-templates'
+const STORAGE_KEY = 'lumivex-custom-templates'
 
 function loadCustom(): Template[] {
   try {

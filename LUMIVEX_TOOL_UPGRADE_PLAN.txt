@@ -1,6 +1,6 @@
-ASTRA TOOL UPGRADE PLAN
+LUMIVEX AI TOOL UPGRADE PLAN
 Generated: 2026-07-03
-Companion file: ASTRA_TOOL_BUILD_RANKING.txt
+Companion file: LUMIVEX AI_TOOL_BUILD_RANKING.txt
 
 Goal:
 Upgrade every current tool from useful prototype/utility level toward best-in-class reliability, observability, safety, and ergonomics.

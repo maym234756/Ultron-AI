@@ -121,7 +121,7 @@ const ROUTE_SCORE_LABELS: Array<[keyof PromptRoute['scores'], string]> = [
 
 function loadSettings(): AppSettings {
   try {
-    const raw = localStorage.getItem('astra-settings')
+    const raw = localStorage.getItem('lumivex-settings')
     if (raw) {
       const parsed = JSON.parse(raw) as AppSettings
       // Back-fill defaults for fields added after initial save
@@ -132,16 +132,16 @@ function loadSettings(): AppSettings {
 }
 
 function loadDarkMode(): boolean {
-  try { return localStorage.getItem('astra-dark') === '1' } catch { return false }
+  try { return localStorage.getItem('lumivex-dark') === '1' } catch { return false }
 }
 
 function loadQuietMode(): boolean {
-  try { return localStorage.getItem('astra-quiet-ui') !== '0' } catch { return true }
+  try { return localStorage.getItem('lumivex-quiet-ui') !== '0' } catch { return true }
 }
 
 function loadWorkspaceMode(): WorkspaceMode {
   try {
-    const raw = localStorage.getItem('astra-workspace-mode')
+    const raw = localStorage.getItem('lumivex-workspace-mode')
     if (raw === 'build' || raw === 'research' || raw === 'debug' || raw === 'review' || raw === 'system') return raw
   } catch { /* ignore */ }
   return 'chat'
@@ -232,12 +232,12 @@ function describeAgentEvent(event: AgentEvent): { label: string; detail: string 
 }
 
 const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; headline: string; placeholder: string; agent: boolean }> = [
-  { id: 'chat', label: 'Chat', headline: 'Ask, iterate, build', placeholder: 'Message Astra...', agent: false },
+  { id: 'chat', label: 'Chat', headline: 'Ask, iterate, build', placeholder: 'Message Lumivex AI...', agent: false },
   { id: 'build', label: 'Build', headline: 'Build workspace', placeholder: 'Describe the project or feature to build...', agent: true },
-  { id: 'research', label: 'Research', headline: 'Research workspace', placeholder: 'What should Astra verify, scan, or synthesize?', agent: true },
+  { id: 'research', label: 'Research', headline: 'Research workspace', placeholder: 'What should Lumivex AI verify, scan, or synthesize?', agent: true },
   { id: 'debug', label: 'Debug', headline: 'Debug workspace', placeholder: 'Paste the error, failing behavior, or stack trace...', agent: true },
   { id: 'review', label: 'Review', headline: 'Review workspace', placeholder: 'Paste code or describe what needs review...', agent: false },
-  { id: 'system', label: 'System', headline: 'System workspace', placeholder: 'Ask Astra to inspect health, tasks, memory, or connectors...', agent: true },
+  { id: 'system', label: 'System', headline: 'System workspace', placeholder: 'Ask Lumivex AI to inspect health, tasks, memory, or connectors...', agent: true },
 ]
 
 // In dev, call Express directly (bypasses Vite proxy which drops SSE connections on idle).
@@ -622,7 +622,7 @@ function App() {
   // Apply / persist dark mode
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
-    try { localStorage.setItem('astra-dark', darkMode ? '1' : '0') } catch { /* ignore */ }
+    try { localStorage.setItem('lumivex-dark', darkMode ? '1' : '0') } catch { /* ignore */ }
   }, [darkMode])
 
   // Detect artifact (previewable code) in the latest assistant message
@@ -769,15 +769,15 @@ function App() {
   // Export current conversation as Markdown
   function exportChat() {
     if (!messages.length) return
-    const lines: string[] = [`# Astra — Conversation Export\n*${new Date().toLocaleString()}*\n`]
+    const lines: string[] = [`# Lumivex AI — Conversation Export\n*${new Date().toLocaleString()}*\n`]
     for (const m of messages) {
-      lines.push(`\n---\n\n**${m.role === 'assistant' ? 'Astra' : 'You'}**\n\n${m.content}`)
+      lines.push(`\n---\n\n**${m.role === 'assistant' ? 'Lumivex AI' : 'You'}**\n\n${m.content}`)
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `astra-chat-${Date.now()}.md`
+    a.download = `lumivex-chat-${Date.now()}.md`
     a.click()
     URL.revokeObjectURL(url)
     addToast('Chat exported as Markdown', 'success')
@@ -968,7 +968,7 @@ function App() {
 
   function updateSettings(next: AppSettings) {
     setSettings(next)
-    try { localStorage.setItem('astra-settings', JSON.stringify(next)) } catch { /* ignore */ }
+    try { localStorage.setItem('lumivex-settings', JSON.stringify(next)) } catch { /* ignore */ }
   }
 
   function setIntelligenceMode(mode: IntelligenceMode) {
@@ -1417,7 +1417,7 @@ function App() {
   function toggleQuietMode() {
     setQuietMode(current => {
       const next = !current
-      try { localStorage.setItem('astra-quiet-ui', next ? '1' : '0') } catch { /* ignore */ }
+      try { localStorage.setItem('lumivex-quiet-ui', next ? '1' : '0') } catch { /* ignore */ }
       if (next) setSidebarCollapsed(true)
       return next
     })
@@ -1427,7 +1427,7 @@ function App() {
     const meta = WORKSPACE_MODES.find(item => item.id === mode) ?? WORKSPACE_MODES[0]
     setWorkspaceMode(mode)
     setAgentMode(meta.agent)
-    try { localStorage.setItem('astra-workspace-mode', mode) } catch { /* ignore */ }
+    try { localStorage.setItem('lumivex-workspace-mode', mode) } catch { /* ignore */ }
   }
 
   function stopStreaming() {
@@ -1459,7 +1459,7 @@ function App() {
     { group: 'Navigate', label: 'Tasks', hint: 'Open task dashboard', action: () => setShowTasks(true) },
     { group: 'Navigate', label: 'Run Tracker', hint: 'Consent-first GPS run tracking and GPX export', action: () => setShowRunTracker(true) },
     { group: 'Navigate', label: 'Memory', hint: 'Open long-term memory', action: () => setShowMemory(true) },
-    { group: 'Navigate', label: 'Self-Healer', hint: 'Scan and repair Astra', action: () => { applyWorkspaceMode('debug'); setShowHealer(true) } },
+    { group: 'Navigate', label: 'Self-Healer', hint: 'Scan and repair Lumivex AI', action: () => { applyWorkspaceMode('debug'); setShowHealer(true) } },
     { group: 'Navigate', label: 'Connectors', hint: 'Browser and account integrations', action: () => setShowConnectors(true) },
     { group: 'Navigate', label: 'Settings', hint: 'Models, router, context, observation', action: () => setShowSettings(true) },
     { group: 'Workspace', label: 'Chat Mode', hint: 'Clean general assistant workspace', action: () => applyWorkspaceMode('chat') },
@@ -1494,7 +1494,7 @@ function App() {
   const timelineItems = latestAgentEvents.map(describeAgentEvent)
 
   if (!auth.ready) {
-    return <main className="auth-shell"><div className="auth-card"><Loader className="spin" /><p>Loading Astra identity...</p></div></main>
+    return <main className="auth-shell"><div className="auth-card"><Loader className="spin" /><p>Loading Lumivex AI identity...</p></div></main>
   }
 
   if (!auth.user) {
@@ -1513,7 +1513,7 @@ function App() {
           </div>
           <div>
             <p className="eyebrow">Local Ollama Engine</p>
-            <h1>Astra</h1>
+            <h1>Lumivex AI</h1>
           </div>
           <button
             type="button"
@@ -1606,7 +1606,7 @@ function App() {
             type="button"
             className={`sidebar-action-btn ${showUpgrade ? 'observer-active' : ''}`}
             onClick={() => setShowUpgrade(true)}
-            title="Self-Upgrade — Astra proposes improvements to its own code"
+            title="Self-Upgrade — Lumivex AI proposes improvements to its own code"
           >
             <Cpu size={13} /> Upgrade
           </button>
@@ -1697,12 +1697,12 @@ function App() {
             <span>{auth.user.email}</span>
             <span>{workspaceRoleLabel(auth.user)} · {auth.user.organizationName ?? 'Personal workspace'}</span>
           </div>
-          <button type="button" onClick={() => void logout()} title="Sign out of Astra" aria-label="Sign out of Astra"><LogOut size={13} /></button>
+          <button type="button" onClick={() => void logout()} title="Sign out of Lumivex AI" aria-label="Sign out of Lumivex AI"><LogOut size={13} /></button>
         </div>
 
       </section>
 
-      <section className="chat-panel" aria-label="Chat with Astra">
+      <section className="chat-panel" aria-label="Chat with Lumivex AI">
         {!quietMode && observerStatus?.enabled && observerStatus.context && (
           <div className="observer-bar">
             <Eye size={11} />
@@ -1871,14 +1871,14 @@ function App() {
                   {message.role === 'assistant' ? <Bot size={18} /> : <UserRound size={18} />}
                 </div>
                 <div className="message-bubble">
-                  <span>{message.role === 'assistant' ? 'Astra' : 'You'}</span>
+                  <span>{message.role === 'assistant' ? 'Lumivex AI' : 'You'}</span>
                   {!quietMode && message.agentEvents.length > 0 && (
                     <Suspense fallback={null}>
                       <AgentTrace events={message.agentEvents} />
                     </Suspense>
                   )}
                   {!quietMode && message.role === 'assistant' && message.route && (
-                    <details className="route-decision" title="Why Astra chose this mode">
+                    <details className="route-decision" title="Why Lumivex AI chose this mode">
                       <summary className="route-decision-summary">
                         <span className={`route-mode ${message.route.useAgent ? 'agent' : 'chat'}`}>{message.route.useAgent ? 'Agent' : 'Chat'}</span>
                         <span>{INTELLIGENCE_LABEL[message.route.intelligenceMode]}</span>
@@ -1958,16 +1958,16 @@ function App() {
                     </div>
                   ) : null}
 
-                  {/* Follow-up suggestions + Astra's clarifying questions */}
+                  {/* Follow-up suggestions + Lumivex AI's clarifying questions */}
                   {message.role === 'assistant' && message.followups && message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).length > 0 && (
                     <div className="followup-chips">
                       {message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).map((q) => {
                         const isAsk = q.startsWith('ASK: ')
                         const label = isAsk ? q.slice(5) : q
                         return isAsk ? (
-                          <div key={q} className="astra-question">
-                            <span className="astra-question-label">Astra asks:</span>
-                            <span className="astra-question-text">{label}</span>
+                          <div key={q} className="lumivex-question">
+                            <span className="lumivex-question-label">Lumivex AI asks:</span>
+                            <span className="lumivex-question-text">{label}</span>
                           </div>
                         ) : (
                           <button
@@ -1984,7 +1984,7 @@ function App() {
                     </div>
                   )}
 
-                  {/* Predictive action cards — what Astra can proactively do next */}
+                  {/* Predictive action cards — what Lumivex AI can proactively do next */}
                   {!quietMode && message.role === 'assistant' && message.predictions && message.predictions.length > 0 && (
                     <div className="prediction-cards">
                       <span className="prediction-header">What I can do next</span>
@@ -2093,7 +2093,7 @@ function App() {
 
         {pendingQuestion && (
           <div className={`question-prompt ${pendingQuestion.kind === 'permission' ? 'permission-prompt' : ''}`}>
-            <p className="question-label">{pendingQuestion.kind === 'permission' ? 'Permission required' : 'Astra is asking:'}</p>
+            <p className="question-label">{pendingQuestion.kind === 'permission' ? 'Permission required' : 'Lumivex AI is asking:'}</p>
             <p className="question-text">{pendingQuestion.question}</p>
             {pendingQuestion.context && <p className="question-context">{pendingQuestion.context}</p>}
             {pendingQuestion.kind === 'permission' ? (
@@ -2128,7 +2128,7 @@ function App() {
           {voiceConvMode && (
             <div className="conv-mode-bar">
               <PhoneCall size={13} />
-              {isListening ? 'Listening… speak now' : isStreaming ? 'Generating response…' : 'Voice conversation active — speak to send, Astra replies aloud'}
+              {isListening ? 'Listening… speak now' : isStreaming ? 'Generating response…' : 'Voice conversation active — speak to send, Lumivex AI replies aloud'}
               <button
                 type="button"
                 style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14, padding: '0 2px' }}
@@ -2336,7 +2336,7 @@ function App() {
             type="button"
             className={`icon-button conv-btn ${voiceConvMode ? 'conv-active' : ''}`}
             onClick={startConversation}
-            title={voiceConvMode ? 'Stop conversation mode' : 'Start voice conversation — Astra listens, responds, and speaks back automatically'}
+            title={voiceConvMode ? 'Stop conversation mode' : 'Start voice conversation — Lumivex AI listens, responds, and speaks back automatically'}
           >
             {voiceConvMode ? <PhoneOff size={16} /> : <PhoneCall size={16} />}
           </button>

@@ -1,6 +1,6 @@
-# Astra Local Assistant
+# Lumivex AI Local Assistant
 
-Astra is a local AI assistant shell with a React chat interface, a Node/Express assistant engine, streaming Server-Sent Events, and Ollama as the model runtime.
+Lumivex AI is a local AI assistant shell with a React chat interface, a Node/Express assistant engine, streaming Server-Sent Events, and Ollama as the model runtime.
 
 This project does not train a frontier model from scratch or outperform Anthropic/OpenAI models by itself. It gives you a fully runnable local assistant engine that can use whichever Ollama model you install, with a clean place to add retrieval, tools, auth, memory, and evaluation.
 
@@ -20,13 +20,13 @@ npm run dev
 
 Open http://localhost:5173. The React app proxies `/api` requests to the assistant server on http://localhost:8787.
 
-Account auth now uses secure server-side sessions instead of browser-stored bearer tokens. Sign-up flows issue a verification code, and password recovery issues a reset code. By default Astra stays in debug delivery mode locally and surfaces those codes in the UI. If you run the included local Mailpit service and configure `.env`, Astra sends real auth emails to a local inbox instead.
+Account auth now uses secure server-side sessions instead of browser-stored bearer tokens. Sign-up flows issue a verification code, and password recovery issues a reset code. By default Lumivex AI stays in debug delivery mode locally and surfaces those codes in the UI. If you run the included local Mailpit service and configure `.env`, Lumivex AI sends real auth emails to a local inbox instead.
 
 Mutating and action-capable API routes require a signed-in session on the server side. This includes agent/tool streams, project and reference builders, previews, self-upgrade, memories, tasks, chat history, local code execution, and connector setup. The UI sends the session cookie to those endpoints in both local dev and packaged builds.
 
 ## Desktop App
 
-Astra can be packaged as a Windows desktop app with Electron. The desktop app starts the bundled local server, opens the Astra window, and keeps a tray icon with the `Ctrl+Shift+U` show/hide shortcut.
+Lumivex AI can be packaged as a Windows desktop app with Electron. The desktop app starts the bundled local server, opens the Lumivex AI window, and keeps a tray icon with the `Ctrl+Shift+U` show/hide shortcut.
 
 Local desktop build:
 
@@ -35,36 +35,36 @@ npm ci
 npm run desktop:dist
 ```
 
-The Windows installer is written to `desktop-release/Astra-Setup-<version>.exe`.
+The Windows installer is written to `desktop-release/Lumivex AI-Setup-<version>.exe`.
 
 Overlay workflow:
 
-- `Ctrl+Shift+U` shows or hides Astra from the tray.
-- `Ctrl+Shift+Space` toggles compact overlay mode. In overlay mode Astra stays on top near the bottom of the screen, so you can type prompts while keeping File Explorer, PowerShell, a browser, or another app visible underneath.
-- Astra uses a reuse-first workflow for external surfaces: if File Explorer, PowerShell, CMD, Gmail, Salesforce, or another browser tab/window is already open, follow-up actions should focus or navigate that existing surface before opening a duplicate.
-- Browser automation includes a target-discovery step for complex pages: `browser_find_targets` can list buttons, links, search boxes, inputs, selectors, and labels before Astra clicks or types.
+- `Ctrl+Shift+U` shows or hides Lumivex AI from the tray.
+- `Ctrl+Shift+Space` toggles compact overlay mode. In overlay mode Lumivex AI stays on top near the bottom of the screen, so you can type prompts while keeping File Explorer, PowerShell, a browser, or another app visible underneath.
+- Lumivex AI uses a reuse-first workflow for external surfaces: if File Explorer, PowerShell, CMD, Gmail, Salesforce, or another browser tab/window is already open, follow-up actions should focus or navigate that existing surface before opening a duplicate.
+- Browser automation includes a target-discovery step for complex pages: `browser_find_targets` can list buttons, links, search boxes, inputs, selectors, and labels before Lumivex AI clicks or types.
 
 GitHub downloads are produced by `.github/workflows/desktop-release.yml`:
 
 - Run the **Desktop Release** workflow manually to create a downloadable installer artifact.
 - Push a tag like `v0.1.0` to create a public GitHub Release with the installer attached.
 
-Users still need Ollama installed and running locally, with at least one model pulled, because Astra stays fully local and does not call cloud model APIs.
+Users still need Ollama installed and running locally, with at least one model pulled, because Lumivex AI stays fully local and does not call cloud model APIs.
 
 ## Mobile and iPad
 
-Astra also ships as an installable web app shell for tablet and mobile browsers. The Vite build includes a web app manifest, iOS home-screen metadata, and a service worker that caches only the app shell and static assets. API traffic is never cached by the service worker, so auth, chat, memory, and tool responses stay live.
+Lumivex AI also ships as an installable web app shell for tablet and mobile browsers. The Vite build includes a web app manifest, iOS home-screen metadata, and a service worker that caches only the app shell and static assets. API traffic is never cached by the service worker, so auth, chat, memory, and tool responses stay live.
 
-For iPad or mobile use, host the built app behind HTTPS and open the Astra URL in Safari or a compatible browser, then add it to the home screen. The mobile surface connects to the same secured backend and still requires the user-controlled Ollama/runtime environment behind it.
+For iPad or mobile use, host the built app behind HTTPS and open the Lumivex AI URL in Safari or a compatible browser, then add it to the home screen. The mobile surface connects to the same secured backend and still requires the user-controlled Ollama/runtime environment behind it.
 
 The PWA shell also includes a consent-first **Run Tracker** panel. It uses browser geolocation only after the user presses Start, stores captured points in that browser, summarizes distance/time/speed/pace, and exports GPX for the user to keep or import elsewhere.
 
 ## Public Capability Upgrades
 
-Astra's tool surface now includes 166 registered tools. Recent backend/tool additions focus on public usability, richer media work, faster engineering loops, and better browser diagnostics:
+Lumivex AI's tool surface now includes 166 registered tools. Recent backend/tool additions focus on public usability, richer media work, faster engineering loops, and better browser diagnostics:
 
 - Media and document tools: `scan_media_file`, `view_media`, `scan_pdf_document`, `generate_photo`, `extract_video_frames`, and `generate_ai_video_storyboard`.
-- Video generation path: Astra can generate AI scene stills and stitch them into an MP4 storyboard with ffmpeg. This is a real generated video artifact, but not a full native text-to-video diffusion model yet.
+- Video generation path: Lumivex AI can generate AI scene stills and stitch them into an MP4 storyboard with ffmpeg. This is a real generated video artifact, but not a full native text-to-video diffusion model yet.
 - Playwright upgrades: `browser_performance_audit` audits page timing, resources, DOM weight, images, forms, buttons, and public UX signals; `browser_smart_extract` extracts structured page content for research, scraping, testing, and reference-building.
 - Coding engine upgrades: `code_impact_search` finds symbols/features/errors with local context, while `code_quality_audit` summarizes scripts, source footprint, largest files, TODO markers, and optional TypeScript checks.
 - Engine lab upgrades: `/api/engine/search` indexes tools, connectors, routes, templates, and system capabilities for discovery; `/api/engine/benchmark` runs an authenticated short Ollama response benchmark for latency and tokens/sec.
@@ -80,21 +80,21 @@ $env:MODEL_PROVIDER = "ollama"
 $env:MODEL_NAME = "llama3.2"
 $env:OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 $env:OLLAMA_MODEL = "llama3.2"
-$env:DATABASE_URL = "file:./astra.db"
+$env:DATABASE_URL = "file:./lumivex.db"
 npm run dev
 ```
 
 For a deployed multi-user environment, point `DATABASE_URL` at Postgres instead:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://astra:change-me@db.example.com:5432/astra?schema=public"
+$env:DATABASE_URL = "postgresql://lumivex:change-me@db.example.com:5432/lumivex?schema=public"
 npm run db:push:postgres
 npm run build
 ```
 
-For public deployment, keep the Vercel frontend and Astra backend split. Vercel serves the static app, while a VPS/container host should run the Express backend with Postgres, SMTP, secure cookies, and access to the model runtime. This repo includes [render.yaml](render.yaml) for a Render backend plus managed Postgres Blueprint. See [docs/deployment.md](docs/deployment.md) and [.env.production.example](.env.production.example) for the production checklist.
+For public deployment, keep the Vercel frontend and Lumivex AI backend split. Vercel serves the static app, while a VPS/container host should run the Express backend with Postgres, SMTP, secure cookies, and access to the model runtime. This repo includes [render.yaml](render.yaml) for a Render backend plus managed Postgres Blueprint. See [docs/deployment.md](docs/deployment.md) and [.env.production.example](.env.production.example) for the production checklist.
 
-For public chat without hosting your own GPU server, point Astra at an OpenAI-compatible provider:
+For public chat without hosting your own GPU server, point Lumivex AI at an OpenAI-compatible provider:
 
 ```powershell
 $env:MODEL_PROVIDER = "openai-compatible"
@@ -110,12 +110,12 @@ $env:AUTH_CHALLENGE_DELIVERY = "smtp"
 $env:AUTH_SMTP_HOST = "127.0.0.1"
 $env:AUTH_SMTP_PORT = "1025"
 $env:AUTH_SMTP_SECURE = "0"
-$env:AUTH_MAIL_FROM = "Astra <no-reply@astra.local>"
+$env:AUTH_MAIL_FROM = "Lumivex AI <no-reply@lumivex.local>"
 ```
 
 ## Self-Hosted Postgres
 
-Astra now includes a self-hosted Postgres stack for local or single-host deployments, plus a local Mailpit inbox for auth emails.
+Lumivex AI now includes a self-hosted Postgres stack for local or single-host deployments, plus a local Mailpit inbox for auth emails.
 
 Start it with Docker Compose:
 
@@ -123,10 +123,10 @@ Start it with Docker Compose:
 npm run db:postgres:up
 ```
 
-Then point Astra at it:
+Then point Lumivex AI at it:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://astra:astra_dev_password@localhost:5432/astra?schema=public"
+$env:DATABASE_URL = "postgresql://lumivex:lumivex_dev_password@localhost:5432/lumivex?schema=public"
 npm run db:push:postgres
 npm run dev
 ```
@@ -144,11 +144,11 @@ Versioned SQL migrations live in `prisma/migrations/` with separate SQLite and P
 
 ## Local Identity Vault
 
-Astra includes a Prisma-backed identity vault. Local desktop installs default to SQLite, while deployed environments can use Postgres behind the same auth flow. You can create Astra accounts, verify them, sign in with email or username, recover passwords, and use the **Vault** panel to store usernames, emails, passwords, tokens, and notes for external apps/connectors.
+Lumivex AI includes a Prisma-backed identity vault. Local desktop installs default to SQLite, while deployed environments can use Postgres behind the same auth flow. You can create Lumivex AI accounts, verify them, sign in with email or username, recover passwords, and use the **Vault** panel to store usernames, emails, passwords, tokens, and notes for external apps/connectors.
 
-- Passwords for the Astra login are hashed with Node `scrypt`.
+- Passwords for the Lumivex AI login are hashed with Node `scrypt`.
 - Credential secrets and notes are encrypted with AES-256-GCM using `CREDENTIAL_ENCRYPTION_KEY` when configured, or a machine-specific fallback for local-only installs.
-- Auth verification and reset codes can be delivered by SMTP when `AUTH_CHALLENGE_DELIVERY` resolves to email mode; otherwise Astra stays in debug delivery mode for local testing.
+- Auth verification and reset codes can be delivered by SMTP when `AUTH_CHALLENGE_DELIVERY` resolves to email mode; otherwise Lumivex AI stays in debug delivery mode for local testing.
 - Local SQLite runtime data is ignored by Git.
 - Use `npm run db:studio` for the local SQLite store or `npm run db:studio:postgres` for a Postgres deployment; Prisma Studio is an admin/debug surface, not the end-user login UI.
 
@@ -166,7 +166,7 @@ Astra includes a Prisma-backed identity vault. Local desktop installs default to
 - `npm run db:postgres:reset` destroys the self-hosted Postgres volume.
 - `npm run start` runs the production server from `dist-server` and serves the built frontend from `dist`.
 - `npm run lint` runs Oxlint.
-- `npm run test:astra` runs deterministic Astra routing, endpoint-guard, engine-lab, and PWA safety checks.
+- `npm run test:lumivex` runs deterministic Lumivex AI routing, endpoint-guard, engine-lab, and PWA safety checks.
 
 ## Engine
 

@@ -65,7 +65,7 @@ type SelfUpgradeSnapshot = {
 }
 
 const QUICK_TASKS = [
-  { emoji: '🔍', label: 'Review for improvements', task: 'Review the Astra codebase in src/ and server/. Identify the most impactful improvement opportunities — performance, reliability, UX, or missing features. List what you find, then implement the single most valuable one using preview_write.' },
+  { emoji: '🔍', label: 'Review for improvements', task: 'Review the Lumivex AI codebase in src/ and server/. Identify the most impactful improvement opportunities — performance, reliability, UX, or missing features. List what you find, then implement the single most valuable one using preview_write.' },
   { emoji: '🐛', label: 'Fix TypeScript errors', task: 'Run lint_code on src/ and server/ to find all TypeScript errors. For each error found, read the affected file, diagnose the issue, and propose a minimal fix using preview_write.' },
   { emoji: '⚡', label: 'Optimize agent performance', task: 'Review server/agent.ts and server/index.ts. Look for performance bottlenecks — unnecessary awaits, redundant processing, or inefficient context handling. Propose targeted optimizations using preview_write.' },
   { emoji: '🎨', label: 'UI accessibility audit', task: 'Review src/App.css and src/components/ for accessibility issues — missing aria-labels, poor contrast, keyboard navigation gaps, or layout issues. Propose improvements using preview_write.' },
@@ -259,7 +259,7 @@ export function SelfUpgradePanel({ onClose, currentModel }: Props) {
         <div className="upgrade-notice">
           <Shield size={12} />
           <span>
-            <strong>Guardrailed.</strong> Astra reads its own source and proposes changes in the{' '}
+            <strong>Guardrailed.</strong> Lumivex AI reads its own source and proposes changes in the{' '}
             <strong>Preview panel</strong> — nothing is written without your approval.
             Only <code>read_file</code>, <code>code_search</code>, <code>lint_code</code>, and{' '}
             <code>preview_write</code> are permitted.
@@ -335,7 +335,7 @@ export function SelfUpgradePanel({ onClose, currentModel }: Props) {
                   className="compare-textarea"
                   value={task}
                   onChange={e => setTask(e.target.value)}
-                  placeholder={`Describe what you want Astra to improve about itself…\n\nExamples:\n• Add keyboard shortcut Ctrl+T to open Tasks panel\n• Improve the dark mode contrast for code block backgrounds\n• Add a token cost estimate to each message footer`}
+                  placeholder={`Describe what you want Lumivex AI to improve about itself…\n\nExamples:\n• Add keyboard shortcut Ctrl+T to open Tasks panel\n• Improve the dark mode contrast for code block backgrounds\n• Add a token cost estimate to each message footer`}
                   rows={5}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void runUpgrade(task)

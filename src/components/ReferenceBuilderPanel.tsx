@@ -192,7 +192,7 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
             <div>
               <span className="settings-section-title">Website Learner</span>
               <h3>Scan, understand, blueprint</h3>
-              <p>Use a public URL or screenshot as a reference, then generate an original build plan Astra can turn into a project.</p>
+              <p>Use a public URL or screenshot as a reference, then generate an original build plan Lumivex AI can turn into a project.</p>
             </div>
             <Camera size={34} />
           </section>
@@ -205,7 +205,7 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
           </label>
 
           <label className="project-builder-field">
-            <span>What should Astra build?</span>
+            <span>What should Lumivex AI build?</span>
             <input value={goal} onChange={event => setGoal(event.target.value)} placeholder="vehicle history report website, SaaS dashboard, booking site..." />
           </label>
 
@@ -223,7 +223,7 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
                   Choose
                 </button>
               </div>
-              <small>Astra will create: {destinationPreview}</small>
+              <small>Lumivex AI will create: {destinationPreview}</small>
             </label>
           </div>
 
@@ -235,7 +235,7 @@ export function ReferenceBuilderPanel({ apiBase, onUsePrompt, onClose }: Props) 
 
           <label className="project-builder-approval">
             <input type="checkbox" checked={approved} onChange={event => setApproved(event.target.checked)} />
-            <span>I approve Astra scanning this public reference/screenshot and creating an original blueprint, without copying protected brand assets or exact content.</span>
+            <span>I approve Lumivex AI scanning this public reference/screenshot and creating an original blueprint, without copying protected brand assets or exact content.</span>
           </label>
 
           <label className="reference-compare-toggle">

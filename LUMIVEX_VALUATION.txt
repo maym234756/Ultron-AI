@@ -1,11 +1,11 @@
 ================================================================================
-                    ASTRA -- IN-DEPTH PRODUCT VALUATION
+                    LUMIVEX AI -- IN-DEPTH PRODUCT VALUATION
                          Updated: July 12, 2026
 ================================================================================
 
 EXECUTIVE SUMMARY
 --------------------------------------------------------------------------------
-Astra is a locally deployed, privacy-first AI assistant platform built around
+Lumivex AI is a locally deployed, privacy-first AI assistant platform built around
 Ollama, Node/Express, React, Electron, Prisma, and a broad tool/connector layer.
 It is no longer just a local chat shell or a desktop automation prototype. The
 current product now includes:
@@ -34,7 +34,7 @@ current product now includes:
   - Playwright performance audits and structured page extraction
   - Coding impact search and project quality audit tools
   - Engine capability search and authenticated response benchmarking
-  - Deterministic Astra evaluation harness for routing, guard, and PWA checks
+  - Deterministic Lumivex AI evaluation harness for routing, guard, and PWA checks
 
 This is a custom product, not a thin wrapper around a cloud API. Its core value
 comes from local ownership, OS/tool access, privacy, zero cloud inference cost,
@@ -67,13 +67,13 @@ Source files counted outside node_modules/dist/generated clients:
   Provider SQL migrations:         2, plus migration README
   PWA assets:                      manifest + service worker
   Desktop workflow:                GitHub Actions Windows installer build
-  Eval scripts:                    router eval + Astra guard/PWA eval
+  Eval scripts:                    router eval + Lumivex AI guard/PWA eval
 
 RECENT VALIDATION STATUS
 --------------------------------------------------------------------------------
 Latest validation run after the July 12 trust/mobile/eval updates:
 
-  npm run test:astra   PASSED, 12/12 deterministic checks
+  npm run test:lumivex   PASSED, 12/12 deterministic checks
   npm run build         PASSED, Prisma generate + TypeScript + Vite + server build, no Vite large chunk warning
   npm run lint          PASSED with warnings only
 
@@ -131,7 +131,7 @@ LEGEND
 
 CORE AI AND CHAT EXPERIENCE
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 Privacy-first local inference                FULL/UNIQUE   PARTIAL/MISSING
 Zero cloud model API cost                    FULL/UNIQUE   MISSING
 Real-time token streaming                    FULL          FULL
@@ -151,7 +151,7 @@ Configurable context window                   FULL          PARTIAL
 
 AGENT, TOOLS, AND AUTOMATION
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 166 registered tool definitions              FULL/UNIQUE   MISSING
 30 modular tool modules                       FULL/UNIQUE   MISSING
 Terminal / shell execution                    FULL/UNIQUE   MISSING
@@ -174,7 +174,7 @@ AI storyboard-to-MP4 generation               PARTIAL       PARTIAL/MISSING
 
 TRUST, IDENTITY, AND ADMINISTRATION
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 Server-side session cookies                   FULL          FULL
 Email verification flow                       FULL          FULL
 Password reset flow                           FULL          FULL
@@ -193,7 +193,7 @@ Versioned SQL migrations                      PARTIAL/FULL  FULL
 
 BUILDERS AND SELF-IMPROVEMENT
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 Project Builder templates                     FULL/UNIQUE   MISSING
 Project Memory                                FULL/UNIQUE   MISSING
 Open folder / VS Code / terminal actions      FULL/UNIQUE   MISSING
@@ -204,11 +204,11 @@ Visual comparison reports                     FULL/UNIQUE   MISSING
 Self-Healer                                   FULL/UNIQUE   MISSING
 Self-Upgrade backlog/packs                    FULL/UNIQUE   MISSING
 Rollback-aware preview history                FULL/UNIQUE   MISSING
-Deterministic Astra eval harness             PARTIAL/FULL  PARTIAL
+Deterministic Lumivex AI eval harness             PARTIAL/FULL  PARTIAL
 
 OBSERVABILITY AND OPERATIONS
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 Health Command Center                         FULL/UNIQUE   PARTIAL/MISSING
 Backend Runtime Supervisor                    FULL/UNIQUE   MISSING
 Route inventory/status                        FULL/UNIQUE   MISSING
@@ -220,7 +220,7 @@ Telemetry export/clear                        FULL          PARTIAL
 
 DISTRIBUTION AND PLATFORM
 --------------------------------------------------------------------------------
-Feature                                      Astra        Cloud Chat Baseline
+Feature                                      Lumivex AI        Cloud Chat Baseline
 Windows desktop tray app                      FULL/UNIQUE   MISSING
 Windows installer release workflow            FULL/UNIQUE   MISSING
 Open in browser / local web app               FULL          FULL
@@ -231,7 +231,7 @@ macOS/Linux packaged desktop                  MISSING       PARTIAL
 
 COMPETITIVE SUMMARY
 --------------------------------------------------------------------------------
-Astra is strongest where cloud chat tools are structurally constrained:
+Lumivex AI is strongest where cloud chat tools are structurally constrained:
 
   - Local data ownership
   - OS and desktop automation
@@ -250,7 +250,7 @@ Cloud chat tools remain stronger in:
   - Global hosted availability without user-managed infrastructure
   - Very long context windows and managed cloud compute
 
-Astra's differentiated position is not simply "better chat." Its more valuable
+Lumivex AI's differentiated position is not simply "better chat." Its more valuable
 position is "a local-first AI operating layer for action, automation, memory,
 project work, and trusted personal/team workflows."
 
@@ -259,7 +259,7 @@ SECTION 3 -- REBUILD COST ANALYSIS
 ================================================================================
 
 This section estimates replacement cost for an experienced professional team to
-replicate the current Astra feature set from scratch. It assumes senior
+replicate the current Lumivex AI feature set from scratch. It assumes senior
 engineers familiar with TypeScript, React, local AI, Prisma, Electron, browser
 automation, and agent/tool architecture.
 
@@ -337,7 +337,7 @@ Add project management, rework, discovery, coordination, and risk buffer:
 
 Estimated Replacement / Rebuild Cost: $460,000 - $730,000
 
-The high end accounts for the fact that the hardest parts of Astra are not the
+The high end accounts for the fact that the hardest parts of Lumivex AI are not the
 visible screens. They are the integration boundaries: local OS actions, browser
 automation, streaming, tool result management, auth/session safety, model routing,
 project writes, rollback previews, and keeping all of it understandable to users.
@@ -363,13 +363,13 @@ The AI assistant market is shifting toward three simultaneous needs:
      The more capable the agent becomes, the more valuable permission boundaries,
      audit trails, previews, rollbacks, and server-side enforcement become.
 
-Astra has moved directly into this market wedge. Its recent upgrades reduce a
+Lumivex AI has moved directly into this market wedge. Its recent upgrades reduce a
 major product risk: the system now has server-side protection for action routes
 instead of relying mainly on frontend login gating.
 
 COMPARABLE PRODUCTS / POSITIONING
 --------------------------------------------------------------------------------
-Product / Category                Typical Position              Astra Advantage
+Product / Category                Typical Position              Lumivex AI Advantage
 LM Studio / Jan.ai                Local chat UI                  Far richer tools/actions
 AnythingLLM                       Local/team knowledge agent      Deeper OS/project automation
 OpenDevin/SWE agents              Coding agent                   Broader personal OS workspace
@@ -453,7 +453,7 @@ SECTION 5 -- TECHNOLOGY ASSET VALUE
    iPad/mobile home-screen shell, and production static serving.
 
 10. EVALUATION AND QUALITY HARNESS                               $15K - $35K
-    Router eval plus deterministic Astra eval checking routing, server-side
+    Router eval plus deterministic Lumivex AI eval checking routing, server-side
   endpoint guards, engine-lab coverage, and PWA API-cache safety.
 
 ================================================================================
@@ -468,7 +468,7 @@ FACTORS THAT REDUCE VALUE
    context tasks.
 
 2. Native mobile not yet shipped
-   Astra now has an installable PWA/iPad web shell, but not a native iOS or
+   Lumivex AI now has an installable PWA/iPad web shell, but not a native iOS or
    Android application.
 
 3. Cross-platform desktop gap
@@ -507,7 +507,7 @@ RISK FACTORS RECENTLY REDUCED
    Provider-specific SQL migrations now exist for SQLite and Postgres.
 
 4. No evaluation harness risk reduced
-   `npm run test:astra` now verifies routing, guard, and PWA safety checks.
+  `npm run test:lumivex` now verifies routing, guard, and PWA safety checks.
 
 5. Admin visibility risk reduced
    Platform admins can view recent identity/vault/org audit events.
@@ -532,7 +532,7 @@ BLENDED STRATEGIC VALUE, ENTERPRISE / LICENSING / ACQUISITION
 --------------------------------------------------------------------------------
   $1,500,000 - $3,800,000+
 
-The valuation increased from the July 3 estimate because Astra added several
+The valuation increased from the July 3 estimate because Lumivex AI added several
 high-value product layers that materially reduce risk and improve distribution:
 
   - Server-side auth enforcement on action-capable routes
@@ -546,16 +546,16 @@ high-value product layers that materially reduce risk and improve distribution:
   - Media scanning, Playwright audit, coding audit, and Run Tracker additions
 
 ================================================================================
-SECTION 8 -- WHAT MAKES ASTRA DEFENSIBLE
+SECTION 8 -- WHAT MAKES LUMIVEX AI DEFENSIBLE
 ================================================================================
 
 1. LOCAL-FIRST TRUST MODEL
-   Astra can operate over local files, local browser sessions, local screenshots,
+   Lumivex AI can operate over local files, local browser sessions, local screenshots,
    local memory, and local credentials without sending user data to a cloud model
    provider by default.
 
 2. ACTION DEPTH
-   Cloud assistants can answer questions about tools. Astra can operate the local
+   Cloud assistants can answer questions about tools. Lumivex AI can operate the local
    environment, write projects, open terminals, run checks, inspect files, use
    browser automation, and manage remembered project workflows.
 
@@ -573,7 +573,7 @@ SECTION 8 -- WHAT MAKES ASTRA DEFENSIBLE
    propose changes, preview diffs, apply/rollback, and validate.
 
 6. DISTRIBUTION FLEXIBILITY
-   Astra can run as a local browser app, Windows desktop app, OpenAI-compatible
+   Lumivex AI can run as a local browser app, Windows desktop app, OpenAI-compatible
    local API, and installable PWA shell. This gives it more deployment shapes than
    a single desktop-only or SaaS-only product.
 
@@ -587,7 +587,7 @@ SECTION 9 -- INVESTMENT REQUIRED TO REACH $1M+ AND $5M+ VALUE
 
 CURRENT STATE
 --------------------------------------------------------------------------------
-Astra is now a serious local-first AI operating platform with a stronger trust
+Lumivex AI is now a serious local-first AI operating platform with a stronger trust
 foundation. It is plausibly above $1M strategic value as a technology asset, but
 commercial value depends on packaging, security hardening, distribution, support,
 and proof of repeatable use.
@@ -610,7 +610,7 @@ Expanded eval benchmark suite                      50-100 hrs   High
 
 PATH TO $5M+ STRATEGIC VALUE
 --------------------------------------------------------------------------------
-Astra would need at least one of these traction paths:
+Lumivex AI would need at least one of these traction paths:
 
   - 50-100 paying self-hosted teams
   - Regulated-industry pilot deployments with measurable productivity outcomes
@@ -623,7 +623,7 @@ Astra would need at least one of these traction paths:
 CONCLUSION
 ================================================================================
 
-Astra has moved from a powerful personal local assistant into the foundation of
+Lumivex AI has moved from a powerful personal local assistant into the foundation of
 a defensible local-first AI operating platform. The July 12 upgrades are
 especially important because they address four prior valuation discounts:
 
@@ -674,13 +674,13 @@ APPENDIX B -- CURRENT VALIDATION COMMANDS
 
 Recommended local validation loop:
 
-  npm run test:astra
+  npm run test:lumivex
   npm run build
   npm run lint
 
 Latest known result:
 
-  test:astra: passed 12/12
+  test:lumivex: passed 12/12
   build: passed
   lint: passed with warnings only
 
@@ -704,9 +704,9 @@ This July 12 update revised the prior July 3 valuation to reflect:
   - Identity vault, org/admin, credential vault, and audit log maturity
   - SQLite/Postgres runtime support and provider SQL migrations
   - PWA/mobile/iPad install shell
-  - Deterministic Astra eval harness
+  - Deterministic Lumivex AI eval harness
   - Updated risk factors and valuation ranges
 
 ================================================================================
-         Document prepared for: Astra Product Review -- July 12, 2026
+         Document prepared for: Lumivex AI Product Review -- July 12, 2026
 ================================================================================

@@ -236,7 +236,7 @@ function buildTaskPlan(prompt: string, mode: NonNullable<AgentOptions['intellige
   }
 }
 
-const AGENT_SYSTEM_BASE = `You are Astra, a powerful local AI assistant with full tool access on a Windows machine.
+const AGENT_SYSTEM_BASE = `You are Lumivex AI, a powerful local AI assistant with full tool access on a Windows machine.
 
 ── HOW TO REASON (apply every turn) ─────────────────────────────────────────
 Before acting, think through these steps:
@@ -649,8 +649,8 @@ export async function runAgent(
   if (preflightLocations.length > 0) {
     const permission: LocationPermissionRequest = { kind: 'read', locations: preflightLocations, actionLabel: 'review/open this location' }
     const answer = await askUser(
-      'Allow Astra to review this location?',
-      `Location: ${preflightLocations.join('\nLocation: ')}\nAstra will start with a safe directory listing, then continue the review using approved filesystem tools.`,
+      'Allow Lumivex AI to review this location?',
+      `Location: ${preflightLocations.join('\nLocation: ')}\nLumivex AI will start with a safe directory listing, then continue the review using approved filesystem tools.`,
       'permission',
     )
     if (!isApprovalAnswer(answer)) {
@@ -843,7 +843,7 @@ export async function runAgent(
           if (permission) {
             if (!hasPermissionGrant(approvedLocationGrants, permission)) {
               const answer = await askUser(
-                `Allow Astra to ${permission.actionLabel}?`,
+                `Allow Lumivex AI to ${permission.actionLabel}?`,
                 `Tool: ${tc.name}\nLocation: ${permission.locations.join('\nLocation: ')}\nOnly approve locations you recognize. Deny blocks this tool call.`,
                 'permission',
               )

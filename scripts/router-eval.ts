@@ -65,7 +65,7 @@ const cases: RouterCase[] = [
   },
   {
     name: 'project path review request',
-    prompt: 'Review the entire project at C:\\Users\\maym2\\Astra and find weak spots',
+    prompt: 'Review the entire project at C:\\Users\\maym2\\Lumivex AI and find weak spots',
     expected: { useAgent: true, intelligenceMode: 'deep', minConfidence: 0.7 },
   },
   {

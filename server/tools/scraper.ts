@@ -445,7 +445,7 @@ export const webCheckMonitor: ToolHandler = async (args) => {
 
     const changed = `CHANGED: "${mon.name}"\nPrevious: ${prev}\nCurrent:  ${current}\nRule: ${mon.notify_on}`
     // Attempt desktop notification
-    await runTerminal({ command: `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${changed.replace(/'/g, "''")}','Astra Web Monitor')` }).catch(() => {})
+    await runTerminal({ command: `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${changed.replace(/'/g, "''")}','Lumivex AI Web Monitor')` }).catch(() => {})
     return changed
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }

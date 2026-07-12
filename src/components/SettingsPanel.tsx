@@ -21,7 +21,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
   function set<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     const next = { ...settings, [key]: value }
     onChange(next)
-    localStorage.setItem('astra-settings', JSON.stringify(next))
+    localStorage.setItem('lumivex-settings', JSON.stringify(next))
   }
 
   async function toggleObserver(enabled: boolean, mode?: 'fast' | 'deep', intervalSec?: number) {
@@ -60,7 +60,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
             <div className="settings-toggle-row">
               <div>
                 <span className="settings-label">Passive observation</span>
-                <p className="settings-hint">Astra silently watches your screen and open windows, giving it context without you having to explain what's open.</p>
+                <p className="settings-hint">Lumivex AI silently watches your screen and open windows, giving it context without you having to explain what's open.</p>
               </div>
               <button
                 type="button"
@@ -118,7 +118,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
             <div className="settings-toggle-row">
               <div>
                 <span className="settings-label">Auto route Chat / Agent</span>
-                <p className="settings-hint">Astra decides whether a prompt needs tools, browser, files, connectors, or a normal chat answer.</p>
+                <p className="settings-hint">Lumivex AI decides whether a prompt needs tools, browser, files, connectors, or a normal chat answer.</p>
               </div>
               <button
                 type="button"
@@ -135,7 +135,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
             <div className="settings-toggle-row">
               <div>
                 <span className="settings-label">Auto intelligence profile</span>
-                <p className="settings-hint">Astra chooses Instant, Balanced, Deep, or Research based on prompt complexity and freshness needs.</p>
+                <p className="settings-hint">Lumivex AI chooses Instant, Balanced, Deep, or Research based on prompt complexity and freshness needs.</p>
               </div>
               <button
                 type="button"
@@ -229,7 +229,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
               placeholder="e.g. I'm a TypeScript developer building React apps. I use Python for data scripts. I prefer concise answers with code examples."
               className="settings-textarea"
             />
-            <span className="settings-hint">Injected into every message. Helps Astra give more relevant answers without you explaining your context each time.</span>
+            <span className="settings-hint">Injected into every message. Helps Lumivex AI give more relevant answers without you explaining your context each time.</span>
           </label>
 
           <div className="settings-divider" />
@@ -242,7 +242,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
               rows={5}
               value={settings.systemPrompt}
               onChange={(e) => set('systemPrompt', e.target.value)}
-              placeholder="Extra instructions appended to Astra's system prompt…"
+              placeholder="Extra instructions appended to Lumivex AI's system prompt…"
               className="settings-textarea"
             />
           </label>
@@ -258,7 +258,7 @@ export function SettingsPanel({ settings, onChange, onClose, models }: Props) {
                 domainExpertise: '', numCtx: 8192, answerStyle: 'detailed',
               }
               onChange(defaults)
-              localStorage.removeItem('astra-settings')
+              localStorage.removeItem('lumivex-settings')
             }}
           >
             Reset to defaults

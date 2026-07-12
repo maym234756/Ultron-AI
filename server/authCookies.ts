@@ -1,6 +1,6 @@
 import type express from 'express'
 
-export const AUTH_SESSION_COOKIE = process.env.AUTH_SESSION_COOKIE ?? 'astra_session'
+export const AUTH_SESSION_COOKIE = process.env.AUTH_SESSION_COOKIE ?? 'lumivex_session'
 
 const rawSameSite = (process.env.AUTH_COOKIE_SAME_SITE ?? 'lax').toLowerCase()
 export const AUTH_COOKIE_SAME_SITE: 'lax' | 'strict' | 'none' = rawSameSite === 'strict' || rawSameSite === 'none' ? rawSameSite : 'lax'

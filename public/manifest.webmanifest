@@ -1,6 +1,6 @@
 {
-  "name": "Astra Local Assistant",
-  "short_name": "Astra",
+  "name": "Lumivex AI",
+  "short_name": "Lumivex",
   "description": "A local-first AI workspace for chat, tools, memory, projects, and trusted automation.",
   "start_url": "/",
   "scope": "/",

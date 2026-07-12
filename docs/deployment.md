@@ -1,9 +1,9 @@
-# Astra Public Deployment
+# Lumivex AI Public Deployment
 
 This repo is now ready for a split public deployment:
 
 - Vercel serves the static React frontend.
-- A separate Node host runs the Astra Express backend.
+- A separate Node host runs the Lumivex AI Express backend.
 - Postgres stores production auth, organization, session, vault, and audit data.
 - Ollama or another internal model runtime must be reachable from the backend.
 
@@ -25,12 +25,12 @@ APP_ORIGIN="https://astra-one-red.vercel.app,https://lumivexai.com,https://www.l
 After the backend is deployed, set this Vercel environment variable and redeploy:
 
 ```env
-VITE_API_BASE_URL="https://api.your-astra-domain.com"
+VITE_API_BASE_URL="https://api.your-lumivexai-domain.com"
 ```
 
 ## Backend Host Requirements
 
-Use a VPS or container host for the backend. Astra is not a good fit for Vercel serverless functions because it has long-running SSE streams, Playwright, local files, tool execution, Prisma, and an Ollama runtime boundary.
+Use a VPS or container host for the backend. Lumivex AI is not a good fit for Vercel serverless functions because it has long-running SSE streams, Playwright, local files, tool execution, Prisma, and an Ollama runtime boundary.
 
 Good targets:
 
@@ -69,7 +69,7 @@ Start from [.env.production.example](../.env.production.example). The critical v
 NODE_ENV="production"
 PORT="8787"
 APP_ORIGIN="https://astra-one-red.vercel.app,https://lumivexai.com,https://www.lumivexai.com"
-DATABASE_URL="postgresql://astra:replace-me@db.example.com:5432/astra?schema=public"
+DATABASE_URL="postgresql://lumivex:replace-me@db.example.com:5432/lumivex?schema=public"
 AUTH_COOKIE_SAME_SITE="none"
 AUTH_COOKIE_SECURE="1"
 CREDENTIAL_ENCRYPTION_KEY="replace-with-a-long-random-secret"
@@ -89,13 +89,13 @@ Use `AUTH_COOKIE_SAME_SITE="none"` and `AUTH_COOKIE_SECURE="1"` when the fronten
 Build the backend image:
 
 ```powershell
-docker build -t astra-backend .
+docker build -t lumivex-backend .
 ```
 
 Run it with a production environment file:
 
 ```powershell
-docker run --env-file .env.production -p 8787:8787 astra-backend
+docker run --env-file .env.production -p 8787:8787 lumivex-backend
 ```
 
 Health check:
@@ -111,7 +111,7 @@ For local development you can use `prisma db push`, but production should use re
 Minimum first deployment path:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://astra:replace-me@db.example.com:5432/astra?schema=public"
+$env:DATABASE_URL = "postgresql://lumivex:replace-me@db.example.com:5432/lumivex?schema=public"
 npm run db:generate:postgres
 npm run db:push:postgres
 ```
@@ -122,7 +122,7 @@ For a shared or customer-facing database, review the SQL under [prisma/migration
 
 Once the backend has a public HTTPS URL:
 
-1. Open the Vercel project `astra`.
+1. Open the current Vercel project for Lumivex AI.
 2. Add `VITE_API_BASE_URL` with the backend URL.
 3. Redeploy production.
 4. Confirm the live frontend can call:

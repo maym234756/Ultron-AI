@@ -122,7 +122,7 @@ function summarizeDatabaseTarget(url: string): string {
   if (url.toLowerCase().startsWith('file:')) {
     const pathname = url.slice('file:'.length)
     const normalized = pathname.replace(/\\/g, '/').split('/').filter(Boolean)
-    return normalized.at(-1) ?? 'astra.db'
+    return normalized.at(-1) ?? 'lumivex.db'
   }
 
   return url
@@ -274,7 +274,7 @@ function bestAvailableModel(models: OllamaModel[]): string {
 }
 
 const defaultSystemPrompt = [
-  'You are Astra, a precise AI assistant running through Astra\'s configured model runtime.',
+  'You are Lumivex AI, a precise AI assistant running through Lumivex AI\'s configured model runtime.',
   'You have broad knowledge, strong reasoning, and full tool access on the user\'s Windows machine.',
   'Be direct, confident, and accurate: say what you know, hedge what is uncertain, state clearly when you do not know.',
   'Answer contract: direct answer first, then only the reasoning, caveats, or steps needed for the user to act.',
@@ -393,7 +393,7 @@ app.use(cors({
       callback(null, true)
       return
     }
-    callback(new Error('Origin not allowed by Astra auth policy.'))
+    callback(new Error('Origin not allowed by Lumivex AI auth policy.'))
   },
   credentials: true,
 }))
@@ -606,11 +606,11 @@ app.get('/api/capabilities/status', async (_request, response) => {
 
   const healthy = statusRows.every(row => row.ok)
   const localServices = [
-    { id: 'adminer', label: 'Adminer', url: `http://127.0.0.1:${process.env.ASTRA_ADMINER_PORT ?? '8088'}`, enabled: databaseProvider === 'postgresql' },
+    { id: 'adminer', label: 'Adminer', url: `http://127.0.0.1:${process.env.LUMIVEX_ADMINER_PORT ?? '8088'}`, enabled: databaseProvider === 'postgresql' },
     {
       id: 'mailpit',
       label: 'Mailpit',
-      url: `http://127.0.0.1:${process.env.ASTRA_MAILPIT_UI_PORT ?? '8025'}`,
+      url: `http://127.0.0.1:${process.env.LUMIVEX_MAILPIT_UI_PORT ?? '8025'}`,
       enabled: delivery.resolvedMode === 'smtp' && (delivery.host === '127.0.0.1' || delivery.host === 'localhost'),
     },
   ]
@@ -662,7 +662,7 @@ app.get('/api/capabilities/status', async (_request, response) => {
   response.json({
     healthy,
     checkedAt,
-    summary: healthy ? 'Astra is operational.' : 'Astra needs attention.',
+    summary: healthy ? 'Lumivex AI is operational.' : 'Lumivex AI needs attention.',
     models: modelNames,
     defaultModel,
     toolCount: toolDefinitions.length,
@@ -777,7 +777,7 @@ function engineSearchItems(): EngineSearchItem[] {
     id: `route:${route.method}:${route.path}`,
     type: 'route' as const,
     title: `${route.method} ${route.path}`,
-    detail: route.path.startsWith('/v1') ? 'OpenAI-compatible API route' : 'Astra backend API route',
+    detail: route.path.startsWith('/v1') ? 'OpenAI-compatible API route' : 'Lumivex AI backend API route',
     keywords: `${route.method} ${route.path}`,
   }))
   const templates = PROJECT_TEMPLATES.map(template => ({
@@ -862,7 +862,7 @@ app.post('/api/engine/benchmark', async (request, response) => {
   if (!user) return
 
   const body = request.body as { model?: string; prompt?: string; maxTokens?: number }
-  const prompt = (body.prompt ?? 'Reply with one concise sentence: Astra engine benchmark complete.').trim().slice(0, 1000)
+  const prompt = (body.prompt ?? 'Reply with one concise sentence: Lumivex AI engine benchmark complete.').trim().slice(0, 1000)
   const maxTokens = Math.min(256, Math.max(16, Number(body.maxTokens ?? 64) || 64))
   let selectedModel = sanitizeModel(body.model)
   try {
@@ -980,7 +980,7 @@ app.post('/api/auth/register', registerRateLimit, async (request, response) => {
       message: 'Enter the verification code to finish creating your account.',
     })
   } catch (err) {
-    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Astra identity' })
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Lumivex AI identity' })
   }
 })
 
@@ -1071,7 +1071,7 @@ app.post('/api/auth/logout', async (request, response) => {
 
 async function requireAuth(request: express.Request, response: express.Response): Promise<Awaited<ReturnType<typeof currentUser>> | null> {
   const user = await currentUser(authToken(request))
-  if (!user) response.status(401).json({ error: 'Sign in to Astra first.' })
+  if (!user) response.status(401).json({ error: 'Sign in to Lumivex AI first.' })
   return user
 }
 
@@ -1400,7 +1400,7 @@ app.post('/api/project-builder/projects/:id/actions', async (request, response) 
   const action = String((request.body as { action?: string } | undefined)?.action ?? '') as ProjectAction
   const approved = Boolean((request.body as { approved?: boolean } | undefined)?.approved)
   if (!approved) {
-    response.status(403).json({ error: 'Approval is required before Astra runs project actions.' })
+    response.status(403).json({ error: 'Approval is required before Lumivex AI runs project actions.' })
     return
   }
   try {
@@ -2212,7 +2212,7 @@ app.post('/api/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (
   if (!user) return
   try {
     const ext = (req.headers['x-audio-format'] as string) ?? 'webm'
-    const tmpFile = path.join(tmpdir(), `astra-voice-${Date.now()}.${ext}`)
+    const tmpFile = path.join(tmpdir(), `lumivex-voice-${Date.now()}.${ext}`)
     await fsPromises.writeFile(tmpFile, req.body as Buffer)
     const result = await transcribeAudio({ file: tmpFile })
     await fsPromises.unlink(tmpFile).catch(() => {})
@@ -2276,8 +2276,8 @@ app.post('/api/followups', async (req, res) => {
               'SUGGEST: [another useful question, max 12 words]',
               '',
               'Then add ONE of these (not both) only when clearly applicable:',
-              'ASK: [a clarifying question Astra needs to give a better answer]',
-              'PREDICT: [emoji] [label] | [specific task Astra can execute with tools, max 20 words]',
+              'ASK: [a clarifying question Lumivex AI needs to give a better answer]',
+              'PREDICT: [emoji] [label] | [specific task Lumivex AI can execute with tools, max 20 words]',
               '',
               'WHEN TO ADD PREDICT � only when the response involved something actionable:',
               '- Code written/reviewed ? test it, lint it, find edge cases, document it',
@@ -2346,10 +2346,10 @@ async function selectProjectDestinationFolder(basePath: string | undefined): Pro
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = 'Choose where Astra should create the project folder'
+$dialog.Description = 'Choose where Lumivex AI should create the project folder'
 $dialog.ShowNewFolderButton = $true
-if ($env:ASTRA_INITIAL_DIR -and (Test-Path -LiteralPath $env:ASTRA_INITIAL_DIR)) {
-  $dialog.SelectedPath = (Resolve-Path -LiteralPath $env:ASTRA_INITIAL_DIR).Path
+if ($env:LUMIVEX_INITIAL_DIR -and (Test-Path -LiteralPath $env:LUMIVEX_INITIAL_DIR)) {
+  $dialog.SelectedPath = (Resolve-Path -LiteralPath $env:LUMIVEX_INITIAL_DIR).Path
 }
 $result = $dialog.ShowDialog()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
@@ -2361,7 +2361,7 @@ exit 2
   const encoded = Buffer.from(script, 'utf16le').toString('base64')
   try {
     const { stdout } = await execAsync(`powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, {
-      env: { ...process.env, ASTRA_INITIAL_DIR: initialPath },
+      env: { ...process.env, LUMIVEX_INITIAL_DIR: initialPath },
       timeout: 5 * 60 * 1000,
       windowsHide: false,
     })
@@ -2480,7 +2480,7 @@ app.post('/api/memories/:id/promote', async (req, res) => {
 app.get('/api/tasks', async (req, res) => {
   const user = await requireActionPermission(req, res, 'read-only')
   if (!user) return
-  const tasksPath = path.join(os.homedir(), '.astra-tasks.json')
+  const tasksPath = path.join(os.homedir(), '.lumivex-tasks.json')
   try {
     if (!fs.existsSync(tasksPath)) { res.json({ tasks: [] }); return }
     const tasks = JSON.parse(fs.readFileSync(tasksPath, 'utf-8'))
@@ -2568,7 +2568,7 @@ app.post('/api/enhance', async (req, res) => {
 })
 
 // ── Self-Upgrade ────────────────────────────────────────────────────────────
-// Astra reads its own codebase and proposes changes via preview_write.
+// Lumivex AI reads its own codebase and proposes changes via preview_write.
 // ALL writes go through the preview/approval flow — nothing is applied automatically.
 
 const SELF_UPGRADE_ALLOWED_TOOLS = [
@@ -2576,7 +2576,7 @@ const SELF_UPGRADE_ALLOWED_TOOLS = [
   'diff_files', 'lint_code', 'preview_write',
 ]
 
-const SELF_UPGRADE_SYSTEM = `You are Astra's self-improvement agent. Analyze the Astra codebase and implement the requested improvement.
+const SELF_UPGRADE_SYSTEM = `You are Lumivex AI's self-improvement agent. Analyze the Lumivex AI codebase and implement the requested improvement.
 
 WORKSPACE: ${process.cwd()}
 
@@ -2711,7 +2711,7 @@ app.post('/api/run-code', async (req, res) => {
   }
   const l = (lang ?? '').toLowerCase()
   const ext = extMap[l] ?? '.js'
-  const tmpFile = path.join(tmpdir(), `astra-run-${Date.now()}${ext}`)
+  const tmpFile = path.join(tmpdir(), `lumivex-run-${Date.now()}${ext}`)
 
   const cmdMap: Record<string, string> = {
     '.py': `python "${tmpFile}"`,
@@ -2830,7 +2830,7 @@ app.post('/api/healer/analyze', async (req, res) => {
   }
 })
 // Drop-in replacement for the OpenAI API — lets any OpenAI-compatible client
-// (Python openai library, Continue.dev, LangChain, curl, etc.) use Astra/Ollama.
+// (Python openai library, Continue.dev, LangChain, curl, etc.) use Lumivex AI/Ollama.
 // Usage:  openai.base_url = "http://localhost:8787/v1"
 //         Authorization header is accepted but ignored (local server)
 
@@ -3110,7 +3110,7 @@ app.post('/v1/completions', async (req, res) => {
 })
 
 app.listen(port, async () => {
-  console.log(`Astra assistant server listening on http://localhost:${port}`)
+  console.log(`Lumivex AI assistant server listening on http://localhost:${port}`)
   console.log(`Model provider: ${modelProviderLabel()}`)
 
   // Start background scheduler — uses headless agent runner
@@ -3349,7 +3349,7 @@ function buildLeanKnowledgePrompt(messages: ChatMessage[], answerStyle?: Assista
   const stylePrompt = answerStylePrompt(answerStyle)
   return [{
     role: 'system',
-    content: `You are Astra. Answer the user's factual question directly and briefly. ${stylePrompt} No preamble. If uncertain, say so in one short caveat.`,
+    content: `You are Lumivex AI. Answer the user's factual question directly and briefly. ${stylePrompt} No preamble. If uncertain, say so in one short caveat.`,
   }, ...messages]
 }
 
@@ -3560,7 +3560,7 @@ function parseProjectSetupAnswer(answer: string): { projectName: string; basePat
     basePath = normalizeProjectLocationHint(explicitLocation[2])
   }
 
-  return { projectName: projectName || 'astra-project', basePath }
+  return { projectName: projectName || 'lumivex-project', basePath }
 }
 
 async function streamProjectBuilderKickoff(response: express.Response, prompt: string): Promise<void> {
@@ -3570,7 +3570,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
   sendEvent(response, 'agent_plan', {
     plan: {
       goal: 'Create a new programming project',
-      assumptions: ['The user wants Astra to start building, not explain how to build.'],
+      assumptions: ['The user wants Lumivex AI to start building, not explain how to build.'],
       steps: ['Ask for the project name.', 'Ask approval for local project creation and tool opening.', 'Create the starter project.', 'Run the first validation pass.', 'Open VS Code and File Explorer.'],
       toolsNeeded: ['project-builder', 'filesystem', 'terminal', 'vscode', 'file explorer'],
       verificationMethod: 'Project Builder writes files and runs the configured build/check command.',
@@ -3583,7 +3583,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
   const projectSetupAnswer = await askSseText(
     response,
     'What should I call it, and which parent folder should I put it inside?',
-    `Template: ${template.label}\nDefault parent: ${DEFAULT_PROJECT_BASE}\nAstra will create a new folder named after the project inside the parent folder you choose. Examples: ${suggestedName} | landing-page on Desktop | api-service at C:\\Projects.`,
+    `Template: ${template.label}\nDefault parent: ${DEFAULT_PROJECT_BASE}\nLumivex AI will create a new folder named after the project inside the parent folder you choose. Examples: ${suggestedName} | landing-page on Desktop | api-service at C:\\Projects.`,
     'project_setup',
     suggestedName
   )
@@ -3599,7 +3599,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
 
   const approved = await askSsePermission(
     response,
-    `Allow Astra to create and open ${projectName}?`,
+    `Allow Lumivex AI to create and open ${projectName}?`,
     `Project: ${projectName}\nTemplate: ${template.label}\nLocation: ${basePath}\nActions: create files, run first check/build, open VS Code, open File Explorer.`
   )
   if (!approved) {
@@ -3692,8 +3692,8 @@ async function streamDirectConnectorOpen(response: express.Response, target: { l
   })
   const approved = await askSsePermission(
     response,
-    `Allow Astra to open ${target.label}?`,
-    `External platform: ${target.label}\nURL: ${target.url}\nApproval lets Astra open this platform and continue the requested workflow for this run.`,
+    `Allow Lumivex AI to open ${target.label}?`,
+    `External platform: ${target.label}\nURL: ${target.url}\nApproval lets Lumivex AI open this platform and continue the requested workflow for this run.`,
   )
   if (!approved) {
     const denied = `Permission denied. I did not open ${target.label}.`
@@ -3739,8 +3739,8 @@ async function streamDirectWindowsAppOpen(response: express.Response, target: { 
   })
   const approved = await askSsePermission(
     response,
-    `Allow Astra to open ${target.label}?`,
-    `Local app/location: ${target.label}\nApp: ${target.app}${target.args ? `\nLocation: ${target.args}` : ''}\nApproval lets Astra open this app or location and continue the requested workflow for this run.`,
+    `Allow Lumivex AI to open ${target.label}?`,
+    `Local app/location: ${target.label}\nApp: ${target.app}${target.args ? `\nLocation: ${target.args}` : ''}\nApproval lets Lumivex AI open this app or location and continue the requested workflow for this run.`,
   )
   if (!approved) {
     const denied = `Permission denied. I did not open ${target.label}.`

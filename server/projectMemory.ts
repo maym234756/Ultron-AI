@@ -41,7 +41,7 @@ type ProjectStore = {
   projects: ProjectRecord[]
 }
 
-const memoryDir = path.join(os.homedir(), '.astra')
+const memoryDir = path.join(os.homedir(), '.lumivex')
 const memoryFile = path.join(memoryDir, 'project-memory.json')
 const devServers = new Map<string, ReturnType<typeof spawn>>()
 const repairFileExtensions = new Set(['.css', '.html', '.js', '.jsx', '.json', '.mjs', '.py', '.ts', '.tsx'])
@@ -80,13 +80,13 @@ function previewUrlFor(record: ProjectRecord, output = ''): string | undefined {
 }
 
 async function ensureProjectPlan(record: ProjectRecord): Promise<string> {
-  const planPath = safeProjectFile(record.projectPath, 'ASTRA_PROJECT_PLAN.md')
+  const planPath = safeProjectFile(record.projectPath, 'LUMIVEX_PROJECT_PLAN.md')
   try {
     await fs.access(planPath)
   } catch {
-    await fs.writeFile(planPath, `# Astra Project Plan - ${record.projectName}
+    await fs.writeFile(planPath, `# Lumivex AI Project Plan - ${record.projectName}
 
-Recovered from Astra Project Memory.
+Recovered from Lumivex AI Project Memory.
 
 ## Starting Point
 
@@ -126,7 +126,7 @@ async function writeStore(store: ProjectStore): Promise<void> {
 async function patchProject(id: string, patch: Partial<ProjectRecord>): Promise<ProjectRecord> {
   const store = await readStore()
   const index = store.projects.findIndex(project => project.id === id)
-  if (index < 0) throw new Error('Project is not in Astra memory.')
+  if (index < 0) throw new Error('Project is not in Lumivex AI memory.')
   const next = { ...store.projects[index], ...patch, updatedAt: Date.now() }
   store.projects[index] = next
   await writeStore(store)
@@ -198,7 +198,7 @@ async function buildMissionStatus(record: ProjectRecord): Promise<ProjectMission
     suggestedReason = 'The last check needs attention, so run the automatic repair loop.'
   } else if (checks === 'unknown' && record.buildCommand) {
     suggestedAction = 'runBuild'
-    suggestedReason = 'Run the first check so Astra has a reliable baseline.'
+    suggestedReason = 'Run the first check so Lumivex AI has a reliable baseline.'
   } else if (devServerStatus === 'stopped' && record.devCommand) {
     suggestedAction = 'runDevServer'
     suggestedReason = 'Checks look usable; start the dev server for preview work.'
@@ -432,7 +432,7 @@ async function runRepair(record: ProjectRecord): Promise<string> {
   if (!commandFailed(firstCheck)) return `Check already passes.\n\n${firstCheck}`
 
   const edits = await proposeRepairEdits(record, firstCheck)
-  if (edits.length === 0) return `Check failed, but Astra could not find a safe automatic repair.\n\n${firstCheck}`
+  if (edits.length === 0) return `Check failed, but Lumivex AI could not find a safe automatic repair.\n\n${firstCheck}`
   const applied = await applyRepairEdits(record, edits)
   const secondCheck = await runCommand(record.buildCommand, record.projectPath, 240)
   return [
@@ -447,7 +447,7 @@ async function runRepair(record: ProjectRecord): Promise<string> {
 async function runPreviewAudit(record: ProjectRecord): Promise<{ output: string; screenshotPath?: string; ok: boolean }> {
   if (!record.previewUrl) return { ok: false, output: 'No preview URL is known yet. Start the dev server first.' }
   const { chromium } = await import('playwright')
-  const screenshotDir = path.join(record.projectPath, '.astra', 'screenshots')
+  const screenshotDir = path.join(record.projectPath, '.lumivex', 'screenshots')
   await fs.mkdir(screenshotDir, { recursive: true })
   const timestamp = Date.now()
   const desktopPath = path.join(screenshotDir, `preview-desktop-${timestamp}.png`)
@@ -514,7 +514,7 @@ export async function rememberProject(result: ProjectBuildResult): Promise<Proje
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     lastBuildStatus: result.logs.some(commandFailed) ? 'Check needs attention' : 'Ready',
-    lastAction: 'Project created by Astra.',
+    lastAction: 'Project created by Lumivex AI.',
     lastLog: result.logs.join('\n\n').slice(-6000),
   }
   store.projects = [record, ...store.projects.filter(project => project.id !== id)].slice(0, 50)
@@ -530,7 +530,7 @@ export async function listProjectRecords(): Promise<ProjectRecord[]> {
 
 export async function runProjectAction(id: string, action: ProjectAction): Promise<{ record: ProjectRecord; output: string }> {
   const record = (await listProjectRecords()).find(project => project.id === id)
-  if (!record) throw new Error('Project is not in Astra memory.')
+  if (!record) throw new Error('Project is not in Lumivex AI memory.')
 
   let output = ''
   if (action === 'runSmartNextStep') {

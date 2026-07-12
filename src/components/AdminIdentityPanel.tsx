@@ -135,7 +135,7 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
             <div>
               <span className="settings-section-title">Platform Overview</span>
               <h3>Identity and Workspace Map</h3>
-              <p>Review organizations, members, and platform admin access across the current Astra runtime.</p>
+              <p>Review organizations, members, and platform admin access across the current Lumivex AI runtime.</p>
             </div>
             <Building2 size={34} />
           </section>

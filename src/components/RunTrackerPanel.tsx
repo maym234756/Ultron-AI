@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void
 }
 
-const STORAGE_KEY = 'astra-run-track-v1'
+const STORAGE_KEY = 'lumivex-run-track-v1'
 
 function toRad(value: number): number {
   return value * Math.PI / 180
@@ -56,9 +56,9 @@ function buildGpx(points: TrackPoint[]): string {
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<gpx version="1.1" creator="Astra" xmlns="http://www.topografix.com/GPX/1/1">',
+    '<gpx version="1.1" creator="Lumivex AI" xmlns="http://www.topografix.com/GPX/1/1">',
     '  <trk>',
-    '    <name>Astra Run</name>',
+    '    <name>Lumivex AI Run</name>',
     '    <trkseg>',
     track,
     '    </trkseg>',
@@ -165,7 +165,7 @@ export function RunTrackerPanel({ onClose }: Props) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `astra-run-${new Date().toISOString().slice(0, 10)}.gpx`
+    link.download = `lumivex-run-${new Date().toISOString().slice(0, 10)}.gpx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -200,7 +200,7 @@ export function RunTrackerPanel({ onClose }: Props) {
             <MapPin size={22} />
             <div>
               <strong>{tracking ? 'Tracking live with your browser permission' : 'Location stays local until you export it'}</strong>
-              <span>Astra uses browser geolocation only after Start is pressed. Points are saved in this browser.</span>
+              <span>Lumivex AI uses browser geolocation only after Start is pressed. Points are saved in this browser.</span>
             </div>
           </div>
 

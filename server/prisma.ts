@@ -2,7 +2,7 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const DEFAULT_SQLITE_URL = 'file:./astra.db'
+const DEFAULT_SQLITE_URL = 'file:./lumivex.db'
 const PRISMA_DIR = fileURLToPath(new URL('../prisma/', import.meta.url))
 
 process.env.DATABASE_URL ??= DEFAULT_SQLITE_URL

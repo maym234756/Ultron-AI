@@ -3397,8 +3397,8 @@ html.dark .auth-terms-close {
   cursor: not-allowed;
 }
 
-/* Astra-initiated clarifying question */
-.astra-question {
+/* Lumivex AI-initiated clarifying question */
+.lumivex-question {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -3410,7 +3410,7 @@ html.dark .auth-terms-close {
   line-height: 1.45;
 }
 
-.astra-question-label {
+.lumivex-question-label {
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
@@ -3419,16 +3419,16 @@ html.dark .auth-terms-close {
   color: var(--accent);
 }
 
-.astra-question-text {
+.lumivex-question-text {
   color: var(--ink);
 }
 
-html.dark .astra-question {
+html.dark .lumivex-question {
   border-color: rgba(47, 129, 247, 0.25);
   background: rgba(47, 129, 247, 0.06);
 }
 
-html.dark .astra-question-text { color: var(--ink); }
+html.dark .lumivex-question-text { color: var(--ink); }
 
 /* ── Predictive action cards ─────────────────────────────────────── */
 .prediction-cards {

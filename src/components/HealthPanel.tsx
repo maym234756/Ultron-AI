@@ -42,8 +42,8 @@ export function HealthPanel({ apiBase, onClose }: Props) {
   useEffect(() => {
     void refresh()
     const syncTelemetry = () => setTelemetry(getTelemetrySnapshot())
-    window.addEventListener('astra-telemetry-updated', syncTelemetry)
-    return () => window.removeEventListener('astra-telemetry-updated', syncTelemetry)
+    window.addEventListener('lumivex-telemetry-updated', syncTelemetry)
+    return () => window.removeEventListener('lumivex-telemetry-updated', syncTelemetry)
   }, [apiBase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const recentRoutes = telemetry.entries.slice(0, 6)
@@ -315,7 +315,7 @@ export function HealthPanel({ apiBase, onClose }: Props) {
           )}
 
           {loading && !status && !error && (
-            <p className="panel-hint">Checking Astra's local systems...</p>
+            <p className="panel-hint">Checking Lumivex AI's local systems...</p>
           )}
         </div>
       </div>

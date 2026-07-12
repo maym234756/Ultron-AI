@@ -812,7 +812,7 @@ export async function setPlatformAdmin(actorUserId: string, targetUserId: string
 
   if (!nextValue && target.isPlatformAdmin) {
     const otherAdminCount = await prisma.user.count({ where: { isPlatformAdmin: true, NOT: { id: target.id } } })
-    if (otherAdminCount === 0) throw new Error('Astra must keep at least one platform admin.')
+    if (otherAdminCount === 0) throw new Error('Lumivex AI must keep at least one platform admin.')
   }
 
   const updated = await prisma.user.update({ where: { id: target.id }, data: { isPlatformAdmin: nextValue } })
@@ -1062,7 +1062,7 @@ export async function registerUser(input: { email?: string; username?: string; d
       })
     })
     const challenge = await issueAuthChallenge(user, EMAIL_VERIFICATION, EMAIL_VERIFICATION_MINUTES)
-    await audit(user.id, 'identity.register', `Created Astra account for ${email}. Verification code issued.`)
+    await audit(user.id, 'identity.register', `Created Lumivex AI account for ${email}. Verification code issued.`)
     return { next: 'verify_email', ...challenge }
   } catch (error) {
     if (isPrismaUniqueError(error)) {

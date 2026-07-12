@@ -19,8 +19,8 @@ import type { Page, Response } from 'playwright'
 const VAULT_FILE = join(process.cwd(), '.cred-vault.json')
 
 function getMachineKey(): Buffer {
-  const seed = `${hostname()}-${userInfo().username}-astra-vault-v1`
-  return pbkdf2Sync(seed, 'astra-vault-salt-2024', 100_000, 32, 'sha256')
+  const seed = `${hostname()}-${userInfo().username}-lumivex-vault-v1`
+  return pbkdf2Sync(seed, 'lumivex-vault-salt-2024', 100_000, 32, 'sha256')
 }
 
 function encrypt(text: string): string {
@@ -284,7 +284,7 @@ export const browserRecordStartDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_record_start',
-    description: 'Start recording browser actions (clicks, typing, navigation). Interact with the page — Astra captures everything. Stop with browser_record_stop to get the replay script.',
+    description: 'Start recording browser actions (clicks, typing, navigation). Interact with the page — Lumivex AI captures everything. Stop with browser_record_stop to get the replay script.',
     parameters: { type: 'object', properties: {} },
   },
 }
@@ -306,7 +306,7 @@ export const browserRecordStart: ToolHandler = async () => {
     await page.addInitScript(() => {
       const doc = (globalThis as any).document
       const send = (action: string) => {
-        const el = doc.getElementById('__astra_recorder__')
+        const el = doc.getElementById('__lumivex_recorder__')
         if (el) el.setAttribute('data-last', action)
       }
       doc.addEventListener('click', (e: any) => {

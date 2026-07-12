@@ -1,6 +1,6 @@
-# Astra Database Migrations
+# Lumivex AI Database Migrations
 
-Astra supports both local SQLite and deployed Postgres through separate Prisma schemas. Keep provider-specific SQL migrations in this folder so production database changes are versioned, reviewable, and rollbackable instead of relying only on `prisma db push`.
+Lumivex AI supports both local SQLite and deployed Postgres through separate Prisma schemas. Keep provider-specific SQL migrations in this folder so production database changes are versioned, reviewable, and rollbackable instead of relying only on `prisma db push`.
 
 - `sqlite/` applies to `prisma/schema.prisma`.
 - `postgres/` applies to `prisma/schema.postgres.prisma`.

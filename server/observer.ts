@@ -80,7 +80,7 @@ async function captureWindows(): Promise<WindowInfo[]> {
 const BROWSER_PROCS = new Set(['chrome', 'msedge', 'firefox', 'brave', 'opera', 'vivaldi'])
 
 async function takeScreenshotBase64(): Promise<string> {
-  const tmp = join(tmpdir(), 'astra_obs.png').replace(/\\/g, '\\\\')
+  const tmp = join(tmpdir(), 'lumivex_obs.png').replace(/\\/g, '\\\\')
   await runPS(
     `Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds

@@ -98,8 +98,8 @@ console.table(results)
 
 const failures = results.filter(result => !result.passed)
 if (failures.length > 0) {
-  console.error(`Astra eval failed: ${failures.length}/${results.length} case(s) failed.`)
+  console.error(`Lumivex AI eval failed: ${failures.length}/${results.length} case(s) failed.`)
   process.exit(1)
 }
 
-console.log(`Astra eval passed: ${results.length}/${results.length} cases.`)
+console.log(`Lumivex AI eval passed: ${results.length}/${results.length} cases.`)

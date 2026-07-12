@@ -161,7 +161,7 @@ export function MemoryPanel({ apiBase, onClose }: Props) {
             <textarea
               value={newContent}
               onChange={event => setNewContent(event.target.value)}
-              placeholder="What should Astra remember?"
+              placeholder="What should Lumivex AI remember?"
               className="settings-textarea"
               rows={3}
             />

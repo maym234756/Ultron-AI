@@ -156,13 +156,13 @@ function organizationInvitePreview(input: OrganizationInviteEmail): Organization
 
 function mailCopy(input: AuthChallengeEmail): { subject: string; text: string; html: string } {
   const name = input.displayName?.trim() || input.email
-  const action = input.type === 'email_verification' ? 'verify your Astra account' : 'reset your Astra password'
+  const action = input.type === 'email_verification' ? 'verify your Lumivex AI account' : 'reset your Lumivex AI password'
   const intro = input.type === 'email_verification'
-    ? 'Use the verification code below to finish signing in to Astra.'
-    : 'Use the reset code below to choose a new Astra password.'
+    ? 'Use the verification code below to finish signing in to Lumivex AI.'
+    : 'Use the reset code below to choose a new Lumivex AI password.'
   const expiry = input.expiresAt.toLocaleString()
   return {
-    subject: input.type === 'email_verification' ? 'Verify your Astra account' : 'Reset your Astra password',
+    subject: input.type === 'email_verification' ? 'Verify your Lumivex AI account' : 'Reset your Lumivex AI password',
     text: [
       `Hi ${name},`,
       '',
@@ -173,7 +173,7 @@ function mailCopy(input: AuthChallengeEmail): { subject: string; text: string; h
       '',
       `If you did not request this, you can ignore this email and no action will be taken.`,
       '',
-      `Astra`,
+      `Lumivex AI`,
     ].join('\n'),
     html: [
       '<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#111827">',
@@ -185,37 +185,37 @@ function mailCopy(input: AuthChallengeEmail): { subject: string; text: string; h
       `<div style="font-size:13px;color:#6b7280;margin-top:10px">Expires ${escapeHtml(expiry)}</div>`,
       '</div>',
       '<p>If you did not request this, you can ignore this email and no action will be taken.</p>',
-      '<p>Astra</p>',
+      '<p>Lumivex AI</p>',
       '</div>',
     ].join(''),
   }
 }
 
 function organizationInviteMailCopy(input: OrganizationInviteEmail): { subject: string; text: string; html: string } {
-  const inviter = input.invitedByDisplayName?.trim() || 'An Astra workspace owner'
+  const inviter = input.invitedByDisplayName?.trim() || 'A Lumivex AI workspace owner'
   const expiry = input.expiresAt.toLocaleString()
   const roleLabel = input.role === 'owner' ? 'workspace owner' : 'workspace member'
   return {
-    subject: `Invitation to join ${input.organizationName} on Astra`,
+    subject: `Invitation to join ${input.organizationName} on Lumivex AI`,
     text: [
       `Hi ${input.email},`,
       '',
-      `${inviter} invited you to join ${input.organizationName} on Astra as a ${roleLabel}.`,
+      `${inviter} invited you to join ${input.organizationName} on Lumivex AI as a ${roleLabel}.`,
       '',
-      'Sign in to Astra with this email address, then accept the invite from the app or use the invite token below.',
+      'Sign in to Lumivex AI with this email address, then accept the invite from the app or use the invite token below.',
       '',
       `Invite token: ${input.inviteToken}`,
-      `Open Astra: ${input.acceptUrl}`,
+      `Open Lumivex AI: ${input.acceptUrl}`,
       `Expires: ${expiry}`,
       '',
       'If you were not expecting this invite, you can ignore this email.',
       '',
-      'Astra',
+      'Lumivex AI',
     ].join('\n'),
     html: [
       '<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#111827">',
       `<p>Hi ${escapeHtml(input.email)},</p>`,
-      `<p>${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(input.organizationName)}</strong> on Astra as a ${escapeHtml(roleLabel)}.</p>`,
+      `<p>${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(input.organizationName)}</strong> on Lumivex AI as a ${escapeHtml(roleLabel)}.</p>`,
       '<div style="margin:24px 0;padding:16px 18px;border:1px solid #d1d5db;border-radius:12px;background:#f9fafb">',
       '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280">Workspace invitation</div>',
       `<div style="font-size:24px;font-weight:700;letter-spacing:.06em;margin-top:8px">${escapeHtml(input.organizationName)}</div>`,
@@ -223,10 +223,10 @@ function organizationInviteMailCopy(input: OrganizationInviteEmail): { subject: 
       `<div style="font-size:14px;color:#111827;margin-top:14px"><strong>Invite token:</strong> ${escapeHtml(input.inviteToken)}</div>`,
       `<div style="font-size:13px;color:#6b7280;margin-top:10px">Expires ${escapeHtml(expiry)}</div>`,
       '</div>',
-      `<p><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;padding:10px 16px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600">Open Astra</a></p>`,
+      `<p><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;padding:10px 16px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600">Open Lumivex AI</a></p>`,
       '<p>Sign in with this email address and accept the invite from inside the app. If needed, you can also paste the invite token manually.</p>',
       '<p>If you were not expecting this invite, you can ignore this email.</p>',
-      '<p>Astra</p>',
+      '<p>Lumivex AI</p>',
       '</div>',
     ].join(''),
   }
