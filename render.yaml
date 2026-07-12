@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /api/health
+    healthCheckPath: /api/backend/status
     preDeployCommand: npm run db:push:postgres
     envVars:
       - key: NODE_ENV

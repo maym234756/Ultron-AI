@@ -52,11 +52,11 @@ Deploy steps:
 3. Review the `astra-backend` and `astra-postgres` resources.
 4. Fill `OLLAMA_BASE_URL` with a backend-reachable model runtime URL.
 5. Deploy the Blueprint.
-6. Open the backend URL and verify `/api/health`.
+6. Open the backend URL and verify `/api/backend/status`.
 
 The Blueprint starts auth email delivery in debug mode so the first deployment can be tested without SMTP. Before a public beta, change `AUTH_CHALLENGE_DELIVERY` to `smtp` and add the SMTP variables from [.env.production.example](../.env.production.example).
 
-Render hosts the API and Postgres. It does not automatically host Ollama for this service. Chat and benchmark routes need `OLLAMA_BASE_URL` to point at a reachable Ollama/model runtime; auth, database, admin, and health routes can still be validated first.
+Render hosts the API and Postgres. It does not automatically host Ollama for this service. Chat and benchmark routes need `OLLAMA_BASE_URL` to point at a reachable Ollama/model runtime; auth, database, admin, backend status, and non-model routes can still be validated first.
 
 ## Required Production Variables
 
