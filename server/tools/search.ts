@@ -67,10 +67,19 @@ async function ddgHtmlSearch(query: string, limit: number): Promise<SearchResult
     } else if (href.startsWith('//')) {
       href = `https:${href}`
     }
-    const title = linkMatch[2].replace(tagRe, '').trim()
+    // Strip HTML tags and then remove any residual < characters to prevent injection
+    const stripHtml = (s: string) => s.replace(tagRe, '').replace(/</g, '').trim()
+    const title = stripHtml(linkMatch[2])
     const snippetMatch = snippetRe.exec(content)
-    const snippet = snippetMatch ? snippetMatch[1].replace(tagRe, '').trim() : ''
-    if (title && href && !href.startsWith('/') && !href.includes('duckduckgo.com')) {
+    const snippet = snippetMatch ? stripHtml(snippetMatch[1]) : ''
+    // Only include external URLs — check hostname to avoid partial-match bypasses
+    let isExternal = false
+    try {
+      const parsed = new URL(href)
+      isExternal = parsed.protocol === 'http:' || parsed.protocol === 'https:'
+      isExternal = isExternal && !parsed.hostname.endsWith('duckduckgo.com')
+    } catch { /* skip malformed URLs */ }
+    if (title && isExternal) {
       results.push({ title, url: href, snippet })
     }
   }
