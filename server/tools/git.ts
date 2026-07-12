@@ -249,7 +249,7 @@ export const gitAddDefinition: ToolDefinition = {
 export const gitAdd: ToolHandler = (args) => {
   const files = (args.files ?? '.').trim() || '.'
   // Reject unsafe shell metacharacters to prevent command injection
-  if (/[;&|`$()<>{}\\\n\r]/.test(files)) return 'Error: files contains unsafe characters'
+  if (/[;&|`$()<>{}\\\n\r\t]/.test(files)) return 'Error: files contains unsafe characters'
   return runTerminal({ command: `git add -- ${files}`, cwd: args.cwd })
 }
 
@@ -286,7 +286,7 @@ export const gitStash: ToolHandler = async (args) => {
     const untracked = args.include_untracked === 'true' ? ' --include-untracked' : ''
     if (args.message) {
       // Sanitize message: strip shell metacharacters to prevent injection
-      const safeMsg = args.message.replace(/[`$\\"\n\r]/g, '').replace(/'/g, "'\\''" )
+      const safeMsg = args.message.replace(/[`$\\"\n\r\t]/g, '').replace(/'/g, "'\\''")
       return runTerminal({ command: `git stash push -m '${safeMsg}'${untracked}`, cwd })
     }
     return runTerminal({ command: `git stash${untracked}`, cwd })

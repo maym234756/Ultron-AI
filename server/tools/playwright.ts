@@ -97,7 +97,8 @@ async function editableValue(target: ResolvedTarget): Promise<string> {
 }
 
 function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
-  const nthIdx = parseInt(args.nth ?? '0', 10) || 0
+  const rawNth = parseInt(args.nth ?? '0', 10)
+  const nthIdx = isNaN(rawNth) || rawNth < 0 ? 0 : rawNth
   const pick = (locator: import('playwright').Locator) => nthIdx > 0 ? locator.nth(nthIdx) : locator.first()
   if (args.selector) return { locator: pick(page.locator(args.selector)), description: `selector "${args.selector}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
   if (args.test_id) return { locator: pick(page.getByTestId(args.test_id)), description: `test id "${args.test_id}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }

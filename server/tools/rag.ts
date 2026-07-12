@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto'
 import type { ToolDefinition, ToolHandler } from './types.js'
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
+/** Default embedding model: set RAG_EMBED_MODEL env var to override (e.g. mxbai-embed-large). */
 const DEFAULT_EMBED_MODEL = process.env.RAG_EMBED_MODEL ?? 'nomic-embed-text'
-const EMBED_MODEL = DEFAULT_EMBED_MODEL  // kept for legacy compatibility
 const STORE_PATH = path.resolve(process.cwd(), '.rag-store.jsonl')
 const CHUNK_SIZE = 600
 const CHUNK_OVERLAP = 60
@@ -32,13 +32,13 @@ async function embedText(text: string, model?: string): Promise<number[]> {
   const res = await fetch(`${OLLAMA_URL}/api/embed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: model ?? EMBED_MODEL, input: text }),
+    body: JSON.stringify({ model: model ?? DEFAULT_EMBED_MODEL, input: text }),
     signal: AbortSignal.timeout(30_000),
   })
   if (!res.ok) throw new Error(`Embed error ${res.status}: ${await res.text()}`)
   const data = await res.json() as { embeddings?: number[][] }
   const emb = data.embeddings?.[0]
-  if (!emb?.length) throw new Error('No embedding returned — is ' + (model ?? EMBED_MODEL) + ' pulled?')
+  if (!emb?.length) throw new Error('No embedding returned — is ' + (model ?? DEFAULT_EMBED_MODEL) + ' pulled?')
   return emb
 }
 
