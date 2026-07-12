@@ -121,7 +121,7 @@ Completed in thirteenth build increment:
 - Upgraded browser_go with wait_until param (domcontentloaded, load, networkidle, commit) and timeout param.
 - Added nth param to browser_click and browser_fill for selecting the nth matching element.
 - Added auto screenshot-on-failure for all browser target errors (saved to Desktop).
-- Updated registered tool count from 153 to 156 (git_add, git_stash, git_merge, rag_repair).
+- Updated registered tool count from 153 to 157 (git_add, git_stash, git_merge, rag_repair).
 - Validation passed: npx tsc -p tsconfig.server.json --noEmit
 - Validation passed: npx oxlint server/tools/git.ts server/tools/http.ts server/tools/rag.ts server/tools/playwright.ts server/tools/registry.ts
 

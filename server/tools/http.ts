@@ -101,8 +101,19 @@ export const httpRequest: ToolHandler = async (args) => {
 
       // Retry on 429 or 5xx
       if (attempt < maxRetries && (res.status === 429 || res.status >= 500)) {
-        const retryAfter = parseInt(res.headers.get('retry-after') ?? '2', 10) || 2
-        await new Promise((r) => setTimeout(r, Math.min(retryAfter, 10) * 1000))
+        const rawRetryAfter = res.headers.get('retry-after') ?? ''
+        let retryDelaySec = 2
+        if (rawRetryAfter) {
+          const asSeconds = parseInt(rawRetryAfter, 10)
+          if (!isNaN(asSeconds)) {
+            retryDelaySec = asSeconds
+          } else {
+            // HTTP-date format (e.g. "Wed, 21 Oct 2025 07:28:00 GMT")
+            const targetMs = Date.parse(rawRetryAfter)
+            if (!isNaN(targetMs)) retryDelaySec = Math.max(1, Math.ceil((targetMs - Date.now()) / 1000))
+          }
+        }
+        await new Promise((r) => setTimeout(r, Math.min(retryDelaySec, 10) * 1000))
         lastError = 'HTTP ' + res.status + ' (retrying ' + (attempt + 1) + '/' + maxRetries + ')'
         continue
       }

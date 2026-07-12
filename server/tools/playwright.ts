@@ -111,7 +111,10 @@ function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
 async function screenshotOnFailure(page: Page, actionName: string): Promise<string> {
   try {
     const ts = Date.now()
-    const dest = join(homedir(), 'Desktop', `ultron-failure-${actionName}-${ts}.png`)
+    // Prefer Desktop if it exists, otherwise fall back to home directory
+    const desktopDir = join(homedir(), 'Desktop')
+    const targetDir = fs.existsSync(desktopDir) ? desktopDir : homedir()
+    const dest = join(targetDir, `ultron-failure-${actionName}-${ts}.png`)
     await page.screenshot({ path: dest, fullPage: false }).catch(() => {})
     return `\nFailure screenshot saved: ${dest}`
   } catch { return '' }
