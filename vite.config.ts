@@ -15,6 +15,7 @@ export default defineConfig({
         theme_color: '#0a0a0f',
         background_color: '#0a0a0f',
         display: 'standalone',
+        display_override: ['window-controls-overlay', 'standalone'],
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
@@ -26,16 +27,38 @@ export default defineConfig({
             purpose: 'any maskable',
           },
           {
+            src: 'icon-192.png',
+            sizes: '384x384',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
             src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',
           },
         ],
+        shortcuts: [
+          {
+            name: 'New Chat',
+            short_name: 'Chat',
+            description: 'Start a new Ultron chat session',
+            url: '/?new=1',
+            icons: [{ src: 'icon-192.png', sizes: '192x192' }],
+          },
+          {
+            name: 'Voice Mode',
+            short_name: 'Voice',
+            description: 'Open Ultron in voice conversation mode',
+            url: '/?voice=1',
+            icons: [{ src: 'icon-192.png', sizes: '192x192' }],
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        navigateFallback: null,
+        navigateFallback: 'index.html',
         runtimeCaching: [
           {
             urlPattern: /^\/api\//,
@@ -44,7 +67,7 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: false,
+        enabled: true,
       },
     }),
   ],

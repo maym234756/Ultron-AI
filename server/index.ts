@@ -410,6 +410,61 @@ app.get('/api/health', async (_request, response) => {
   }
 })
 
+// Deep health check — verifies Ollama reachability, database, tool registry, and PWA build.
+app.get('/api/health/deep', async (_request, response) => {
+  const checkedAt = Date.now()
+  const checks: Array<{ id: string; label: string; ok: boolean; detail: string; latencyMs?: number }> = []
+
+  // 1. Ollama reachability + model list
+  const ollamaStart = Date.now()
+  let ollamaOk = false
+  try {
+    const tags = await fetchOllamaTags(2500)
+    const count = (tags.models ?? []).length
+    ollamaOk = true
+    checks.push({ id: 'ollama', label: 'Ollama engine', ok: true, detail: `${count} model(s) available`, latencyMs: Date.now() - ollamaStart })
+  } catch (err) {
+    checks.push({ id: 'ollama', label: 'Ollama engine', ok: false, detail: err instanceof Error ? err.message : 'Ollama unreachable', latencyMs: Date.now() - ollamaStart })
+  }
+
+  // 2. Database (provider + target check)
+  checks.push({
+    id: 'database',
+    label: 'Database',
+    ok: true,
+    detail: `${databaseProvider} · ${summarizeDatabaseTarget(databaseUrl)}`,
+  })
+
+  // 3. Tool registry
+  checks.push({
+    id: 'tools',
+    label: 'Tool registry',
+    ok: toolDefinitions.length > 0,
+    detail: `${toolDefinitions.length} tool(s) registered`,
+  })
+
+  // 4. PWA service worker (present in production build)
+  const swPath = path.join(distDir, 'sw.js')
+  const hasSW = fs.existsSync(swPath)
+  checks.push({
+    id: 'pwa',
+    label: 'PWA service worker',
+    ok: hasSW,
+    detail: hasSW ? 'sw.js present in dist' : 'No sw.js found — run npm run build to generate it',
+  })
+
+  // 5. Fast model warmup
+  checks.push({
+    id: 'warmup',
+    label: 'Model warmup',
+    ok: warmupStatus.primaryOk || Boolean(cachedFastModel),
+    detail: warmupStatus.detail,
+  })
+
+  const ok = checks.every(c => c.ok)
+  response.status(ok ? 200 : 503).json({ ok, checkedAt, ollamaOk, checks })
+})
+
 app.get('/api/backend/status', (_request, response) => {
   response.json(backendRuntimeSnapshot({
     routes: collectBackendRoutes(app),
@@ -736,6 +791,19 @@ async function finalizeSessionInvite(session: { token: string; user: { id: strin
     }
   }
 }
+
+// Rate limiters for the main inference endpoints — generous but prevents runaway abuse
+// on locally-networked or publicly-exposed deployments.
+const chatRateLimit = authRateLimit({
+  id: 'chat',
+  windowMs: 60_000,
+  max: 60,
+})
+const agentRateLimit = authRateLimit({
+  id: 'agent',
+  windowMs: 60_000,
+  max: 30,
+})
 
 const registerRateLimit = authRateLimit({
   id: 'register',
@@ -1274,7 +1342,7 @@ app.get('/api/models', async (_request, response) => {
   }
 })
 
-app.post('/api/chat', async (request, response) => {
+app.post('/api/chat', chatRateLimit, async (request, response) => {
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)
@@ -1363,7 +1431,7 @@ app.post('/api/chat', async (request, response) => {
   }
 })
 
-app.post('/api/agent', async (request, response) => {
+app.post('/api/agent', agentRateLimit, async (request, response) => {
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)

@@ -4,12 +4,17 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
 }
 
+const DISMISS_KEY = 'ultron-pwa-install-dismissed'
+
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showBanner, setShowBanner] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
 
   useEffect(() => {
+    // Don't show if permanently dismissed
+    if (localStorage.getItem(DISMISS_KEY)) return
+
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
     const isInStandalone = ('standalone' in window.navigator) && (window.navigator as Navigator & { standalone?: boolean }).standalone
 
@@ -38,6 +43,11 @@ export function PWAInstallPrompt() {
     setShowBanner(false)
   }
 
+  const handleDismiss = () => {
+    localStorage.setItem(DISMISS_KEY, '1')
+    setShowBanner(false)
+  }
+
   return (
     <div
       style={{
@@ -48,6 +58,7 @@ export function PWAInstallPrompt() {
         background: '#1a1a2e',
         borderTop: '1px solid #333',
         padding: '12px 16px',
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -87,7 +98,7 @@ export function PWAInstallPrompt() {
           </button>
         )}
         <button
-          onClick={() => setShowBanner(false)}
+          onClick={handleDismiss}
           style={{
             background: 'transparent',
             color: '#aaa',

@@ -845,6 +845,123 @@ html.dark .app-shell.quiet-ui {
   }
 }
 
+/* ── Mobile-phone layout (≤480px) ──────────────────────────────── */
+@media (max-width: 480px) {
+  /* Stack shell vertically and give chat area all remaining space */
+  .app-shell {
+    flex-direction: column;
+    min-height: 100dvh; /* dynamic viewport height: accounts for browser chrome */
+  }
+
+  /* Sidebar folds to a slimmer banner; collapsed hides entirely */
+  .sidebar {
+    padding: 12px 14px !important;
+    gap: 10px;
+    overflow-x: hidden;
+  }
+  .sidebar.collapsed {
+    height: 0;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  /* Reduce chat panel padding and lock composer at viewport bottom */
+  .chat-panel {
+    padding: 12px 10px;
+    padding-bottom: 0;
+    /* leave room for the fixed composer */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Message list should scroll above the fixed composer */
+  .message-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  /* Composer sticks to the very bottom of the viewport on phones */
+  .composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    border-radius: 8px 8px 0 0;
+    margin: 0 -10px;
+    padding: 10px;
+    /* Safe-area inset for iOS notch phones */
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  /* Compact composer textarea on phones */
+  .composer textarea {
+    min-height: 38px;
+  }
+
+  /* Tool tray scrolls horizontally rather than wrapping */
+  .composer-tool-tray {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .composer-tool-tray::-webkit-scrollbar { display: none; }
+
+  /* Prevent tool result / agent trace blocks from blowing out horizontal layout */
+  .tool-block,
+  .agent-trace,
+  .message-bubble {
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Tool result code blocks: scroll horizontally instead of overflowing */
+  .tool-block pre,
+  .tool-result-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Shrink avatars slightly on very small screens */
+  .avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Welcome screen prompt grid: single column */
+  .prompt-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Action timeline: single column on phones */
+  .action-timeline {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Compact workspace switcher on phones */
+  .workspace-switcher {
+    gap: 4px;
+  }
+  .workspace-switcher button {
+    font-size: 11px;
+    padding: 0 8px;
+    min-height: 26px;
+  }
+
+  /* Header: stack controls below title */
+  .chat-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 /* ── Agent mode toggle ── */
 .agent-toggle {
   display: flex;
