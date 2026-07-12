@@ -45,7 +45,7 @@ export function TaskPanel({ apiBase, onClose }: Props) {
   async function loadTasks() {
     setLoading(true)
     try {
-      const r = await fetch(`${apiBase}/api/tasks`)
+      const r = await fetch(`${apiBase}/api/tasks`, { credentials: 'include' })
       if (r.ok) setTasks(((await r.json()) as { tasks: Task[] }).tasks ?? [])
     } finally {
       setLoading(false)
@@ -60,6 +60,7 @@ export function TaskPanel({ apiBase, onClose }: Props) {
     try {
       await fetch(`${apiBase}/api/tasks`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
@@ -81,13 +82,13 @@ export function TaskPanel({ apiBase, onClose }: Props) {
 
   async function markDone(id: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: true } : t))
-    await fetch(`${apiBase}/api/tasks/${id}/done`, { method: 'PATCH' }).catch(() => {})
+    await fetch(`${apiBase}/api/tasks/${id}/done`, { method: 'PATCH', credentials: 'include' }).catch(() => {})
     await loadTasks()
   }
 
   async function deleteTask(id: string) {
     setTasks(prev => prev.filter(t => t.id !== id))
-    await fetch(`${apiBase}/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
+    await fetch(`${apiBase}/api/tasks/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {})
   }
 
   function applyFilter(all: Task[]): Task[] {

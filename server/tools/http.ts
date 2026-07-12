@@ -29,7 +29,7 @@ export const httpRequest: ToolHandler = async (args) => {
   const timeoutSec = parseInt(args.timeout ?? '30', 10) || 30
 
   const headers: Record<string, string> = {
-    'User-Agent': 'Ultron/1.0',
+    'User-Agent': 'Astra/1.0',
   }
 
   // Parse extra headers

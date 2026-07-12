@@ -58,6 +58,7 @@ export function ComparePanel({ models, settings, onClose, initialDraft }: Props)
     try {
       const res = await fetch(`${API_BASE}/api/compare`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: text }],

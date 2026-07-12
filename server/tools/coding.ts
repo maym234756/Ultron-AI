@@ -435,3 +435,166 @@ export const codeStats: ToolHandler = async (args) => {
     return `Error: ${err instanceof Error ? err.message : String(err)}`
   }
 }
+
+// -- code_impact_search --------------------------------------------------------
+
+export const codeImpactSearchDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'code_impact_search',
+    description: 'Search a codebase for a feature, symbol, route, env var, or error text and return nearby context grouped by file. Useful before editing or debugging.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Text or regex to search for.' },
+        directory: { type: 'string', description: 'Directory to search. Defaults to workspace root.' },
+        include: { type: 'string', description: 'File glob filter, e.g. "*.ts" or "*.tsx".' },
+        regex: { type: 'string', description: 'Set to "true" to treat query as regex.' },
+        context: { type: 'string', description: 'Context lines around each match, default 2.' },
+        max_results: { type: 'string', description: 'Maximum matches, default 80, max 300.' },
+      },
+      required: ['query'],
+    },
+  },
+}
+
+export const codeImpactSearch: ToolHandler = async (args) => {
+  const query = (args.query ?? '').trim()
+  if (!query) return 'Error: query is required'
+  const dir = args.directory?.trim() || process.cwd()
+  const absDir = path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir)
+  const max = Math.min(300, Math.max(1, parseInt(args.max_results ?? '80', 10) || 80))
+  const context = Math.min(8, Math.max(0, parseInt(args.context ?? '2', 10) || 2))
+  const fixedFlag = args.regex === 'true' ? '' : '--fixed-strings'
+  const include = args.include ? `--glob "${args.include.replace(/"/g, '\\"')}"` : ''
+  const escapedQuery = query.replace(/"/g, '\\"')
+  const escapedDir = absDir.replace(/"/g, '\\"')
+  const cmd = [
+    'rg --hidden --no-ignore-parent --ignore-case',
+    '--glob "!**/.git/**" --glob "!**/node_modules/**" --glob "!**/dist/**" --glob "!**/desktop-release/**"',
+    fixedFlag,
+    include,
+    `--line-number --heading --context ${context} --max-count ${max} --max-filesize 2M -- "${escapedQuery}" "${escapedDir}" 2>$null`,
+  ].filter(Boolean).join(' ')
+  const result = await runTerminal({ command: cmd, timeout_sec: args.timeout_sec ?? '45', max_output_chars: '50000' })
+  if (result && !result.includes('not recognized') && result.trim()) return result.slice(0, 20000)
+
+  const psQuery = query.replace(/"/g, '`"')
+  const psCmd = `Get-ChildItem -Path "${absDir}" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\node_modules\\|\\dist\\|\\.git\\|\\desktop-release\\' } | Select-String -Pattern "${psQuery}" -CaseSensitive:$false | Select-Object -First ${max} | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }`
+  const psResult = await runTerminal({ command: psCmd, timeout_sec: args.timeout_sec ?? '60', max_output_chars: '50000' })
+  return psResult.slice(0, 20000) || 'No matches found.'
+}
+
+// -- code_quality_audit --------------------------------------------------------
+
+export const codeQualityAuditDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'code_quality_audit',
+    description: 'Summarize project health for faster coding: package scripts, file/line counts, largest source files, TODO/FIXME counts, and optional TypeScript check.',
+    parameters: {
+      type: 'object',
+      properties: {
+        directory: { type: 'string', description: 'Project directory. Defaults to workspace root.' },
+        typecheck: { type: 'string', description: 'Set to "true" to run npx tsc --noEmit.' },
+        max_files: { type: 'string', description: 'Number of largest files to show, default 15.' },
+      },
+      required: [],
+    },
+  },
+}
+
+export const codeQualityAudit: ToolHandler = async (args) => {
+  const dir = args.directory?.trim() || process.cwd()
+  const absDir = path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir)
+  const maxFiles = Math.min(40, Math.max(5, parseInt(args.max_files ?? '15', 10) || 15))
+  try {
+    const fsSync = await import('node:fs')
+    const packagePath = path.join(absDir, 'package.json')
+    let scripts = 'No package.json scripts found.'
+    if (fsSync.existsSync(packagePath)) {
+      try {
+        const pkg = JSON.parse(fsSync.readFileSync(packagePath, 'utf-8')) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        const scriptRows = Object.entries(pkg.scripts ?? {}).map(([name, value]) => `  ${name}: ${value}`)
+        scripts = scriptRows.length ? scriptRows.join('\n') : 'package.json has no scripts.'
+      } catch { scripts = 'package.json exists but could not be parsed.' }
+    }
+
+    const exclude = new Set(['node_modules', 'dist', '.git', 'desktop-release', '.next', '.venv', 'coverage'])
+    const sourceExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.json', '.md', '.py', '.go', '.rs'])
+    const largest: Array<{ file: string; lines: number; bytes: number }> = []
+    const byExt: Record<string, { files: number; lines: number }> = {}
+    let totalFiles = 0
+    let totalLines = 0
+    let todoCount = 0
+
+    function walk(dirPath: string, depth = 0) {
+      if (depth > 12) return
+      let entries: string[]
+      try { entries = fsSync.readdirSync(dirPath) } catch { return }
+      for (const entry of entries) {
+        if (exclude.has(entry)) continue
+        const full = path.join(dirPath, entry)
+        let stat
+        try { stat = fsSync.statSync(full) } catch { continue }
+        if (stat.isDirectory()) {
+          walk(full, depth + 1)
+          continue
+        }
+        if (!stat.isFile() || stat.size > 2_000_000) continue
+        const ext = path.extname(entry).toLowerCase() || '(none)'
+        if (!sourceExts.has(ext)) continue
+        let content = ''
+        try { content = fsSync.readFileSync(full, 'utf-8') } catch { continue }
+        const lines = content.split('\n').length
+        totalFiles++
+        totalLines += lines
+        byExt[ext] ??= { files: 0, lines: 0 }
+        byExt[ext].files++
+        byExt[ext].lines += lines
+        todoCount += (content.match(/\b(TODO|FIXME|HACK|BUG|XXX)\b/gi) ?? []).length
+        largest.push({ file: path.relative(absDir, full), lines, bytes: stat.size })
+      }
+    }
+
+    walk(absDir)
+    const extRows = Object.entries(byExt)
+      .sort((a, b) => b[1].lines - a[1].lines)
+      .map(([ext, value]) => `  ${ext.padEnd(8)} ${String(value.files).padStart(4)} files ${String(value.lines).padStart(7)} lines`)
+      .join('\n')
+    const largestRows = largest
+      .sort((a, b) => b.lines - a.lines)
+      .slice(0, maxFiles)
+      .map(item => `  ${String(item.lines).padStart(6)} lines  ${item.file}`)
+      .join('\n')
+
+    let typecheck = 'Skipped. Pass typecheck:"true" to run npx tsc --noEmit.'
+    if (args.typecheck === 'true') {
+      typecheck = await runTerminal({ command: 'npx tsc --noEmit 2>&1', cwd: absDir, timeout_sec: args.timeout_sec ?? '180', max_output_chars: '20000' })
+      if (!typecheck.trim()) typecheck = 'TypeScript check passed with no output.'
+    }
+
+    return [
+      `Code quality audit: ${absDir}`,
+      '',
+      'Scripts:',
+      scripts,
+      '',
+      'Source footprint:',
+      `  Files: ${totalFiles.toLocaleString()}`,
+      `  Lines: ${totalLines.toLocaleString()}`,
+      `  TODO/FIXME/HACK/BUG/XXX markers: ${todoCount.toLocaleString()}`,
+      '',
+      'By extension:',
+      extRows || '  No source files counted.',
+      '',
+      'Largest files:',
+      largestRows || '  No source files counted.',
+      '',
+      'Typecheck:',
+      typecheck.slice(0, 20000),
+    ].join('\n')
+  } catch (err) {
+    return `Code quality audit failed: ${err instanceof Error ? err.message : String(err)}`
+  }
+}

@@ -1,4 +1,4 @@
-ULTRON TOOL BUILD-DEPTH RANKING
+ASTRA TOOL BUILD-DEPTH RANKING
 Generated: 2026-07-03
 Source inspected: server/tools/*.ts and server/tools/registry.ts
 

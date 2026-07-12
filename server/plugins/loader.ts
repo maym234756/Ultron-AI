@@ -15,7 +15,7 @@ export type Plugin = {
 const PLUGINS_DIR = resolve(process.cwd(), 'plugins')
 
 const EXAMPLE_PLUGIN = `/**
- * Example Ultron plugin — drop this file in the plugins/ folder and restart.
+ * Example Astra plugin — drop this file in the plugins/ folder and restart.
  * Must export: definitions (ToolDefinition[]) and handlers (Record<string, ToolHandler>)
  */
 import type { ToolDefinition, ToolHandler } from '../server/tools/types.js'

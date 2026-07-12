@@ -110,6 +110,8 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
+  const [showTerms, setShowTerms] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [inviteToken] = useState(() => inviteTokenFromUrl())
   const [invitePreview, setInvitePreview] = useState<OrganizationInvitePreview | null>(null)
 
@@ -145,6 +147,8 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
     setError('')
     setInfo('')
     setCode('')
+    setShowTerms(false)
+    setTermsAccepted(false)
     setMode(next)
   }
 
@@ -181,6 +185,10 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     if (busy) return
+    if (mode === 'signup' && !termsAccepted) {
+      setError('You must accept the Terms & Agreement before creating an Astra account.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -239,19 +247,19 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
   }
 
   const title = mode === 'signup'
-    ? 'Create your Ultron account'
+    ? 'Create your Astra account'
     : mode === 'verify'
       ? 'Verify your email'
       : mode === 'forgot'
         ? 'Request a password reset'
         : mode === 'reset'
           ? 'Reset your password'
-          : 'Sign in to Ultron'
+          : 'Sign in to Astra'
 
   const description = mode === 'verify'
     ? 'Enter the verification code for your account. In debug mode the code appears here; with SMTP configured it is delivered by email.'
     : mode === 'forgot'
-      ? 'Request a password reset code for your Ultron account.'
+      ? 'Request a password reset code for your Astra account.'
       : mode === 'reset'
         ? 'Enter your reset code and choose a new password.'
         : invitePreview
@@ -272,7 +280,7 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
     <main className="auth-shell">
       <form className="auth-card" onSubmit={event => void submit(event)}>
         <div className="auth-mark"><ShieldCheck size={34} /></div>
-        <p className="eyebrow">Ultron Account</p>
+        <p className="eyebrow">Astra Account</p>
         <h1>{title}</h1>
         <p>{description}</p>
 
@@ -318,7 +326,20 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
           </label>
         )}
 
-        <button className="project-builder-run" type="submit" disabled={busy}>
+        {mode === 'signup' && (
+          <label className="auth-terms-consent">
+            <input checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)} type="checkbox" required />
+            <span>
+              I agree to the{' '}
+              <button className="auth-terms-link" type="button" onClick={() => setShowTerms(true)}>
+                Terms & Agreement
+              </button>
+              .
+            </span>
+          </label>
+        )}
+
+        <button className="project-builder-run" type="submit" disabled={busy || (mode === 'signup' && !termsAccepted)}>
           {busy ? <Loader size={15} className="spin" /> : <LockKeyhole size={15} />}
           {submitLabel}
         </button>
@@ -357,6 +378,81 @@ export function AuthPanel({ apiBase, configured, onAuthenticated }: Props) {
           </button>
         )}
       </form>
+
+      {showTerms && (
+        <div className="auth-terms-overlay" role="presentation" onClick={() => setShowTerms(false)}>
+          <section className="auth-terms-modal" role="dialog" aria-modal="true" aria-labelledby="astra-terms-title" onClick={event => event.stopPropagation()}>
+            <div className="auth-terms-head">
+              <div>
+                <p className="eyebrow">Astra Terms & Agreement</p>
+                <h2 id="astra-terms-title">Use Astra with clear consent and responsibility.</h2>
+              </div>
+              <button type="button" className="auth-terms-close" onClick={() => setShowTerms(false)} aria-label="Close terms">×</button>
+            </div>
+
+            <div className="auth-terms-body">
+              <p><strong>Last updated:</strong> July 12, 2026. These terms explain the expected use of Astra, a local-first AI workspace for chat, tools, memory, coding, browser automation, media workflows, run tracking, and connected services.</p>
+
+              <h3>1. Astra AI service</h3>
+              <p>Astra provides an AI assistant interface, local model routing, project-building tools, memory features, browser and desktop automation, connectors, media processing, and administrative workspace controls. Features may run locally, call your configured backend, or interact with third-party services you connect.</p>
+
+              <h3>2. Account and workspace access</h3>
+              <p>You are responsible for keeping your login, verification codes, password reset codes, devices, and workspace access secure. Organization owners and platform admins are responsible for invited users, roles, workspace membership, and access changes.</p>
+
+              <h3>3. Local-first privacy and data</h3>
+              <p>Astra is designed to operate with local infrastructure where configured, including Ollama, local databases, encrypted credential storage, and local project files. Data may still leave your device if you enable connectors, external APIs, email delivery, browser automation, cloud endpoints, or public URLs.</p>
+
+              <h3>4. Credentials, files, and sensitive information</h3>
+              <p>Only store credentials, tokens, files, screenshots, media, health data, location data, or private business information that you are authorized to use. Review tool actions before approval, especially actions that read files, write files, run terminal commands, access browsers, or use saved credentials.</p>
+
+              <h3>5. Automation and user approval</h3>
+              <p>Astra can help operate browsers, files, terminals, apps, code projects, schedulers, and connectors. You remain responsible for approving actions, checking outputs, confirming destructive or account-changing operations, and complying with the terms of any third-party website or service Astra interacts with.</p>
+
+              <h3>6. AI output and professional review</h3>
+              <p>Astra may generate text, code, images, videos, analysis, summaries, recommendations, and automations that can be incomplete, inaccurate, unsafe, or outdated. Review important output before relying on it. Astra is not a substitute for legal, medical, financial, security, emergency, or other licensed professional advice.</p>
+
+              <h3>7. Media, location, and personal data features</h3>
+              <p>PDF scanning, photo viewing, video viewing, AI media generation, voice, vision, and run tracking can involve personal or sensitive data. Use these features only with consent from the people involved and only where collection, processing, storage, and sharing are lawful and appropriate.</p>
+
+              <h3>8. Acceptable use</h3>
+              <p>Do not use Astra to break laws, violate privacy, bypass authorization, abuse systems, generate harmful instructions, impersonate others, create malicious code, or infringe intellectual property. You are responsible for what you ask Astra to do and what you do with Astra's output.</p>
+
+              <h3>9. Billing, subscriptions, and paid features</h3>
+              <p>If Astra adds paid plans, usage limits, billing, credits, enterprise seats, paid connectors, premium model access, AI media generation, storage, support, or other paid features, the displayed pricing, renewal, cancellation, refund, trial, tax, and usage terms will apply. You are responsible for keeping billing information accurate and for charges authorized by your account or organization.</p>
+
+              <h3>10. User content ownership and processing permission</h3>
+              <p>You keep ownership of your prompts, files, uploads, screenshots, project content, credentials, run data, media, and other content you provide. You grant Astra permission to process that content only as needed to provide the features you use, operate connected tools, maintain security, troubleshoot issues, and comply with law or account administration requirements.</p>
+
+              <h3>11. Generated output and user responsibility</h3>
+              <p>Subject to applicable law and third-party rights, you may use Astra-generated output for your own work. You are responsible for reviewing output, checking licenses and attribution, validating generated code or media, and making sure your use of output does not violate someone else's rights or applicable rules.</p>
+
+              <h3>12. Data retention, export, and deletion</h3>
+              <p>Astra may store account records, sessions, memories, credentials, project history, tasks, run data, generated artifacts, logs, and organization records depending on your configuration. You are responsible for exporting anything you need before deleting it. Account deletion, workspace removal, or local database deletion may permanently remove data unless backups or third-party copies exist.</p>
+
+              <h3>13. Security limitations</h3>
+              <p>Astra uses security-minded patterns such as session auth, local-first storage, encrypted credential handling where configured, and approval gates for sensitive actions. No system is perfectly secure. You should use strong passwords, protect your device, restrict admin access, rotate compromised credentials, and avoid storing secrets you do not need.</p>
+
+              <h3>14. Suspension, termination, and misuse</h3>
+              <p>Access may be limited, suspended, or terminated if an account is compromised, violates these terms, creates security risk, abuses systems, infringes rights, fails billing requirements, or is required by law or workspace administration. You may stop using Astra at any time, but prior obligations and responsible-use requirements still apply.</p>
+
+              <h3>15. Availability, updates, and third-party services</h3>
+              <p>Astra depends on your device, local services, models, databases, browser runtime, network, packages, and connected providers. Features may change, fail, or require maintenance. Third-party services remain governed by their own terms, privacy policies, limits, and availability.</p>
+
+              <h3>16. Disclaimers and limitation of liability</h3>
+              <p>Astra is provided as a configurable assistant platform and may be experimental, incomplete, interrupted, or incorrect. To the maximum extent allowed by law, Astra is provided without warranties of perfect accuracy, fitness for a particular purpose, uninterrupted operation, or error-free results. Astra's operators and contributors are not liable for indirect, incidental, consequential, special, punitive, or lost-profit damages caused by use or inability to use Astra.</p>
+
+              <h3>17. Indemnification</h3>
+              <p>You agree to be responsible for claims, losses, liabilities, damages, costs, and expenses that arise from your misuse of Astra, violation of these terms, violation of law, infringement of third-party rights, unauthorized use of data or credentials, or harmful actions you approve or perform through Astra.</p>
+
+              <h3>18. Changes, governing rules, and contact</h3>
+              <p>These terms may be updated as Astra adds billing, enterprise controls, new AI tools, model providers, media generation, storage, mobile features, or other capabilities. Continued use after updated terms are shown means you accept the updated terms. Production deployments should provide a support or legal contact, a governing-law section, and any required privacy-policy links for the region where Astra is offered.</p>
+
+              <h3>19. Agreement</h3>
+              <p>By creating an account or using Astra, you agree to use it responsibly, protect your account, respect other users and third-party systems, review AI output, and accept that Astra is provided as a configurable assistant platform rather than a guarantee of perfect results.</p>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   )
 }

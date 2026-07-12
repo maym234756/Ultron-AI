@@ -84,7 +84,7 @@ export const ghSetTokenDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'gh_set_token',
-    description: 'Save a GitHub Personal Access Token (PAT) so Ultron can access private repos, create issues, etc.',
+    description: 'Save a GitHub Personal Access Token (PAT) so Astra can access private repos, create issues, etc.',
     parameters: {
       type: 'object',
       properties: {

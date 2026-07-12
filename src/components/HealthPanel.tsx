@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle, Download, Loader, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react'
-import type { CapabilityStatus, ConnectorStatusSnapshot } from '../types'
+import { Activity, AlertTriangle, CheckCircle, Download, Gauge, Loader, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react'
+import type { CapabilityStatus, ConnectorStatusSnapshot, EngineBenchmarkResult, EngineSearchResponse } from '../types'
 import { clearTelemetry, exportTelemetry, getTelemetrySnapshot } from '../lib/telemetry'
 import type { TelemetrySnapshot } from '../lib/telemetry'
 
@@ -15,6 +15,12 @@ export function HealthPanel({ apiBase, onClose }: Props) {
   const [telemetry, setTelemetry] = useState<TelemetrySnapshot>(getTelemetrySnapshot)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [engineQuery, setEngineQuery] = useState('')
+  const [engineSearch, setEngineSearch] = useState<EngineSearchResponse | null>(null)
+  const [engineSearchLoading, setEngineSearchLoading] = useState(false)
+  const [benchmark, setBenchmark] = useState<EngineBenchmarkResult | null>(null)
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false)
+  const [benchmarkError, setBenchmarkError] = useState('')
 
   async function refresh() {
     setLoading(true)
@@ -36,8 +42,8 @@ export function HealthPanel({ apiBase, onClose }: Props) {
   useEffect(() => {
     void refresh()
     const syncTelemetry = () => setTelemetry(getTelemetrySnapshot())
-    window.addEventListener('ultron-telemetry-updated', syncTelemetry)
-    return () => window.removeEventListener('ultron-telemetry-updated', syncTelemetry)
+    window.addEventListener('astra-telemetry-updated', syncTelemetry)
+    return () => window.removeEventListener('astra-telemetry-updated', syncTelemetry)
   }, [apiBase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const recentRoutes = telemetry.entries.slice(0, 6)
@@ -64,6 +70,42 @@ export function HealthPanel({ apiBase, onClose }: Props) {
     if (typeof value !== 'number') return 'n/a'
     if (value >= 1000) return `${(value / 1000).toFixed(1)}s`
     return `${value}ms`
+  }
+
+  async function searchEngine(query = engineQuery) {
+    setEngineSearchLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set('q', query.trim())
+      params.set('limit', '12')
+      const response = await fetch(`${apiBase}/api/engine/search?${params.toString()}`)
+      if (!response.ok) throw new Error(`Engine search failed (${response.status})`)
+      setEngineSearch(await response.json() as EngineSearchResponse)
+    } catch (err) {
+      setBenchmarkError(err instanceof Error ? err.message : 'Engine search failed')
+    } finally {
+      setEngineSearchLoading(false)
+    }
+  }
+
+  async function runBenchmark() {
+    setBenchmarkLoading(true)
+    setBenchmarkError('')
+    try {
+      const response = await fetch(`${apiBase}/api/engine/benchmark`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: status?.defaultModel, maxTokens: 64 }),
+      })
+      const data = await response.json() as Partial<EngineBenchmarkResult> & { error?: string }
+      if (!response.ok || data.error) throw new Error(data.error ?? `Benchmark failed (${response.status})`)
+      setBenchmark(data as EngineBenchmarkResult)
+    } catch (err) {
+      setBenchmarkError(err instanceof Error ? err.message : 'Benchmark failed')
+    } finally {
+      setBenchmarkLoading(false)
+    }
   }
 
   return (
@@ -132,6 +174,51 @@ export function HealthPanel({ apiBase, onClose }: Props) {
                 <span className="settings-section-title">Available Models</span>
                 <p>{status.models.length ? status.models.join(', ') : 'No models reported'}</p>
               </div>
+
+              <section className="diagnostics-panel">
+                <div className="diagnostics-header">
+                  <span className="settings-section-title"><Search size={13} /> Engine Search</span>
+                  <p>Find tools, connectors, routes, templates, and public capabilities.</p>
+                </div>
+                <form className="engine-search-row" onSubmit={event => { event.preventDefault(); void searchEngine() }}>
+                  <input value={engineQuery} onChange={event => setEngineQuery(event.target.value)} placeholder="Search capabilities, tools, routes..." />
+                  <button type="submit" className="sidebar-action-btn" disabled={engineSearchLoading}>
+                    {engineSearchLoading ? <Loader size={13} className="spin" /> : <Search size={13} />}
+                    Search
+                  </button>
+                </form>
+                <div className="engine-result-list">
+                  {(engineSearch?.results ?? []).slice(0, 8).map(result => (
+                    <div key={result.id} className="engine-result-card">
+                      <strong>{result.title}</strong>
+                      <span>{result.type} · {result.detail}</span>
+                    </div>
+                  ))}
+                  {engineSearch && engineSearch.results.length === 0 && <p className="panel-hint">No matching capability found.</p>}
+                  {!engineSearch && <p className="panel-hint">Try “video”, “pdf”, “salesforce”, “benchmark”, “run tracker”, or “coding”.</p>}
+                </div>
+              </section>
+
+              <section className="diagnostics-panel">
+                <div className="diagnostics-header">
+                  <span className="settings-section-title"><Gauge size={13} /> Response Benchmark</span>
+                  <p>Run a short local Ollama benchmark against the selected default model.</p>
+                </div>
+                <button type="button" className="sidebar-action-btn benchmark-run-btn" onClick={() => void runBenchmark()} disabled={benchmarkLoading || status.models.length === 0}>
+                  {benchmarkLoading ? <Loader size={13} className="spin" /> : <Gauge size={13} />}
+                  Run benchmark
+                </button>
+                {benchmarkError && <div className="notice">{benchmarkError}</div>}
+                {benchmark && (
+                  <div className="diagnostics-metrics benchmark-metrics">
+                    <div><strong>{formatMs(benchmark.totalMs)}</strong><span>Total</span></div>
+                    <div><strong>{formatMs(benchmark.loadMs)}</strong><span>Load</span></div>
+                    <div><strong>{benchmark.tokensPerSec ?? 'n/a'}</strong><span>Tokens/sec</span></div>
+                    <div><strong>{benchmark.responseTokens ?? 'n/a'}</strong><span>Output tokens</span></div>
+                  </div>
+                )}
+                {benchmark?.sample && <p className="panel-hint">{benchmark.model}: {benchmark.sample}</p>}
+              </section>
 
               <section className="diagnostics-panel">
                 <div className="diagnostics-header">
@@ -228,7 +315,7 @@ export function HealthPanel({ apiBase, onClose }: Props) {
           )}
 
           {loading && !status && !error && (
-            <p className="panel-hint">Checking Ultron's local systems...</p>
+            <p className="panel-hint">Checking Astra's local systems...</p>
           )}
         </div>
       </div>

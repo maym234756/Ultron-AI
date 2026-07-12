@@ -32,7 +32,7 @@ export const searchWeb: ToolHandler = async (args) => {
   try {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Ultron/1.0' },
+      headers: { 'User-Agent': 'Astra/1.0' },
       signal: AbortSignal.timeout(8_000),
     })
     const data = (await res.json()) as DDGResponse

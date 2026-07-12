@@ -19,8 +19,8 @@ import type { Page, Response } from 'playwright'
 const VAULT_FILE = join(process.cwd(), '.cred-vault.json')
 
 function getMachineKey(): Buffer {
-  const seed = `${hostname()}-${userInfo().username}-ultron-vault-v1`
-  return pbkdf2Sync(seed, 'ultron-vault-salt-2024', 100_000, 32, 'sha256')
+  const seed = `${hostname()}-${userInfo().username}-astra-vault-v1`
+  return pbkdf2Sync(seed, 'astra-vault-salt-2024', 100_000, 32, 'sha256')
 }
 
 function encrypt(text: string): string {
@@ -284,7 +284,7 @@ export const browserRecordStartDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'browser_record_start',
-    description: 'Start recording browser actions (clicks, typing, navigation). Interact with the page — Ultron captures everything. Stop with browser_record_stop to get the replay script.',
+    description: 'Start recording browser actions (clicks, typing, navigation). Interact with the page — Astra captures everything. Stop with browser_record_stop to get the replay script.',
     parameters: { type: 'object', properties: {} },
   },
 }
@@ -306,7 +306,7 @@ export const browserRecordStart: ToolHandler = async () => {
     await page.addInitScript(() => {
       const doc = (globalThis as any).document
       const send = (action: string) => {
-        const el = doc.getElementById('__ultron_recorder__')
+        const el = doc.getElementById('__astra_recorder__')
         if (el) el.setAttribute('data-last', action)
       }
       doc.addEventListener('click', (e: any) => {
@@ -459,4 +459,158 @@ export const browserNetworkCapture: ToolHandler = async (args) => {
   return _capturedRequests.map((r, i) =>
     `[${i + 1}] ${r.method} ${r.url}\nStatus: ${r.status} · ${r.contentType || 'unknown type'} · ${r.size.toLocaleString()} bytes\n${r.body.slice(0, 1000)}`
   ).join('\n\n---\n\n')
+}
+
+// -- browser_performance_audit -------------------------------------------------
+
+export const browserPerformanceAuditDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_performance_audit',
+    description: 'Audit the current Playwright page for response time, navigation timing, resource counts, DOM size, forms, images, scripts, and basic public UX signals.',
+    parameters: {
+      type: 'object',
+      properties: {
+        include_resources: { type: 'string', description: 'Set to "true" to include the slowest resource URLs.' },
+        max_resources: { type: 'string', description: 'Maximum slow resources to return when include_resources is true. Default 12.' },
+      },
+    },
+  },
+}
+
+export const browserPerformanceAudit: ToolHandler = async (args) => {
+  try {
+    const page = await getPage()
+    const includeResources = args.include_resources === 'true'
+    const maxResources = Math.max(1, Math.min(50, parseInt(args.max_resources ?? '12', 10) || 12))
+    const audit = await page.evaluate(({ includeResources, maxResources }) => {
+      const win = globalThis as any
+      const doc = win.document
+      const perf = win.performance
+      const navLocation = win.location
+      const navigation = perf.getEntriesByType('navigation')[0]
+      const resources = perf.getEntriesByType('resource') as any[]
+      const paintEntries = perf.getEntriesByType('paint') as any[]
+      const byType = resources.reduce<Record<string, { count: number; transfer: number; duration: number }>>((acc, item) => {
+        const type = item.initiatorType || 'other'
+        acc[type] ??= { count: 0, transfer: 0, duration: 0 }
+        acc[type].count++
+        acc[type].transfer += item.transferSize || 0
+        acc[type].duration += item.duration || 0
+        return acc
+      }, {})
+      const slowest = resources
+        .slice()
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, maxResources)
+        .map(item => ({
+          url: item.name.slice(0, 220),
+          type: item.initiatorType || 'other',
+          durationMs: Math.round(item.duration),
+          transferKb: Math.round((item.transferSize || 0) / 1024),
+        }))
+      const timings = navigation ? {
+        domContentLoadedMs: Math.round(navigation.domContentLoadedEventEnd - navigation.startTime),
+        loadEventMs: Math.round(navigation.loadEventEnd - navigation.startTime),
+        responseStartMs: Math.round(navigation.responseStart - navigation.startTime),
+        responseEndMs: Math.round(navigation.responseEnd - navigation.startTime),
+        transferKb: Math.round((navigation.transferSize || 0) / 1024),
+      } : null
+      const paints = Object.fromEntries(paintEntries.map(entry => [entry.name, Math.round(entry.startTime)]))
+      return {
+        url: navLocation.href,
+        title: doc.title,
+        timings,
+        paints,
+        resources: {
+          total: resources.length,
+          byType,
+          slowest: includeResources ? slowest : undefined,
+        },
+        page: {
+          domNodes: doc.querySelectorAll('*').length,
+          headings: doc.querySelectorAll('h1,h2,h3,h4,h5,h6').length,
+          links: doc.links.length,
+          buttons: doc.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]').length,
+          forms: doc.forms.length,
+          images: doc.images.length,
+          videos: doc.querySelectorAll('video').length,
+          iframes: doc.querySelectorAll('iframe').length,
+        },
+        publicUxSignals: {
+          hasViewportMeta: Boolean(doc.querySelector('meta[name="viewport"]')),
+          hasDescription: Boolean(doc.querySelector('meta[name="description"]')),
+          h1Text: Array.from(doc.querySelectorAll('h1')).map((h: any) => h.textContent?.trim()).filter(Boolean).slice(0, 3),
+          emptyButtons: Array.from(doc.querySelectorAll('button')).filter((button: any) => !button.textContent?.trim() && !button.getAttribute('aria-label')).length,
+          imagesWithoutAlt: Array.from(doc.images).filter((img: any) => !img.alt).length,
+        },
+      }
+    }, { includeResources, maxResources })
+    return JSON.stringify(audit, null, 2).slice(0, 20000)
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// -- browser_smart_extract -----------------------------------------------------
+
+export const browserSmartExtractDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'browser_smart_extract',
+    description: 'Extract structured content from the current page: title, headings, main text, links, forms, buttons, images, videos, and tables.',
+    parameters: {
+      type: 'object',
+      properties: {
+        max_items: { type: 'string', description: 'Maximum items per category. Default 25.' },
+        include_text: { type: 'string', description: 'Set to "false" to omit main text preview.' },
+      },
+    },
+  },
+}
+
+export const browserSmartExtract: ToolHandler = async (args) => {
+  try {
+    const page = await getPage()
+    const maxItems = Math.max(5, Math.min(100, parseInt(args.max_items ?? '25', 10) || 25))
+    const includeText = args.include_text !== 'false'
+    const extracted = await page.evaluate(({ maxItems, includeText }) => {
+      const win = globalThis as any
+      const doc = win.document
+      const navLocation = win.location
+      const cssEscape = win.CSS?.escape ?? ((value: string) => value.replace(/"/g, '\\"'))
+      const text = (el: any) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+      const attr = (el: any, name: string) => el?.getAttribute?.(name) ?? ''
+      const main = doc.querySelector('main,article,[role="main"]') ?? doc.body
+      const tables = Array.from(doc.querySelectorAll('table')).slice(0, Math.min(8, maxItems)).map((table: any) => {
+        const rows = Array.from(table.querySelectorAll('tr')).slice(0, 8).map((row: any) =>
+          Array.from(row.querySelectorAll('th,td')).slice(0, 8).map(cell => text(cell))
+        )
+        return { caption: text(table.querySelector('caption')), rows }
+      })
+      return {
+        url: navLocation.href,
+        title: doc.title,
+        description: attr(doc.querySelector('meta[name="description"]') ?? doc.createElement('meta'), 'content'),
+        headings: Array.from(doc.querySelectorAll('h1,h2,h3')).slice(0, maxItems).map((heading: any) => ({ tag: heading.tagName.toLowerCase(), text: text(heading) })),
+        textPreview: includeText ? text(main).slice(0, 5000) : undefined,
+        links: Array.from(doc.links).slice(0, maxItems).map((link: any) => ({ text: text(link), href: link.href })),
+        buttons: Array.from(doc.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]')).slice(0, maxItems).map((button: any) => ({ text: text(button), ariaLabel: attr(button, 'aria-label'), type: attr(button, 'type') })),
+        forms: Array.from(doc.forms).slice(0, maxItems).map((form: any) => ({
+          action: form.action,
+          method: form.method,
+          fields: Array.from(form.querySelectorAll('input,textarea,select')).slice(0, 30).map((field: any) => ({
+            tag: field.tagName.toLowerCase(),
+            type: attr(field, 'type'),
+            name: attr(field, 'name'),
+            id: attr(field, 'id'),
+            placeholder: attr(field, 'placeholder'),
+            label: text(doc.querySelector(`label[for="${cssEscape(attr(field, 'id'))}"]`)),
+          })),
+        })),
+        images: Array.from(doc.images).slice(0, maxItems).map((img: any) => ({ src: img.currentSrc || img.src, alt: img.alt, width: img.naturalWidth, height: img.naturalHeight })),
+        videos: Array.from(doc.querySelectorAll('video')).slice(0, maxItems).map((video: any) => ({ src: video.currentSrc || attr(video, 'src'), poster: attr(video, 'poster'), duration: Number.isFinite(video.duration) ? video.duration : null })),
+        tables,
+      }
+    }, { maxItems, includeText })
+    return JSON.stringify(extracted, null, 2).slice(0, 24000)
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }

@@ -35,6 +35,18 @@ type IdentityOverview = {
   }>
 }
 
+type AuditLogEntry = {
+  id: string
+  action: string
+  summary: string
+  createdAt: string
+  user: {
+    id: string
+    email: string
+    displayName: string
+  } | null
+}
+
 type Props = {
   apiBase: string
   currentUser: AuthUser
@@ -45,6 +57,7 @@ type Props = {
 
 export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth, onNotice }: Props) {
   const [overview, setOverview] = useState<IdentityOverview | null>(null)
+  const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [busyUserId, setBusyUserId] = useState('')
   const [error, setError] = useState('')
@@ -53,10 +66,17 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/api/admin/identity`, { credentials: 'include' })
+      const [response, auditResponse] = await Promise.all([
+        fetch(`${apiBase}/api/admin/identity`, { credentials: 'include' }),
+        fetch(`${apiBase}/api/admin/audit?limit=40`, { credentials: 'include' }),
+      ])
       const data = await response.json() as IdentityOverview & { error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Could not load identity overview')
       setOverview(data)
+      if (auditResponse.ok) {
+        const auditData = await auditResponse.json() as { entries?: AuditLogEntry[] }
+        setAuditEntries(auditData.entries ?? [])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load identity overview')
     } finally {
@@ -115,7 +135,7 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
             <div>
               <span className="settings-section-title">Platform Overview</span>
               <h3>Identity and Workspace Map</h3>
-              <p>Review organizations, members, and platform admin access across the current Ultron runtime.</p>
+              <p>Review organizations, members, and platform admin access across the current Astra runtime.</p>
             </div>
             <Building2 size={34} />
           </section>
@@ -189,6 +209,24 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
                           </div>
                         </article>
                       ))}
+                    </div>
+                  </article>
+                ))}
+              </section>
+
+              <section className="project-builder-projects org-card-stack">
+                <div className="project-builder-section-head">
+                  <span className="settings-section-title">Audit Log</span>
+                  <span className="panel-hint">{auditEntries.length} recent event(s)</span>
+                </div>
+
+                {auditEntries.length === 0 && <p className="panel-hint">No audit entries recorded yet.</p>}
+                {auditEntries.map(entry => (
+                  <article className="org-member-card" key={entry.id}>
+                    <div className="org-member-meta">
+                      <strong>{entry.action}</strong>
+                      <span>{entry.summary}</span>
+                      <span>{new Date(entry.createdAt).toLocaleString()} · {entry.user?.displayName ?? entry.user?.email ?? 'System'}</span>
                     </div>
                   </article>
                 ))}

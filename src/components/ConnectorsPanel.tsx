@@ -75,6 +75,7 @@ export function ConnectorsPanel({ apiBase, onClose }: Props) {
     try {
       const response = await fetch(`${apiBase}/api/connectors/${connector.id}/setup`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       })
@@ -91,7 +92,7 @@ export function ConnectorsPanel({ apiBase, onClose }: Props) {
     setTestingId(connector.id)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/api/connectors/${connector.id}/test`, { method: 'POST' })
+      const response = await fetch(`${apiBase}/api/connectors/${connector.id}/test`, { method: 'POST', credentials: 'include' })
       if (!response.ok) throw new Error(`Connection test failed (${response.status})`)
       await refresh()
     } catch (err) {
@@ -107,6 +108,7 @@ export function ConnectorsPanel({ apiBase, onClose }: Props) {
     try {
       const response = await fetch(`${apiBase}/api/connectors/actions/dry-run`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actionName: action.name, input: {} }),
       })

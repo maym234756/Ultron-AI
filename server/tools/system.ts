@@ -90,14 +90,14 @@ public class ExistingWindowFocus {
 }
 "@
 $names = @(${names})
-$ultronFocusedExistingWindow = $false
+$astraFocusedExistingWindow = $false
 $p = Get-Process -ErrorAction SilentlyContinue | Where-Object { $names -contains $_.ProcessName -and $_.MainWindowHandle -ne 0 } | Sort-Object StartTime -Descending | Select-Object -First 1
 if ($p) {
   [ExistingWindowFocus]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
   Start-Sleep -Milliseconds 120
   [ExistingWindowFocus]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
   Write-Output "Focused existing $($p.ProcessName): $($p.MainWindowTitle)"
-  $ultronFocusedExistingWindow = $true
+  $astraFocusedExistingWindow = $true
 }
 `.trim()
 }
@@ -141,7 +141,7 @@ export const openApp: ToolHandler = (args) => {
     const processNames = APP_PROCESS_HINTS[raw]
     if (processNames?.length) {
       return runTerminal({
-        command: `${focusExistingWindowCommand(processNames)}; if (-not $ultronFocusedExistingWindow) { ${extra
+        command: `${focusExistingWindowCommand(processNames)}; if (-not $astraFocusedExistingWindow) { ${extra
           ? `Start-Process "${exe}" -ArgumentList "${extra.replace(/"/g, '\\"')}"`
           : `Start-Process "${exe}"`}; Write-Output "Opened ${exe}" }`,
       })
@@ -317,7 +317,7 @@ export const notifyDefinition: ToolDefinition = {
 }
 
 export const notify: ToolHandler = (args) => {
-  const title = (args.title ?? 'Ultron').replace(/"/g, "'")
+  const title = (args.title ?? 'Astra').replace(/"/g, "'")
   const message = (args.message ?? '').replace(/"/g, "'")
   const script = [
     'Add-Type -AssemblyName System.Windows.Forms',

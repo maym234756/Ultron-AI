@@ -38,7 +38,7 @@ export type ConnectorSetupPatch = Partial<Pick<ConnectorSetupState,
   'preferredAuth' | 'permissionLevel' | 'auditLogEnabled' | 'browserSessionReady' | 'apiTokenConfigured' | 'lastTestAt' | 'lastTestOk' | 'lastTestDetail'
 >>
 
-const setupFile = path.join(os.homedir(), '.ultron-connectors.json')
+const setupFile = path.join(os.homedir(), '.astra-connectors.json')
 
 export const DEFAULT_CONNECTOR_PERMISSION: ConnectorPermissionLevel = 'apply-with-approval'
 

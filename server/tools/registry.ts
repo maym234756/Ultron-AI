@@ -23,6 +23,12 @@ import {
   createSlideshow, createSlideshowDefinition,
   recordScreen, recordScreenDefinition,
   convertVideo, convertVideoDefinition,
+  scanMediaFile, scanMediaFileDefinition,
+  viewMedia, viewMediaDefinition,
+  scanPdfDocument, scanPdfDocumentDefinition,
+  generatePhoto, generatePhotoDefinition,
+  extractVideoFrames, extractVideoFramesDefinition,
+  generateAiVideoStoryboard, generateAiVideoStoryboardDefinition,
 } from './media.js'
 import {
   browserGo, browserGoDefinition,
@@ -63,6 +69,8 @@ import {
   patchFile, patchFileDefinition,
   codeTodos, codeTodosDefinition,
   codeStats, codeStatsDefinition,
+  codeImpactSearch, codeImpactSearchDefinition,
+  codeQualityAudit, codeQualityAuditDefinition,
 } from './coding.js'
 import {
   gitStatus, gitStatusDefinition,
@@ -130,6 +138,8 @@ import {
   browserRecordStart, browserRecordStartDefinition,
   browserRecordStop, browserRecordStopDefinition,
   browserNetworkCapture, browserNetworkCaptureDefinition,
+  browserPerformanceAudit, browserPerformanceAuditDefinition,
+  browserSmartExtract, browserSmartExtractDefinition,
 } from './playwright_adv.js'
 import { ragIndexUrl, ragIndexUrlDefinition } from './rag.js'
 import { previewWrite, previewWriteDefinition, previewExec, previewExecDefinition } from './preview.js'
@@ -197,6 +207,12 @@ export const toolDefinitions: ToolDefinition[] = [
   createSlideshowDefinition,
   recordScreenDefinition,
   convertVideoDefinition,
+  scanMediaFileDefinition,
+  viewMediaDefinition,
+  scanPdfDocumentDefinition,
+  generatePhotoDefinition,
+  extractVideoFramesDefinition,
+  generateAiVideoStoryboardDefinition,
   browserGoDefinition,
   browserClickDefinition,
   browserFillDefinition,
@@ -233,6 +249,8 @@ export const toolDefinitions: ToolDefinition[] = [
   patchFileDefinition,
   codeTodosDefinition,
   codeStatsDefinition,
+  codeImpactSearchDefinition,
+  codeQualityAuditDefinition,
   readPdfDefinition,
   gitStatusDefinition,
   gitDiffDefinition,
@@ -335,6 +353,8 @@ export const toolDefinitions: ToolDefinition[] = [
   browserRecordStartDefinition,
   browserRecordStopDefinition,
   browserNetworkCaptureDefinition,
+  browserPerformanceAuditDefinition,
+  browserSmartExtractDefinition,
   // RAG URL indexing
   ragIndexUrlDefinition,
   // Preview panel
@@ -373,6 +393,12 @@ const handlers: Record<string, ToolHandler> = {
   create_slideshow: createSlideshow,
   record_screen: recordScreen,
   convert_video: convertVideo,
+  scan_media_file: scanMediaFile,
+  view_media: viewMedia,
+  scan_pdf_document: scanPdfDocument,
+  generate_photo: generatePhoto,
+  extract_video_frames: extractVideoFrames,
+  generate_ai_video_storyboard: generateAiVideoStoryboard,
   browser_go: browserGo,
   browser_click: browserClick,
   browser_fill: browserFill,
@@ -409,6 +435,8 @@ const handlers: Record<string, ToolHandler> = {
   patch_file: patchFile,
   code_todos: codeTodos,
   code_stats: codeStats,
+  code_impact_search: codeImpactSearch,
+  code_quality_audit: codeQualityAudit,
   read_pdf: readPdf,
   git_status: gitStatus,
   git_diff: gitDiff,
@@ -510,6 +538,8 @@ const handlers: Record<string, ToolHandler> = {
   browser_record_start: browserRecordStart,
   browser_record_stop: browserRecordStop,
   browser_network_capture: browserNetworkCapture,
+  browser_performance_audit: browserPerformanceAudit,
+  browser_smart_extract: browserSmartExtract,
   // RAG URL indexing
   rag_index_url: ragIndexUrl,
   // Preview panel

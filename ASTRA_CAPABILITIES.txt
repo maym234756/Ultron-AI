@@ -1,8 +1,8 @@
 ================================================================================
-                         ULTRON - FULL CAPABILITIES
+                         ASTRA - FULL CAPABILITIES
 ================================================================================
 
-Ultron is a local AI assistant running on your Windows machine with full tool
+Astra is a local AI assistant running on your Windows machine with full tool
 access. Primary model: qwen2.5:14b. Vision: llava. Fast model: llama3.2:3b.
 Embeddings: nomic-embed-text. Playwright-controlled Chromium for full browser
 automation (headless:false). Passive screen observer runs in the background,
@@ -29,7 +29,7 @@ MODELS
 --------------------------------------------------------------------------------
 AI INTELLIGENCE
 --------------------------------------------------------------------------------
-Ultron's reasoning uses a structured multi-step protocol:
+Astra's reasoning uses a structured multi-step protocol:
   UNDERSTAND → DECOMPOSE → PLAN → ACT → VERIFY
 
 Critical Thinking:
@@ -74,7 +74,7 @@ Auto Router / Decision Engine:
 - Routes action and research prompts correctly: "Open Gmail" -> Agent;
   "Research latest X with sources" -> Agent/Research
 - Routes project, folder, codebase, and explicit local-path reviews to Agent/Deep
-  so Ultron can request permission and use filesystem tools instead of guessing
+  so Astra can request permission and use filesystem tools instead of guessing
 - Settings toggles: Auto route Chat/Agent and Auto intelligence profile
 
 Critical Thinking Upgrades:
@@ -86,7 +86,7 @@ Critical Thinking Upgrades:
   key content, verification status, and open questions
 
 --------------------------------------------------------------------------------
-MODEL COMPARE (Ultron-exclusive)
+MODEL COMPARE (Astra-exclusive)
 --------------------------------------------------------------------------------
 Run the same prompt against all your installed Ollama models simultaneously:
 - Up to 4 models side-by-side in a responsive CSS-grid layout
@@ -98,20 +98,20 @@ Run the same prompt against all your installed Ollama models simultaneously:
 - New endpoint: POST /api/compare (SSE)
 
 --------------------------------------------------------------------------------
-VOICE CONVERSATION MODE (Ultron-exclusive)
+VOICE CONVERSATION MODE (Astra-exclusive)
 --------------------------------------------------------------------------------
 Full hands-free voice conversation loop — no keyboard needed:
 - Click the 📞 Phone button in the composer to enter conversation mode
-- Ultron listens (Web Speech API), auto-sends when you stop speaking
-- When response finishes, Ultron speaks it aloud automatically (Web Speech TTS)
-- After speaking, Ultron restarts listening — fully hands-free loop
+- Astra listens (Web Speech API), auto-sends when you stop speaking
+- When response finishes, Astra speaks it aloud automatically (Web Speech TTS)
+- After speaking, Astra restarts listening — fully hands-free loop
 - Red banner above composer shows conversation state (Listening / Generating)
 - Click X in banner or phone button again to exit conversation mode
 - Stopping a stream also exits conversation mode
 - Normal mic button still works for single-shot voice input
 
 --------------------------------------------------------------------------------
-PROMPT ENHANCE (Ultron-exclusive)
+PROMPT ENHANCE (Astra-exclusive)
 --------------------------------------------------------------------------------
 - ✨ Wand icon appears in composer when draft is longer than 8 characters
 - Calls /api/enhance: asks the model to rewrite your prompt for clarity and precision
@@ -120,12 +120,12 @@ PROMPT ENHANCE (Ultron-exclusive)
 - Endpoint: POST /api/enhance
 
 --------------------------------------------------------------------------------
-PROJECT BUILDER (Ultron-exclusive)
+PROJECT BUILDER (Astra-exclusive)
 --------------------------------------------------------------------------------
 Template-driven programming project creation with approval-first local actions:
 - Sidebar Build panel scaffolds complete starter projects from templates
 - Natural prompts like "Let's build a website" route to a guided builder flow:
-  Ultron asks for the project name and location, asks approval, then creates
+  Astra asks for the project name and location, asks approval, then creates
   and opens the project instead of giving a generic tutorial
 - Templates: zero-dependency browser app, React + Vite + TypeScript,
   Express API service, and Python CLI tool
@@ -133,11 +133,11 @@ Template-driven programming project creation with approval-first local actions:
   VS Code open, and File Explorer open
 - Project Memory remembers generated projects, paths, stacks, commands, last
   check status, last action, and preview URL when available
-- Every Project Builder scaffold includes ULTRON_PROJECT_PLAN.md with template
+- Every Project Builder scaffold includes ASTRA_PROJECT_PLAN.md with template
   context, commands, next implementation ideas, and a recommended check/fix/dev
-  loop so Ultron can keep building from a concrete project brief
+  loop so Astra can keep building from a concrete project brief
 - Remembered projects can be opened in File Explorer, opened in VS Code, opened
-  directly to ULTRON_PROJECT_PLAN.md, opened in a PowerShell terminal at the
+  directly to ASTRA_PROJECT_PLAN.md, opened in a PowerShell terminal at the
   project folder, installed later when dependencies were skipped, checked/built
   again, repaired with a check-fix-check loop, started as a dev server, or
   stopped from the Builder panel
@@ -153,7 +153,7 @@ Template-driven programming project creation with approval-first local actions:
   POST /api/project-builder/projects/:id/actions
 
 --------------------------------------------------------------------------------
-REFERENCE BUILDER / WEBSITE LEARNER (Ultron-exclusive)
+REFERENCE BUILDER / WEBSITE LEARNER (Astra-exclusive)
 --------------------------------------------------------------------------------
 Reference-to-blueprint workflow for building original websites from examples:
 - Sidebar Learn panel accepts a public website URL, screenshot image, or both
@@ -161,7 +161,7 @@ Reference-to-blueprint workflow for building original websites from examples:
 - Extracts page title, headings, navigation, CTAs, forms, colors, image alt text,
   text sample, and screenshot layout summary when a vision model is available
 - Creates an original build blueprint with product concept, pages, components,
-  workflows, visual direction, and a ready-to-use Ultron build prompt
+  workflows, visual direction, and a ready-to-use Astra build prompt
 - Learn + Build creates a complete original zero-dependency website project from
   the scanned reference, writes source files, runs the first check, and adds the
   result to Project Memory
@@ -172,14 +172,14 @@ Reference-to-blueprint workflow for building original websites from examples:
 - Enforces guardrails against copying brand names, logos, exact text, protected
   imagery, or distinctive trade dress; it learns structure and workflow patterns
 - "Use As Build Prompt" sends the blueprint into chat and enables Agent mode so
-  Ultron can continue into Project Builder, validation, repair, and preview
+  Astra can continue into Project Builder, validation, repair, and preview
 - Endpoints: POST /api/reference-builder/scan,
   POST /api/reference-builder/build
 
 --------------------------------------------------------------------------------
 TASK DASHBOARD
 --------------------------------------------------------------------------------
-Full task management UI backed by a persistent task file (~/.ultron-tasks.json):
+Full task management UI backed by a persistent task file (~/.astra-tasks.json):
 - Sidebar Tasks button shows live overdue badge count
 - Filter tabs: Pending / Today / Overdue / Done / All — each with live counts
 - Inline quick-add form: title, due date picker, priority selector, tags
@@ -190,9 +190,9 @@ Full task management UI backed by a persistent task file (~/.ultron-tasks.json):
 - REST endpoints: GET/POST /api/tasks, PATCH /api/tasks/:id/done, DELETE /api/tasks/:id
 
 --------------------------------------------------------------------------------
-SELF-UPGRADE 2.0 SYSTEM (Ultron-exclusive)
+SELF-UPGRADE 2.0 SYSTEM (Astra-exclusive)
 --------------------------------------------------------------------------------
-Ultron can analyze and improve its own source code — with strict guardrails:
+Astra can analyze and improve its own source code — with strict guardrails:
 
 HOW IT WORKS:
 1. Click “Upgrade” in the sidebar to open the Self-Upgrade panel
@@ -272,7 +272,7 @@ FILE SYSTEM (HOME DIRECTORY — FULL ACCESS)
 - External app/platform launches also require an Allow/Deny popup first:
   File Explorer, PowerShell, Command Prompt, Windows Terminal, Gmail,
   Salesforce, YouTube, Google Search, Facebook, and other connector/web targets.
-  Approval grants that platform/tool surface for the current run so Ultron can
+  Approval grants that platform/tool surface for the current run so Astra can
   continue the requested workflow without repeatedly asking for the same access.
 
 --------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ Central registry for authenticated websites, SaaS apps, cloud consoles, and APIs
 - Sidebar "Connect" panel lists connector category, auth modes, capabilities,
   safety rules, and Open button for each service
 - Agent fast path uses the same registry, so connector prompts answer instantly
-- Safe authentication model: user logs in normally; Ultron uses browser session
+- Safe authentication model: user logs in normally; Astra uses browser session
   or configured OAuth/API tokens; passwords are never collected in chat
 - Sensitive actions are approval-gated: sending email, editing CRM records,
   deleting rows/files, posting content, changing billing/security settings
@@ -495,7 +495,7 @@ TASKS & DAILY PLANNING
 PLUGIN SYSTEM
 --------------------------------------------------------------------------------
 - Drop a .ts or .js file in the plugins/ folder
-- Ultron auto-discovers and registers its tools on startup
+- Astra auto-discovers and registers its tools on startup
 - No changes to registry.ts or agent.ts needed
 - Example plugin template provided in plugins/_example.ts.disabled
 - Each plugin exports: definitions[] + handlers{}
@@ -578,7 +578,7 @@ CLIPBOARD
 --------------------------------------------------------------------------------
 - Read the current clipboard contents
 - Write any text to the clipboard
-- Bridge between Ultron and other apps
+- Bridge between Astra and other apps
 
 --------------------------------------------------------------------------------
 AUDIO (TEXT-TO-SPEECH)
@@ -674,7 +674,7 @@ PROMPT TEMPLATES:
 
 MEMORY MANAGER:
 - "Memory" button in sidebar opens a full memory management panel
-- View all long-term memories Ultron has saved
+- View all long-term memories Astra has saved
 - Add new memories manually with optional tags
 - Delete individual memories ("forget this")
 - Memories are embedding-indexed and recalled semantically on every request
@@ -698,7 +698,7 @@ SETTINGS:
 - Context window size (2,048–32,768 tokens)
 - Fast model field (auto-used for simple commands)
 - Domain expertise field (injected into every request)
-- Custom system prompt (appended to Ultron's base prompt)
+- Custom system prompt (appended to Astra's base prompt)
 - Passive screen observation toggle, mode (fast/deep), interval
 - Reset to defaults button
 
@@ -746,13 +746,13 @@ OTHER:
 - Keyboard shortcuts help modal: press ? to see all shortcuts
 - Electron tray app: Ctrl+Shift+U global hotkey, hides to tray (npm run tray)
 - Downloadable Windows desktop installer: npm run desktop:dist builds
-  desktop-release/Ultron-Setup-<version>.exe, and the GitHub Desktop Release
+  desktop-release/Astra-Setup-<version>.exe, and the GitHub Desktop Release
   workflow publishes installer artifacts and tagged public GitHub Releases
 
 --------------------------------------------------------------------------------
 BACKEND RUNTIME SUPERVISOR
 --------------------------------------------------------------------------------
-Ultron now has a server-side runtime supervisor in addition to basic health checks:
+Astra now has a server-side runtime supervisor in addition to basic health checks:
 - Middleware tracks every backend request by normalized method/path
 - Counts active requests and active SSE streams for long-running chat, agent,
   compare, model-pull, self-upgrade, and OpenAI-compatible streams
@@ -774,7 +774,7 @@ API ENDPOINTS: 60 route declarations
 /api/health           — Ollama status + best available model
 /api/backend/status   — Backend runtime supervisor, route inventory, traffic,
                         active streams, memory, event-loop, and recent errors
-/api/capabilities/status — Full Ultron readiness report and operational health
+/api/capabilities/status — Full Astra readiness report and operational health
 /api/connectors/status — External connector registry and readiness snapshot
 /api/connectors/actions — Native connector action schema registry
 /api/connectors/actions/dry-run — Dry-run a typed connector action plan
@@ -828,7 +828,7 @@ POST /api/healer/analyze     — Stream SSE: run restricted healing agent on one
 --------------------------------------------------------------------------------
 SELF-HEALING SYSTEM
 --------------------------------------------------------------------------------
-Ultron can detect and propose fixes for its own code errors — with strict
+Astra can detect and propose fixes for its own code errors — with strict
 guardrails so nothing ever changes without your explicit approval.
 
 HOW IT WORKS:
@@ -857,7 +857,7 @@ WHAT IT DETECTS:
 --------------------------------------------------------------------------------
 HEALTH COMMAND CENTER
 --------------------------------------------------------------------------------
-Ultron now has first-class self-health reporting, not just a basic server ping.
+Astra now has first-class self-health reporting, not just a basic server ping.
 
 WHAT IT CHECKS:
 • Ollama reachability and local model inventory

@@ -183,6 +183,40 @@ export type CapabilityStatus = {
   statuses: CapabilityStatusRow[]
 }
 
+export type EngineSearchResult = {
+  id: string
+  type: 'tool' | 'connector' | 'route' | 'template' | 'system'
+  title: string
+  detail: string
+  keywords: string
+  score: number
+}
+
+export type EngineSearchResponse = {
+  query: string
+  checkedAt: number
+  inventory: {
+    tools: number
+    connectors: number
+    routes: number
+    templates: number
+  }
+  results: EngineSearchResult[]
+}
+
+export type EngineBenchmarkResult = {
+  checkedAt: number
+  model: string
+  promptChars: number
+  totalMs: number
+  loadMs: number | null
+  evalMs: number | null
+  promptTokens: number | null
+  responseTokens: number | null
+  tokensPerSec: number | null
+  sample: string
+}
+
 export type ConnectorStatus = {
   id: string
   label: string

@@ -46,7 +46,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    fetch(`${apiBase}/api/history`)
+    fetch(`${apiBase}/api/history`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d: { sessions?: HistoryMeta[] }) => setSessions(d.sessions ?? []))
       .catch(() => {})
@@ -66,7 +66,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       try {
-        const r = await fetch(`${apiBase}/api/history/search?q=${encodeURIComponent(q)}`)
+        const r = await fetch(`${apiBase}/api/history/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
         if (r.ok) {
           const d = await r.json() as { results: SearchResult[] }
           setContentResults(d.results ?? [])
@@ -79,7 +79,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
 
   async function loadSession(id: string) {
     try {
-      const r = await fetch(`${apiBase}/api/history/${id}`)
+      const r = await fetch(`${apiBase}/api/history/${id}`, { credentials: 'include' })
       const d = await r.json() as { session?: { messages: Message[]; model: string } }
       if (d.session) {
         onLoad(d.session.messages, d.session.model)
@@ -90,7 +90,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
 
   async function deleteSession(e: React.MouseEvent, id: string) {
     e.stopPropagation()
-    await fetch(`${apiBase}/api/history/${id}`, { method: 'DELETE' }).catch(() => {})
+    await fetch(`${apiBase}/api/history/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {})
     setSessions((s) => s.filter((x) => x.id !== id))
     setContentResults(r => r ? r.filter(x => x.id !== id) : r)
   }
@@ -107,6 +107,7 @@ export function HistoryPanel({ apiBase, onLoad, onClose }: Props) {
     if (!title) { setRenamingId(null); return }
     await fetch(`${apiBase}/api/history/${id}`, {
       method: 'PATCH',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title }),
     }).catch(() => {})

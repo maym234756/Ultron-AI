@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, scrypt as sc
 import { promisify } from 'node:util'
 import os from 'node:os'
 import { deliverAuthChallenge, deliverOrganizationInvite, type AuthChallengeDelivery, type OrganizationInviteDelivery } from './authMailer.js'
-import { prisma } from './prisma.js'
+import { databaseProvider, prisma } from './prisma.js'
 
 const scrypt = promisify(scryptCallback)
 const SESSION_DAYS = 14
@@ -156,6 +156,18 @@ export type IdentityOverview = {
     pendingInviteCount: number
     members: OrganizationMemberSummary[]
   }>
+}
+
+export type AuditLogEntry = {
+  id: string
+  action: string
+  summary: string
+  createdAt: string
+  user: {
+    id: string
+    email: string
+    displayName: string
+  } | null
 }
 
 type OrganizationActor = {
@@ -800,7 +812,7 @@ export async function setPlatformAdmin(actorUserId: string, targetUserId: string
 
   if (!nextValue && target.isPlatformAdmin) {
     const otherAdminCount = await prisma.user.count({ where: { isPlatformAdmin: true, NOT: { id: target.id } } })
-    if (otherAdminCount === 0) throw new Error('Ultron must keep at least one platform admin.')
+    if (otherAdminCount === 0) throw new Error('Astra must keep at least one platform admin.')
   }
 
   const updated = await prisma.user.update({ where: { id: target.id }, data: { isPlatformAdmin: nextValue } })
@@ -856,6 +868,28 @@ export async function identityOverview(userId: string): Promise<IdentityOverview
   }
 }
 
+export async function auditLogOverview(userId: string, limit = 80): Promise<AuditLogEntry[]> {
+  const actor = await prisma.user.findUnique({ where: { id: userId } })
+  if (!actor?.isPlatformAdmin) throw new Error('Platform admin access is required.')
+  const take = Math.min(200, Math.max(1, Math.trunc(limit)))
+  const rows = await prisma.auditLog.findMany({
+    take,
+    orderBy: { createdAt: 'desc' },
+    include: { user: { select: { id: true, email: true, displayName: true } } },
+  })
+  return rows.map(row => ({
+    id: row.id,
+    action: row.action,
+    summary: row.summary,
+    createdAt: row.createdAt.toISOString(),
+    user: row.user ? {
+      id: row.user.id,
+      email: row.user.email,
+      displayName: row.user.displayName,
+    } : null,
+  }))
+}
+
 function isPrismaUniqueError(error: unknown): error is { code: string; meta?: { target?: unknown } } {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'P2002'
 }
@@ -890,7 +924,7 @@ function encryptionKey(): Buffer {
   if (process.env.CREDENTIAL_ENCRYPTION_KEY?.trim()) {
     return createHash('sha256').update(process.env.CREDENTIAL_ENCRYPTION_KEY.trim()).digest()
   }
-  const seed = `${os.hostname()}-${os.userInfo().username}-ultron-identity-vault-v1`
+  const seed = `${os.hostname()}-${os.userInfo().username}-astra-identity-vault-v1`
   return createHash('sha256').update(seed).digest()
 }
 
@@ -1003,27 +1037,32 @@ export async function registerUser(input: { email?: string; username?: string; d
   if (password.length < 8) throw new Error('Password must be at least 8 characters.')
 
   try {
-    const isPlatformAdmin = await prisma.user.count() === 0
     const passwordData = await hashPassword(password)
-    const user = await prisma.user.create({
-      data: {
-        email,
-        username,
-        displayName,
-        isPlatformAdmin,
-        organizationRole: 'owner',
-        passwordHash: passwordData.hash,
-        passwordSalt: passwordData.salt,
-        organization: {
-          create: {
-            name: organizationName(displayName, username),
-            slug: username,
+    const user = await prisma.$transaction(async tx => {
+      if (databaseProvider === 'postgresql') {
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(853164201)')
+      }
+      const isPlatformAdmin = await tx.user.count() === 0
+      return tx.user.create({
+        data: {
+          email,
+          username,
+          displayName,
+          isPlatformAdmin,
+          organizationRole: 'owner',
+          passwordHash: passwordData.hash,
+          passwordSalt: passwordData.salt,
+          organization: {
+            create: {
+              name: organizationName(displayName, username),
+              slug: username,
+            },
           },
         },
-      },
+      })
     })
     const challenge = await issueAuthChallenge(user, EMAIL_VERIFICATION, EMAIL_VERIFICATION_MINUTES)
-    await audit(user.id, 'identity.register', `Created Ultron account for ${email}. Verification code issued.`)
+    await audit(user.id, 'identity.register', `Created Astra account for ${email}. Verification code issued.`)
     return { next: 'verify_email', ...challenge }
   } catch (error) {
     if (isPrismaUniqueError(error)) {

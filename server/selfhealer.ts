@@ -1,5 +1,5 @@
 /**
- * Ultron Self-Healing System
+ * Astra Self-Healing System
  * Detects TypeScript errors, proposes minimal fixes via a restricted agent,
  * and routes ALL changes through the Preview panel for user approval.
  *
@@ -156,7 +156,7 @@ export function addHealLog(entry: HealerLogEntry) {
 // ── Healing agent system prompt ───────────────────────────────────────────────
 
 export function buildHealerPrompt(issue: HealerIssue): string {
-  return `You are Ultron's Self-Healing Agent — a restricted TypeScript error fixer.
+  return `You are Astra's Self-Healing Agent — a restricted TypeScript error fixer.
 
 MISSION: Fix this specific TypeScript error. Nothing else.
 

@@ -1,4 +1,4 @@
-import { useDeferredValue, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useDeferredValue, useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   Bot,
@@ -17,6 +17,7 @@ import {
   Loader,
   ListTodo,
   LogOut,
+  MapPin,
   PhoneCall,
   PhoneOff,
   Cpu,
@@ -44,31 +45,33 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react'
-import { AgentTrace } from './components/AgentTrace'
-import { ComparePanel } from './components/ComparePanel'
-import { ConnectorsPanel } from './components/ConnectorsPanel'
-import { HealerPanel } from './components/HealerPanel'
-import { SelfUpgradePanel } from './components/SelfUpgradePanel'
-import { TaskPanel } from './components/TaskPanel'
-import { HealthPanel } from './components/HealthPanel'
-import { MessageContent } from './components/MessageContent'
-import { HistoryPanel } from './components/HistoryPanel'
-import { MemoryPanel } from './components/MemoryPanel'
-import { SettingsPanel } from './components/SettingsPanel'
-import { TemplatesPanel } from './components/TemplatesPanel'
-import { PreviewPanel } from './components/PreviewPanel'
-import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
-import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
 import { AuthPanel } from './components/AuthPanel'
-import { AdminIdentityPanel } from './components/AdminIdentityPanel'
-import { CredentialVaultPanel } from './components/CredentialVaultPanel'
-import { OrganizationPanel } from './components/OrganizationPanel'
+import { PreviewPanel } from './components/PreviewPanel'
 import type { AuthUser } from './components/AuthPanel'
 import type { AgentEvent, AnswerStyle, AppSettings, AttachedFile, HistoryMeta, IntelligenceMode, Message, ObserverStatus, PendingQuestion, Prediction, PromptRoute, Task } from './types'
 import { routePrompt } from './lib/promptRouter'
 import { recordTelemetry } from './lib/telemetry'
 import type { PendingTelemetry } from './lib/telemetry'
 import './App.css'
+
+const AgentTrace = lazy(() => import('./components/AgentTrace').then(module => ({ default: module.AgentTrace })))
+const ComparePanel = lazy(() => import('./components/ComparePanel').then(module => ({ default: module.ComparePanel })))
+const ConnectorsPanel = lazy(() => import('./components/ConnectorsPanel').then(module => ({ default: module.ConnectorsPanel })))
+const HealerPanel = lazy(() => import('./components/HealerPanel').then(module => ({ default: module.HealerPanel })))
+const SelfUpgradePanel = lazy(() => import('./components/SelfUpgradePanel').then(module => ({ default: module.SelfUpgradePanel })))
+const TaskPanel = lazy(() => import('./components/TaskPanel').then(module => ({ default: module.TaskPanel })))
+const HealthPanel = lazy(() => import('./components/HealthPanel').then(module => ({ default: module.HealthPanel })))
+const MessageContent = lazy(() => import('./components/MessageContent').then(module => ({ default: module.MessageContent })))
+const HistoryPanel = lazy(() => import('./components/HistoryPanel').then(module => ({ default: module.HistoryPanel })))
+const MemoryPanel = lazy(() => import('./components/MemoryPanel').then(module => ({ default: module.MemoryPanel })))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(module => ({ default: module.SettingsPanel })))
+const TemplatesPanel = lazy(() => import('./components/TemplatesPanel').then(module => ({ default: module.TemplatesPanel })))
+const ProjectBuilderPanel = lazy(() => import('./components/ProjectBuilderPanel').then(module => ({ default: module.ProjectBuilderPanel })))
+const ReferenceBuilderPanel = lazy(() => import('./components/ReferenceBuilderPanel').then(module => ({ default: module.ReferenceBuilderPanel })))
+const AdminIdentityPanel = lazy(() => import('./components/AdminIdentityPanel').then(module => ({ default: module.AdminIdentityPanel })))
+const CredentialVaultPanel = lazy(() => import('./components/CredentialVaultPanel').then(module => ({ default: module.CredentialVaultPanel })))
+const OrganizationPanel = lazy(() => import('./components/OrganizationPanel').then(module => ({ default: module.OrganizationPanel })))
+const RunTrackerPanel = lazy(() => import('./components/RunTrackerPanel').then(module => ({ default: module.RunTrackerPanel })))
 
 type EngineStatus = 'checking' | 'online' | 'offline'
 type WorkspaceMode = 'chat' | 'build' | 'research' | 'debug' | 'review' | 'system'
@@ -77,13 +80,6 @@ type AuthState = {
   ready: boolean
   configured: boolean
   user: AuthUser | null
-}
-
-type QuickAction = {
-  emoji: string
-  label: string
-  desc: string
-  prompt: string
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -125,7 +121,7 @@ const ROUTE_SCORE_LABELS: Array<[keyof PromptRoute['scores'], string]> = [
 
 function loadSettings(): AppSettings {
   try {
-    const raw = localStorage.getItem('ultron-settings')
+    const raw = localStorage.getItem('astra-settings')
     if (raw) {
       const parsed = JSON.parse(raw) as AppSettings
       // Back-fill defaults for fields added after initial save
@@ -136,16 +132,16 @@ function loadSettings(): AppSettings {
 }
 
 function loadDarkMode(): boolean {
-  try { return localStorage.getItem('ultron-dark') === '1' } catch { return false }
+  try { return localStorage.getItem('astra-dark') === '1' } catch { return false }
 }
 
 function loadQuietMode(): boolean {
-  try { return localStorage.getItem('ultron-quiet-ui') !== '0' } catch { return true }
+  try { return localStorage.getItem('astra-quiet-ui') !== '0' } catch { return true }
 }
 
 function loadWorkspaceMode(): WorkspaceMode {
   try {
-    const raw = localStorage.getItem('ultron-workspace-mode')
+    const raw = localStorage.getItem('astra-workspace-mode')
     if (raw === 'build' || raw === 'research' || raw === 'debug' || raw === 'review' || raw === 'system') return raw
   } catch { /* ignore */ }
   return 'chat'
@@ -164,9 +160,9 @@ function buildArtifactSrcDoc(lang: string, code: string): string {
 
 function getGreeting(): string {
   const h = new Date().getHours()
-  if (h >= 5 && h < 12) return 'Good morning!'
-  if (h >= 12 && h < 17) return 'Good afternoon!'
-  if (h >= 17 && h < 21) return 'Good evening!'
+  if (h >= 5 && h < 12) return 'Good morning'
+  if (h >= 12 && h < 17) return 'Good afternoon'
+  if (h >= 17 && h < 21) return 'Good evening'
   return 'Working late?'
 }
 
@@ -236,72 +232,17 @@ function describeAgentEvent(event: AgentEvent): { label: string; detail: string 
 }
 
 const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; headline: string; placeholder: string; agent: boolean }> = [
-  { id: 'chat', label: 'Chat', headline: 'Ask, iterate, build', placeholder: 'Message Ultron...', agent: false },
+  { id: 'chat', label: 'Chat', headline: 'Ask, iterate, build', placeholder: 'Message Astra...', agent: false },
   { id: 'build', label: 'Build', headline: 'Build workspace', placeholder: 'Describe the project or feature to build...', agent: true },
-  { id: 'research', label: 'Research', headline: 'Research workspace', placeholder: 'What should Ultron verify, scan, or synthesize?', agent: true },
+  { id: 'research', label: 'Research', headline: 'Research workspace', placeholder: 'What should Astra verify, scan, or synthesize?', agent: true },
   { id: 'debug', label: 'Debug', headline: 'Debug workspace', placeholder: 'Paste the error, failing behavior, or stack trace...', agent: true },
   { id: 'review', label: 'Review', headline: 'Review workspace', placeholder: 'Paste code or describe what needs review...', agent: false },
-  { id: 'system', label: 'System', headline: 'System workspace', placeholder: 'Ask Ultron to inspect health, tasks, memory, or connectors...', agent: true },
+  { id: 'system', label: 'System', headline: 'System workspace', placeholder: 'Ask Astra to inspect health, tasks, memory, or connectors...', agent: true },
 ]
-
-const QUICK_ACTIONS: QuickAction[] = [
-  { emoji: '💻', label: 'Review my code', desc: 'Find bugs, suggestions, and best practices', prompt: 'Review the code I\'m working on and suggest improvements.' },
-  { emoji: '🔍', label: 'Search the web', desc: 'Find up-to-date information online', prompt: 'Search the web for: ' },
-  { emoji: '📁', label: 'Search files', desc: 'Find filenames or matching text locally', prompt: 'Search my files for: ' },
-  { emoji: '🐛', label: 'Debug an error', desc: 'Diagnose and fix errors in your code', prompt: 'Help me debug this error:\n\n' },
-  { emoji: '📝', label: 'Explain this', desc: 'Clear explanations on any topic', prompt: 'Explain this clearly:\n\n' },
-  { emoji: '⚙️', label: 'System stats', desc: 'CPU, RAM, disk, and running processes', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
-  { emoji: '🌐', label: 'Summarize URL', desc: 'Fetch and summarize any web page', prompt: 'Fetch and summarize the content of: ' },
-]
-
-const AGENT_QUICK_ACTIONS: QuickAction[] = [
-  { emoji: '📂', label: 'Explore project', desc: 'Map folder structure and purpose of each module', prompt: 'List this project\'s files and summarise what each top-level folder does.' },
-  { emoji: '🧭', label: 'Find in files', desc: 'Fast local filename/content search', prompt: 'Search this workspace for files or code related to: ' },
-  { emoji: '⌨️', label: 'Open shell', desc: 'Use CMD or PowerShell for local commands', prompt: 'Open or run the right Windows shell command for: ' },
-  { emoji: '🔨', label: 'Build & fix errors', desc: 'Run the build, catch errors, auto-fix', prompt: 'Run the build, find any errors, and fix them.' },
-  { emoji: '🌐', label: 'Latest Ollama news', desc: 'Find new models worth pulling locally', prompt: 'Search the web for the latest Ollama model releases and tell me which ones to pull.' },
-  { emoji: '📊', label: 'System monitor', desc: 'Live CPU, RAM, and top processes', prompt: 'Show my system stats and top CPU/RAM processes.' },
-  { emoji: '🧠', label: 'Recall memories', desc: 'Review everything Ultron remembers about you', prompt: 'List everything you remember about me and my projects.' },
-  { emoji: '📋', label: 'Daily briefing', desc: 'Tasks, schedule, and system health', prompt: 'Give me my daily briefing — tasks, schedule, and anything I should know.' },
-]
-
-const WORKSPACE_QUICK_ACTIONS: Record<WorkspaceMode, QuickAction[]> = {
-  chat: QUICK_ACTIONS,
-  build: [
-    { emoji: '🧱', label: 'New project', desc: 'Choose a template, plan files, and scaffold locally', prompt: 'Help me start a new programming project. Ask what kind of project, then make a build plan.' },
-    { emoji: '🔨', label: 'Build & fix', desc: 'Run checks, inspect failures, and repair the project', prompt: 'Run the build, find any errors, and fix them.' },
-    { emoji: '📋', label: 'Project plan', desc: 'Turn an idea into templates, tasks, and milestones', prompt: 'Turn this project idea into a file-by-file implementation plan with build steps:' },
-    ...AGENT_QUICK_ACTIONS.slice(0, 3),
-  ],
-  research: [
-    { emoji: '🌐', label: 'Scan website', desc: 'Learn a reference site and extract a build blueprint', prompt: 'Open Reference Builder so I can learn a website and build an original version from it.' },
-    { emoji: '🔎', label: 'Verify sources', desc: 'Search, compare, and cite current information', prompt: 'Research this topic with current sources and summarize what is verified:' },
-    { emoji: '🧭', label: 'Compare options', desc: 'Build a decision matrix from evidence', prompt: 'Compare these options with pros, cons, risks, and a recommendation:' },
-    ...QUICK_ACTIONS.filter(action => action.label === 'Search the web' || action.label === 'Summarize URL'),
-  ],
-  debug: [
-    { emoji: '🐞', label: 'Diagnose error', desc: 'Find likely cause and next checks', prompt: 'Help me debug this error. Start with the most likely root cause and the cheapest check:\n\n' },
-    { emoji: '🧪', label: 'Run tests', desc: 'Find failing checks and propose fixes', prompt: 'Run the relevant tests or build, explain the failures, and fix what is broken.' },
-    { emoji: '🩺', label: 'Health check', desc: 'Inspect UI, API, models, and local services', prompt: 'Check Ultron health end to end and tell me what needs attention.' },
-    ...AGENT_QUICK_ACTIONS.slice(1, 4),
-  ],
-  review: [
-    { emoji: '🧾', label: 'Code review', desc: 'Prioritize bugs, risks, and missing tests', prompt: 'Review this code like a senior engineer. Lead with bugs and risks:\n\n' },
-    { emoji: '🔐', label: 'Security pass', desc: 'Look for unsafe inputs, secrets, and permissions', prompt: 'Review this for security risks, privacy issues, and permission problems:\n\n' },
-    { emoji: '🧹', label: 'Simplify UI', desc: 'Find frontend noise and simplify the workflow', prompt: 'Review this UI and suggest what to remove, collapse, or make clearer:' },
-    ...QUICK_ACTIONS.slice(0, 3),
-  ],
-  system: [
-    { emoji: '⚙️', label: 'System stats', desc: 'CPU, RAM, disk, processes, and uptime', prompt: 'Show my system stats (CPU, RAM, disk, running processes).' },
-    { emoji: '🧠', label: 'Recall memory', desc: 'Review what Ultron knows across projects', prompt: 'List everything you remember about me and my projects.' },
-    { emoji: '🛠️', label: 'Self repair', desc: 'Scan Ultron and propose repairs', prompt: 'Run Ultron self-healer and tell me what should be repaired.' },
-    ...AGENT_QUICK_ACTIONS.slice(3),
-  ],
-}
 
 // In dev, call Express directly (bypasses Vite proxy which drops SSE connections on idle).
 // CORS is open on the Express server so this works fine.
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 function inviteTokenFromLocation(): string {
   if (typeof window === 'undefined') return ''
@@ -358,6 +299,7 @@ function App() {
   const [showHealth, setShowHealth] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
+  const [showRunTracker, setShowRunTracker] = useState(false)
   const [showConnectors, setShowConnectors] = useState(false)
   const [showReferenceBuilder, setShowReferenceBuilder] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
@@ -528,6 +470,7 @@ function App() {
     const saved = loadSettings()
     fetch(`${API_BASE}/api/observer/toggle`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         enabled: saved.observationEnabled,
@@ -537,7 +480,7 @@ function App() {
     }).catch(() => {})
 
     // Load recent chats for welcome screen
-    fetch(`${API_BASE}/api/history`)
+    fetch(`${API_BASE}/api/history`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then((d: { sessions?: HistoryMeta[] } | null) => {
         if (d?.sessions) setRecentChats(d.sessions.slice(0, 5))
@@ -545,7 +488,7 @@ function App() {
       .catch(() => {})
 
     // Load overdue task count for sidebar badge
-    fetch(`${API_BASE}/api/tasks`)
+    fetch(`${API_BASE}/api/tasks`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : { tasks: [] })
       .then((d: { tasks?: Task[] }) => {
         const today = new Date().toISOString().split('T')[0]
@@ -609,6 +552,7 @@ function App() {
       const assistantId = lastMsg.id
       void fetch(`${API_BASE}/api/followups`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: forFollowups }),
       }).then(r => r.ok ? r.json() : null)
@@ -651,6 +595,7 @@ function App() {
       const sessionId = currentSessionId.current
       void fetch(`${API_BASE}/api/title`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: firstTwo }),
       }).then(r => r.ok ? r.json() : null)
@@ -658,6 +603,7 @@ function App() {
           if (data?.title && sessionId) {
             void fetch(`${API_BASE}/api/history`, {
               method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ id: sessionId, title: data.title, model: selectedModel, messages }),
             }).catch(() => {})
@@ -676,7 +622,7 @@ function App() {
   // Apply / persist dark mode
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
-    try { localStorage.setItem('ultron-dark', darkMode ? '1' : '0') } catch { /* ignore */ }
+    try { localStorage.setItem('astra-dark', darkMode ? '1' : '0') } catch { /* ignore */ }
   }, [darkMode])
 
   // Detect artifact (previewable code) in the latest assistant message
@@ -757,7 +703,7 @@ function App() {
   // Load a history session by ID
   async function loadHistory(id: string) {
     try {
-      const r = await fetch(`${API_BASE}/api/history/${id}`)
+      const r = await fetch(`${API_BASE}/api/history/${id}`, { credentials: 'include' })
       const d = await r.json() as { session?: { messages: Message[]; model: string } }
       if (d.session) {
         currentSessionId.current = id
@@ -823,15 +769,15 @@ function App() {
   // Export current conversation as Markdown
   function exportChat() {
     if (!messages.length) return
-    const lines: string[] = [`# Ultron — Conversation Export\n*${new Date().toLocaleString()}*\n`]
+    const lines: string[] = [`# Astra — Conversation Export\n*${new Date().toLocaleString()}*\n`]
     for (const m of messages) {
-      lines.push(`\n---\n\n**${m.role === 'assistant' ? 'Ultron' : 'You'}**\n\n${m.content}`)
+      lines.push(`\n---\n\n**${m.role === 'assistant' ? 'Astra' : 'You'}**\n\n${m.content}`)
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ultron-chat-${Date.now()}.md`
+    a.download = `astra-chat-${Date.now()}.md`
     a.click()
     URL.revokeObjectURL(url)
     addToast('Chat exported as Markdown', 'success')
@@ -919,6 +865,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/api/history`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: currentSessionId.current ?? undefined, title, model, messages: msgs }),
       })
@@ -1021,7 +968,7 @@ function App() {
 
   function updateSettings(next: AppSettings) {
     setSettings(next)
-    try { localStorage.setItem('ultron-settings', JSON.stringify(next)) } catch { /* ignore */ }
+    try { localStorage.setItem('astra-settings', JSON.stringify(next)) } catch { /* ignore */ }
   }
 
   function setIntelligenceMode(mode: IntelligenceMode) {
@@ -1033,7 +980,7 @@ function App() {
   }
 
   function reloadTaskCount() {
-    fetch(`${API_BASE}/api/tasks`)
+    fetch(`${API_BASE}/api/tasks`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : { tasks: [] })
       .then((d: { tasks?: Task[] }) => {
         const today = new Date().toISOString().split('T')[0]
@@ -1050,6 +997,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/api/enhance`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: draft, model: selectedModel }),
       })
@@ -1139,6 +1087,7 @@ function App() {
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: conversation.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
@@ -1386,6 +1335,7 @@ function App() {
     try {
       await fetch(`${API_BASE}/api/agent/answer`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, answer }),
       })
@@ -1408,6 +1358,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/project-builder/select-folder`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ basePath: questionDraft }),
       })
@@ -1466,7 +1417,7 @@ function App() {
   function toggleQuietMode() {
     setQuietMode(current => {
       const next = !current
-      try { localStorage.setItem('ultron-quiet-ui', next ? '1' : '0') } catch { /* ignore */ }
+      try { localStorage.setItem('astra-quiet-ui', next ? '1' : '0') } catch { /* ignore */ }
       if (next) setSidebarCollapsed(true)
       return next
     })
@@ -1476,7 +1427,7 @@ function App() {
     const meta = WORKSPACE_MODES.find(item => item.id === mode) ?? WORKSPACE_MODES[0]
     setWorkspaceMode(mode)
     setAgentMode(meta.agent)
-    try { localStorage.setItem('ultron-workspace-mode', mode) } catch { /* ignore */ }
+    try { localStorage.setItem('astra-workspace-mode', mode) } catch { /* ignore */ }
   }
 
   function stopStreaming() {
@@ -1501,14 +1452,14 @@ function App() {
 
   const statusLabel = status === 'online' ? 'Ollama online' : status === 'checking' ? 'Checking engine' : 'Ollama offline'
   const workspaceMeta = WORKSPACE_MODES.find(item => item.id === workspaceMode) ?? WORKSPACE_MODES[0]
-  const activeQuickActions = WORKSPACE_QUICK_ACTIONS[workspaceMode]
   const commandItems = [
     { group: 'Navigate', label: 'Build Project', hint: 'Open Project Builder', action: () => { applyWorkspaceMode('build'); setShowProjectBuilder(true) } },
     { group: 'Navigate', label: 'Reference Builder', hint: 'Learn a website or screenshot', action: () => { applyWorkspaceMode('research'); setShowReferenceBuilder(true) } },
     { group: 'Navigate', label: 'Health Center', hint: 'Check UI, API, models, and tools', action: () => { applyWorkspaceMode('system'); setShowHealth(true) } },
     { group: 'Navigate', label: 'Tasks', hint: 'Open task dashboard', action: () => setShowTasks(true) },
+    { group: 'Navigate', label: 'Run Tracker', hint: 'Consent-first GPS run tracking and GPX export', action: () => setShowRunTracker(true) },
     { group: 'Navigate', label: 'Memory', hint: 'Open long-term memory', action: () => setShowMemory(true) },
-    { group: 'Navigate', label: 'Self-Healer', hint: 'Scan and repair Ultron', action: () => { applyWorkspaceMode('debug'); setShowHealer(true) } },
+    { group: 'Navigate', label: 'Self-Healer', hint: 'Scan and repair Astra', action: () => { applyWorkspaceMode('debug'); setShowHealer(true) } },
     { group: 'Navigate', label: 'Connectors', hint: 'Browser and account integrations', action: () => setShowConnectors(true) },
     { group: 'Navigate', label: 'Settings', hint: 'Models, router, context, observation', action: () => setShowSettings(true) },
     { group: 'Workspace', label: 'Chat Mode', hint: 'Clean general assistant workspace', action: () => applyWorkspaceMode('chat') },
@@ -1541,54 +1492,16 @@ function App() {
   }
   const latestAgentEvents = [...messages].reverse().find(message => message.role === 'assistant' && message.agentEvents.length > 0)?.agentEvents.slice(-4) ?? []
   const timelineItems = latestAgentEvents.map(describeAgentEvent)
-  const workspaceCards = (() => {
-    switch (workspaceMode) {
-      case 'build':
-        return [
-          { label: 'Project Builder', detail: 'Templates, plans, install, build, dev server', action: () => setShowProjectBuilder(true) },
-          { label: 'Repair Loop', detail: 'Run build checks and feed failures back to Ultron', action: () => { setAgentMode(true); void sendMessage(undefined, 'Run the build, diagnose any errors, and fix them.') } },
-          { label: 'Project Plan', detail: 'Turn the idea into files, milestones, and commands', action: () => void sendMessage(undefined, 'Create a concise project plan with file structure, templates, commands, and verification steps.') },
-        ]
-      case 'research':
-        return [
-          { label: 'Reference Builder', detail: 'Scan a website or screenshot into a build blueprint', action: () => setShowReferenceBuilder(true) },
-          { label: 'Visual Compare', detail: 'Compare generated output against the reference', action: () => setShowReferenceBuilder(true) },
-          { label: 'Source Brief', detail: 'Search, verify, and summarize with current context', action: () => { setAgentMode(true); void sendMessage(undefined, 'Research this topic with current sources and give me a verified brief:') } },
-        ]
-      case 'debug':
-        return [
-          { label: 'Self-Healer', detail: 'Scan Ultron for errors and propose fixes', action: () => setShowHealer(true) },
-          { label: 'Health Center', detail: 'Check UI, API, model, and tool readiness', action: () => setShowHealth(true) },
-          { label: 'Run Diagnosis', detail: 'Start with the cheapest failing check', action: () => { setAgentMode(true); void sendMessage(undefined, 'Diagnose the current problem. Start with the cheapest check that can disconfirm the likely cause.') } },
-        ]
-      case 'review':
-        return [
-          { label: 'Code Review', detail: 'Bugs, risks, regressions, missing tests', action: () => void sendMessage(undefined, 'Review this code. Lead with bugs, risks, and missing tests:\n\n') },
-          { label: 'UX Cleanup', detail: 'Find and remove interface noise', action: () => void sendMessage(undefined, 'Review this UI and identify what to remove, collapse, or clarify:') },
-          { label: 'Compare Models', detail: 'Ask every local model for a second opinion', action: () => setShowCompare(true) },
-        ]
-      case 'system':
-        return [
-          { label: 'Health', detail: 'API, models, tools, and local readiness', action: () => setShowHealth(true) },
-          { label: 'Tasks', detail: 'Daily planner and open work', action: () => setShowTasks(true) },
-          { label: 'Memory', detail: 'Long-term facts and project context', action: () => setShowMemory(true) },
-        ]
-      default:
-        return [
-          { label: 'Command Center', detail: 'Jump to any Ultron capability', action: () => { setShowCommandCenter(true); setCommandQuery('') } },
-          { label: 'Build', detail: 'Create projects and run local checks', action: () => applyWorkspaceMode('build') },
-          { label: 'Research', detail: 'Scan references and verify sources', action: () => applyWorkspaceMode('research') },
-        ]
-    }
-  })()
 
   if (!auth.ready) {
-    return <main className="auth-shell"><div className="auth-card"><Loader className="spin" /><p>Loading Ultron identity...</p></div></main>
+    return <main className="auth-shell"><div className="auth-card"><Loader className="spin" /><p>Loading Astra identity...</p></div></main>
   }
 
   if (!auth.user) {
     return <AuthPanel apiBase={API_BASE} configured={auth.configured} onAuthenticated={handleAuthenticated} />
   }
+
+  const welcomeName = auth.user.displayName.trim() || auth.user.username || 'there'
 
   return (
   <>
@@ -1600,7 +1513,7 @@ function App() {
           </div>
           <div>
             <p className="eyebrow">Local Ollama Engine</p>
-            <h1>Ultron</h1>
+            <h1>Astra</h1>
           </div>
           <button
             type="button"
@@ -1666,6 +1579,9 @@ function App() {
               <span className="sidebar-task-badge">{taskOverdueCount}</span>
             )}
           </button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setShowRunTracker(true)} title="Run Tracker — consent-first GPS tracking and GPX export">
+            <MapPin size={13} /> Run
+          </button>
           <button type="button" className="sidebar-action-btn" onClick={() => setShowHealer(true)} title="Self-Healer — scan for TypeScript errors and auto-propose fixes">
             <Zap size={13} /> Heal
           </button>
@@ -1690,7 +1606,7 @@ function App() {
             type="button"
             className={`sidebar-action-btn ${showUpgrade ? 'observer-active' : ''}`}
             onClick={() => setShowUpgrade(true)}
-            title="Self-Upgrade — Ultron proposes improvements to its own code"
+            title="Self-Upgrade — Astra proposes improvements to its own code"
           >
             <Cpu size={13} /> Upgrade
           </button>
@@ -1781,12 +1697,12 @@ function App() {
             <span>{auth.user.email}</span>
             <span>{workspaceRoleLabel(auth.user)} · {auth.user.organizationName ?? 'Personal workspace'}</span>
           </div>
-          <button type="button" onClick={() => void logout()} title="Sign out of Ultron" aria-label="Sign out of Ultron"><LogOut size={13} /></button>
+          <button type="button" onClick={() => void logout()} title="Sign out of Astra" aria-label="Sign out of Astra"><LogOut size={13} /></button>
         </div>
 
       </section>
 
-      <section className="chat-panel" aria-label="Chat with Ultron">
+      <section className="chat-panel" aria-label="Chat with Astra">
         {!quietMode && observerStatus?.enabled && observerStatus.context && (
           <div className="observer-bar">
             <Eye size={11} />
@@ -1920,9 +1836,8 @@ function App() {
           {deferredMessages.length === 0 ? (
             <div className="welcome-state">
               <div className="welcome-brand">
-                <div className="welcome-icon-wrap"><Bot size={30} /></div>
                 <div className="welcome-hero-text">
-                  <h2>{getGreeting()} How can I help?</h2>
+                  <h2>{getGreeting()}, {welcomeName}! How can I help?</h2>
                   <div className="welcome-badges">
                     <span className="welcome-badge badge-private">🔒 Private</span>
                     <span className="welcome-badge badge-local">🧠 {selectedModel.split(':')[0] || 'Ollama'}</span>
@@ -1931,30 +1846,6 @@ function App() {
                     {observerStatus?.enabled && <span className="welcome-badge badge-obs">👁 Watching</span>}
                   </div>
                 </div>
-              </div>
-              <div className="workspace-dashboard" aria-label={`${workspaceMeta.label} dashboard`}>
-                {workspaceCards.map(card => (
-                  <button key={card.label} type="button" className="workspace-card" onClick={card.action}>
-                    <span>{card.label}</span>
-                    <small>{card.detail}</small>
-                  </button>
-                ))}
-              </div>
-              <div className="quick-actions">
-                {activeQuickActions.map((action) => (
-                  <button
-                    key={`${workspaceMode}-${action.label}`}
-                    type="button"
-                    className="quick-action-card"
-                    onClick={() => sendMessage(undefined, action.prompt)}
-                  >
-                    <span className="quick-action-emoji">{action.emoji}</span>
-                    <div className="quick-action-text">
-                      <span className="quick-action-label">{action.label}</span>
-                      {'desc' in action && action.desc && <span className="quick-action-desc">{action.desc}</span>}
-                    </div>
-                  </button>
-                ))}
               </div>
               {recentChats.length > 0 && (
                 <div className="recent-chats">
@@ -1980,10 +1871,14 @@ function App() {
                   {message.role === 'assistant' ? <Bot size={18} /> : <UserRound size={18} />}
                 </div>
                 <div className="message-bubble">
-                  <span>{message.role === 'assistant' ? 'Ultron' : 'You'}</span>
-                  {!quietMode && message.agentEvents.length > 0 && <AgentTrace events={message.agentEvents} />}
+                  <span>{message.role === 'assistant' ? 'Astra' : 'You'}</span>
+                  {!quietMode && message.agentEvents.length > 0 && (
+                    <Suspense fallback={null}>
+                      <AgentTrace events={message.agentEvents} />
+                    </Suspense>
+                  )}
                   {!quietMode && message.role === 'assistant' && message.route && (
-                    <details className="route-decision" title="Why Ultron chose this mode">
+                    <details className="route-decision" title="Why Astra chose this mode">
                       <summary className="route-decision-summary">
                         <span className={`route-mode ${message.route.useAgent ? 'agent' : 'chat'}`}>{message.route.useAgent ? 'Agent' : 'Chat'}</span>
                         <span>{INTELLIGENCE_LABEL[message.route.intelligenceMode]}</span>
@@ -2019,11 +1914,13 @@ function App() {
                     return (
                       <>
                         <div className={`msg-body-wrap ${isLong && !expanded ? 'msg-body-collapsed' : ''}`}>
-                          <MessageContent
-                            content={message.content}
-                            streaming={isStreaming && msgIdx === deferredMessages.length - 1}
-                            onImageClick={url => setLightboxUrl(url)}
-                          />
+                          <Suspense fallback={<div className="message-content" />}>
+                            <MessageContent
+                              content={message.content}
+                              streaming={isStreaming && msgIdx === deferredMessages.length - 1}
+                              onImageClick={url => setLightboxUrl(url)}
+                            />
+                          </Suspense>
                           {isLong && !expanded && <div className="msg-body-fade" />}
                         </div>
                         {isLong && (
@@ -2043,7 +1940,9 @@ function App() {
                           <img key={i} src={url} alt="Attached" className="msg-image-thumb" onClick={() => setLightboxUrl(url)} style={{ cursor: 'zoom-in' }} />
                         ))}
                         <div className={`msg-body-wrap ${isLong && !expanded ? 'msg-body-collapsed msg-body-collapsed-user' : ''}`}>
-                          <MessageContent content={message.content} onImageClick={url => setLightboxUrl(url)} />
+                          <Suspense fallback={<div className="message-content" />}>
+                            <MessageContent content={message.content} onImageClick={url => setLightboxUrl(url)} />
+                          </Suspense>
                           {isLong && !expanded && <div className="msg-body-fade msg-body-fade-user" />}
                         </div>
                         {isLong && (
@@ -2059,16 +1958,16 @@ function App() {
                     </div>
                   ) : null}
 
-                  {/* Follow-up suggestions + Ultron's clarifying questions */}
+                  {/* Follow-up suggestions + Astra's clarifying questions */}
                   {message.role === 'assistant' && message.followups && message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).length > 0 && (
                     <div className="followup-chips">
                       {message.followups.filter(q => !quietMode || q.startsWith('ASK: ')).map((q) => {
                         const isAsk = q.startsWith('ASK: ')
                         const label = isAsk ? q.slice(5) : q
                         return isAsk ? (
-                          <div key={q} className="ultron-question">
-                            <span className="ultron-question-label">Ultron asks:</span>
-                            <span className="ultron-question-text">{label}</span>
+                          <div key={q} className="astra-question">
+                            <span className="astra-question-label">Astra asks:</span>
+                            <span className="astra-question-text">{label}</span>
                           </div>
                         ) : (
                           <button
@@ -2085,7 +1984,7 @@ function App() {
                     </div>
                   )}
 
-                  {/* Predictive action cards — what Ultron can proactively do next */}
+                  {/* Predictive action cards — what Astra can proactively do next */}
                   {!quietMode && message.role === 'assistant' && message.predictions && message.predictions.length > 0 && (
                     <div className="prediction-cards">
                       <span className="prediction-header">What I can do next</span>
@@ -2194,7 +2093,7 @@ function App() {
 
         {pendingQuestion && (
           <div className={`question-prompt ${pendingQuestion.kind === 'permission' ? 'permission-prompt' : ''}`}>
-            <p className="question-label">{pendingQuestion.kind === 'permission' ? 'Permission required' : 'Ultron is asking:'}</p>
+            <p className="question-label">{pendingQuestion.kind === 'permission' ? 'Permission required' : 'Astra is asking:'}</p>
             <p className="question-text">{pendingQuestion.question}</p>
             {pendingQuestion.context && <p className="question-context">{pendingQuestion.context}</p>}
             {pendingQuestion.kind === 'permission' ? (
@@ -2229,7 +2128,7 @@ function App() {
           {voiceConvMode && (
             <div className="conv-mode-bar">
               <PhoneCall size={13} />
-              {isListening ? 'Listening… speak now' : isStreaming ? 'Generating response…' : 'Voice conversation active — speak to send, Ultron replies aloud'}
+              {isListening ? 'Listening… speak now' : isStreaming ? 'Generating response…' : 'Voice conversation active — speak to send, Astra replies aloud'}
               <button
                 type="button"
                 style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14, padding: '0 2px' }}
@@ -2437,7 +2336,7 @@ function App() {
             type="button"
             className={`icon-button conv-btn ${voiceConvMode ? 'conv-active' : ''}`}
             onClick={startConversation}
-            title={voiceConvMode ? 'Stop conversation mode' : 'Start voice conversation — Ultron listens, responds, and speaks back automatically'}
+            title={voiceConvMode ? 'Stop conversation mode' : 'Start voice conversation — Astra listens, responds, and speaks back automatically'}
           >
             {voiceConvMode ? <PhoneOff size={16} /> : <PhoneCall size={16} />}
           </button>
@@ -2559,121 +2458,128 @@ function App() {
       </div>
     )}
 
-    {showHistory && (
-      <HistoryPanel
-        apiBase={API_BASE}
-        onLoad={(msgs, model) => {
-          currentSessionId.current = null
-          // Back-fill timestamp for messages loaded from history
-          setMessages(msgs.map(m => ({ ...m, timestamp: m.timestamp ?? 0 })))
-          if (model) setSelectedModel(model)
-        }}
-        onClose={() => setShowHistory(false)}
-      />
-    )}
-    {showTemplates && (
-      <TemplatesPanel
-        onSelect={(prompt) => {
-          setDraft(prompt)
-          setTimeout(() => { textareaRef.current?.focus(); autoResizeTextarea() }, 0)
-        }}
-        onClose={() => setShowTemplates(false)}
-        currentDraft={draft}
-      />
-    )}
-    {showMemory && (
-      <MemoryPanel
-        apiBase={API_BASE}
-        onClose={() => setShowMemory(false)}
-      />
-    )}
-    {showCredentialVault && (
-      <CredentialVaultPanel
-        apiBase={API_BASE}
-        onClose={() => setShowCredentialVault(false)}
-      />
-    )}
-    {showOrganizationPanel && auth.user && (
-      <OrganizationPanel
-        apiBase={API_BASE}
-        currentUser={auth.user}
-        refreshAuth={refreshAuth}
-        onNotice={addToast}
-        onClose={() => setShowOrganizationPanel(false)}
-      />
-    )}
-    {showAdminIdentityPanel && auth.user?.isPlatformAdmin && (
-      <AdminIdentityPanel
-        apiBase={API_BASE}
-        currentUser={auth.user}
-        refreshAuth={refreshAuth}
-        onNotice={addToast}
-        onClose={() => setShowAdminIdentityPanel(false)}
-      />
-    )}
-    {showHealer && (
-      <HealerPanel
-        apiBase={API_BASE}
-        onClose={() => setShowHealer(false)}
-      />
-    )}
-    {showHealth && (
-      <HealthPanel
-        apiBase={API_BASE}
-        onClose={() => setShowHealth(false)}
-      />
-    )}
-    {showCompare && (
-      <ComparePanel
-        models={availableModels}
-        settings={settings}
-        initialDraft={draft}
-        onClose={() => setShowCompare(false)}
-      />
-    )}
-    {showTasks && (
-      <TaskPanel
-        apiBase={API_BASE}
-        onClose={() => { setShowTasks(false); reloadTaskCount() }}
-      />
-    )}
-    {showConnectors && (
-      <ConnectorsPanel
-        apiBase={API_BASE}
-        onClose={() => setShowConnectors(false)}
-      />
-    )}
-    {showProjectBuilder && (
-      <ProjectBuilderPanel
-        apiBase={API_BASE}
-        onClose={() => setShowProjectBuilder(false)}
-      />
-    )}
-    {showReferenceBuilder && (
-      <ReferenceBuilderPanel
-        apiBase={API_BASE}
-        onUsePrompt={(prompt) => {
-          setDraft(prompt)
-          setAgentMode(true)
-          setTimeout(() => { textareaRef.current?.focus(); autoResizeTextarea() }, 0)
-        }}
-        onClose={() => setShowReferenceBuilder(false)}
-      />
-    )}
-    {showUpgrade && (
-      <SelfUpgradePanel
-        currentModel={selectedModel}
-        onClose={() => setShowUpgrade(false)}
-      />
-    )}
-    {showSettings && (
-      <SettingsPanel
-        settings={settings}
-        onChange={updateSettings}
-        onClose={() => setShowSettings(false)}
-        models={availableModels}
-      />
-    )}
+    <Suspense fallback={null}>
+      {showHistory && (
+        <HistoryPanel
+          apiBase={API_BASE}
+          onLoad={(msgs, model) => {
+            currentSessionId.current = null
+            // Back-fill timestamp for messages loaded from history
+            setMessages(msgs.map(m => ({ ...m, timestamp: m.timestamp ?? 0 })))
+            if (model) setSelectedModel(model)
+          }}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+      {showTemplates && (
+        <TemplatesPanel
+          onSelect={(prompt) => {
+            setDraft(prompt)
+            setTimeout(() => { textareaRef.current?.focus(); autoResizeTextarea() }, 0)
+          }}
+          onClose={() => setShowTemplates(false)}
+          currentDraft={draft}
+        />
+      )}
+      {showMemory && (
+        <MemoryPanel
+          apiBase={API_BASE}
+          onClose={() => setShowMemory(false)}
+        />
+      )}
+      {showCredentialVault && (
+        <CredentialVaultPanel
+          apiBase={API_BASE}
+          onClose={() => setShowCredentialVault(false)}
+        />
+      )}
+      {showOrganizationPanel && auth.user && (
+        <OrganizationPanel
+          apiBase={API_BASE}
+          currentUser={auth.user}
+          refreshAuth={refreshAuth}
+          onNotice={addToast}
+          onClose={() => setShowOrganizationPanel(false)}
+        />
+      )}
+      {showAdminIdentityPanel && auth.user?.isPlatformAdmin && (
+        <AdminIdentityPanel
+          apiBase={API_BASE}
+          currentUser={auth.user}
+          refreshAuth={refreshAuth}
+          onNotice={addToast}
+          onClose={() => setShowAdminIdentityPanel(false)}
+        />
+      )}
+      {showHealer && (
+        <HealerPanel
+          apiBase={API_BASE}
+          onClose={() => setShowHealer(false)}
+        />
+      )}
+      {showHealth && (
+        <HealthPanel
+          apiBase={API_BASE}
+          onClose={() => setShowHealth(false)}
+        />
+      )}
+      {showCompare && (
+        <ComparePanel
+          models={availableModels}
+          settings={settings}
+          initialDraft={draft}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
+      {showTasks && (
+        <TaskPanel
+          apiBase={API_BASE}
+          onClose={() => { setShowTasks(false); reloadTaskCount() }}
+        />
+      )}
+      {showRunTracker && (
+        <RunTrackerPanel
+          onClose={() => setShowRunTracker(false)}
+        />
+      )}
+      {showConnectors && (
+        <ConnectorsPanel
+          apiBase={API_BASE}
+          onClose={() => setShowConnectors(false)}
+        />
+      )}
+      {showProjectBuilder && (
+        <ProjectBuilderPanel
+          apiBase={API_BASE}
+          onClose={() => setShowProjectBuilder(false)}
+        />
+      )}
+      {showReferenceBuilder && (
+        <ReferenceBuilderPanel
+          apiBase={API_BASE}
+          onUsePrompt={(prompt) => {
+            setDraft(prompt)
+            setAgentMode(true)
+            setTimeout(() => { textareaRef.current?.focus(); autoResizeTextarea() }, 0)
+          }}
+          onClose={() => setShowReferenceBuilder(false)}
+        />
+      )}
+      {showUpgrade && (
+        <SelfUpgradePanel
+          currentModel={selectedModel}
+          onClose={() => setShowUpgrade(false)}
+        />
+      )}
+      {showSettings && (
+        <SettingsPanel
+          settings={settings}
+          onChange={updateSettings}
+          onClose={() => setShowSettings(false)}
+          models={availableModels}
+        />
+      )}
+    </Suspense>
     <PreviewPanel />
 
     {/* Artifacts panel */}

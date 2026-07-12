@@ -181,7 +181,7 @@ export function PreviewPanel() {
 
   const fetchPreviews = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/api/previews`)
+      const r = await fetch(`${API_BASE}/api/previews`, { credentials: 'include' })
       if (r.ok) setPreviews(await r.json() as PendingPreview[])
     } catch { /* server offline */ }
   }, [])
@@ -197,7 +197,7 @@ export function PreviewPanel() {
   async function applyOne(id: string) {
     setApplying(prev => new Set([...prev, id]))
     try {
-      await fetch(`${API_BASE}/api/previews/${id}/apply`, { method: 'POST' })
+      await fetch(`${API_BASE}/api/previews/${id}/apply`, { method: 'POST', credentials: 'include' })
       setPreviews(prev => prev.filter(p => p.id !== id))
     } finally {
       setApplying(prev => { const s = new Set(prev); s.delete(id); return s })
@@ -205,7 +205,7 @@ export function PreviewPanel() {
   }
 
   async function discardOne(id: string) {
-    await fetch(`${API_BASE}/api/previews/${id}`, { method: 'DELETE' })
+    await fetch(`${API_BASE}/api/previews/${id}`, { method: 'DELETE', credentials: 'include' })
     setPreviews(prev => prev.filter(p => p.id !== id))
   }
 

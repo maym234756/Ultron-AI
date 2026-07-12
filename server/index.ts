@@ -28,7 +28,7 @@ import type { MemoryScope } from './tools/longmem.js'
 import { transcribeAudio } from './tools/whisper.js'
 import { getAutoContext } from './tools/rag.js'
 import { getPreviews, applyPreview, discardPreview, getAppliedPreviews, rollbackPreview } from './tools/preview.js'
-import { buildExternalConnectorAnswer, findConnectorsForText, getConnectorStatusSnapshot } from './connectors.js'
+import { CONNECTOR_REGISTRY, buildExternalConnectorAnswer, findConnectorsForText, getConnectorStatusSnapshot } from './connectors.js'
 import { addConnectorAuditEntry, getConnectorSetupSnapshot, getConnectorSetupState, updateConnectorSetup } from './connectorSetup.js'
 import { getConnectorActionSchemas, planConnectorAction } from './connectorActions.js'
 import { buildSelfUpgradePrompt, getSelfUpgradeSnapshot, getUpgradePack, recordSelfUpgradeRun, updateSelfUpgradeBacklogItem } from './selfUpgrade.js'
@@ -41,6 +41,7 @@ import { previewPromptRoute } from './promptRouter.js'
 import {
   acceptIncomingOrganizationInvite,
   acceptOrganizationInvite,
+  auditLogOverview,
   cancelOrganizationInvite,
   confirmEmailVerification,
   createCredential,
@@ -121,7 +122,7 @@ function summarizeDatabaseTarget(url: string): string {
   if (url.toLowerCase().startsWith('file:')) {
     const pathname = url.slice('file:'.length)
     const normalized = pathname.replace(/\\/g, '/').split('/').filter(Boolean)
-    return normalized.at(-1) ?? 'ultron.db'
+    return normalized.at(-1) ?? 'astra.db'
   }
 
   return url
@@ -232,7 +233,7 @@ function bestAvailableModel(models: OllamaModel[]): string {
 }
 
 const defaultSystemPrompt = [
-  'You are Ultron, a precise local AI assistant running through Ollama.',
+  'You are Astra, a precise local AI assistant running through Ollama.',
   'You have broad knowledge, strong reasoning, and full tool access on the user\'s Windows machine.',
   'Be direct, confident, and accurate: say what you know, hedge what is uncertain, state clearly when you do not know.',
   'Answer contract: direct answer first, then only the reasoning, caveats, or steps needed for the user to act.',
@@ -351,7 +352,7 @@ app.use(cors({
       callback(null, true)
       return
     }
-    callback(new Error('Origin not allowed by Ultron auth policy.'))
+    callback(new Error('Origin not allowed by Astra auth policy.'))
   },
   credentials: true,
 }))
@@ -364,7 +365,9 @@ app.get('/api/observer/status', (_req, res) => {
   res.json(observerStatus())
 })
 
-app.post('/api/observer/toggle', (req, res) => {
+app.post('/api/observer/toggle', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const { enabled, mode, intervalSec } = req.body as {
     enabled?: boolean; mode?: 'fast' | 'deep'; intervalSec?: number
   }
@@ -381,7 +384,9 @@ app.post('/api/observer/toggle', (req, res) => {
   res.json(observerStatus())
 })
 
-app.post('/api/observer/capture', async (_req, res) => {
+app.post('/api/observer/capture', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   try {
     const ctx = await captureNow()
     res.json({ ok: true, context: ctx, formatted: formatContextForAgent(ctx) })
@@ -560,11 +565,11 @@ app.get('/api/capabilities/status', async (_request, response) => {
 
   const healthy = statusRows.every(row => row.ok)
   const localServices = [
-    { id: 'adminer', label: 'Adminer', url: `http://127.0.0.1:${process.env.ULTRON_ADMINER_PORT ?? '8088'}`, enabled: databaseProvider === 'postgresql' },
+    { id: 'adminer', label: 'Adminer', url: `http://127.0.0.1:${process.env.ASTRA_ADMINER_PORT ?? '8088'}`, enabled: databaseProvider === 'postgresql' },
     {
       id: 'mailpit',
       label: 'Mailpit',
-      url: `http://127.0.0.1:${process.env.ULTRON_MAILPIT_UI_PORT ?? '8025'}`,
+      url: `http://127.0.0.1:${process.env.ASTRA_MAILPIT_UI_PORT ?? '8025'}`,
       enabled: delivery.resolvedMode === 'smtp' && (delivery.host === '127.0.0.1' || delivery.host === 'localhost'),
     },
   ]
@@ -616,7 +621,7 @@ app.get('/api/capabilities/status', async (_request, response) => {
   response.json({
     healthy,
     checkedAt,
-    summary: healthy ? 'Ultron is operational.' : 'Ultron needs attention.',
+    summary: healthy ? 'Astra is operational.' : 'Astra needs attention.',
     models: modelNames,
     defaultModel,
     toolCount: toolDefinitions.length,
@@ -666,7 +671,9 @@ app.get('/api/connectors/actions', (_request, response) => {
   response.json({ actions: getConnectorActionSchemas() })
 })
 
-app.post('/api/connectors/actions/dry-run', (request, response) => {
+app.post('/api/connectors/actions/dry-run', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   const { actionName, input } = request.body as { actionName?: string; input?: Record<string, unknown> }
   if (!actionName?.trim()) {
     response.status(400).json({ error: 'actionName is required.' })
@@ -700,6 +707,182 @@ app.get('/api/latency/status', (_request, response) => {
     warmup: warmupStatus,
     modelCache: cachedModelNames,
   })
+})
+
+type EngineSearchItem = {
+  id: string
+  type: 'tool' | 'connector' | 'route' | 'template' | 'system'
+  title: string
+  detail: string
+  keywords: string
+}
+
+function engineSearchItems(): EngineSearchItem[] {
+  const tools = toolDefinitions.map(tool => ({
+    id: `tool:${tool.function.name}`,
+    type: 'tool' as const,
+    title: tool.function.name,
+    detail: tool.function.description,
+    keywords: [tool.function.name, tool.function.description, Object.keys(tool.function.parameters.properties).join(' ')].join(' '),
+  }))
+  const connectors = CONNECTOR_REGISTRY.map(connector => ({
+    id: `connector:${connector.id}`,
+    type: 'connector' as const,
+    title: connector.label,
+    detail: `${connector.category} · ${connector.capabilities.join('; ')}`,
+    keywords: [connector.label, connector.id, connector.category, connector.aliases.join(' '), connector.capabilities.join(' '), connector.sensitiveActions.join(' ')].join(' '),
+  }))
+  const routes = collectBackendRoutes(app).map(route => ({
+    id: `route:${route.method}:${route.path}`,
+    type: 'route' as const,
+    title: `${route.method} ${route.path}`,
+    detail: route.path.startsWith('/v1') ? 'OpenAI-compatible API route' : 'Astra backend API route',
+    keywords: `${route.method} ${route.path}`,
+  }))
+  const templates = PROJECT_TEMPLATES.map(template => ({
+    id: `template:${template.id}`,
+    type: 'template' as const,
+    title: template.label,
+    detail: `${template.description} · ${template.stack}`,
+    keywords: [template.id, template.label, template.description, template.stack].join(' '),
+  }))
+  const system: EngineSearchItem[] = [
+    {
+      id: 'system:latency',
+      type: 'system',
+      title: 'Response speed and latency tuning',
+      detail: 'Warm models, fast-model routing, first-token telemetry, benchmark endpoint, and local response metrics.',
+      keywords: 'speed latency benchmark response time first token tokens per second warmup fast model',
+    },
+    {
+      id: 'system:trust',
+      type: 'system',
+      title: 'Action trust layer',
+      detail: 'Server-side session checks, action permissions, credential vault, audit logs, previews, and rollback workflows.',
+      keywords: 'auth permission audit credential vault approval preview rollback trust security',
+    },
+    {
+      id: 'system:mobile',
+      type: 'system',
+      title: 'Mobile/iPad PWA and Run Tracker',
+      detail: 'Installable PWA shell, service worker API-skip safety, browser geolocation run tracking, and GPX export.',
+      keywords: 'mobile ipad pwa service worker run tracker geolocation gps gpx',
+    },
+  ]
+  return [...system, ...tools, ...connectors, ...templates, ...routes]
+}
+
+function scoreEngineSearch(item: EngineSearchItem, tokens: string[]): number {
+  const title = item.title.toLowerCase()
+  const detail = item.detail.toLowerCase()
+  const keywords = item.keywords.toLowerCase()
+  let score = 0
+  for (const token of tokens) {
+    if (title === token) score += 80
+    if (title.includes(token)) score += 35
+    if (keywords.includes(token)) score += 16
+    if (detail.includes(token)) score += 10
+  }
+  if (item.type === 'system') score += 4
+  if (item.type === 'tool') score += 3
+  return score
+}
+
+app.get('/api/engine/search', (request, response) => {
+  const query = String(request.query.q ?? '').trim().slice(0, 120)
+  const limit = Math.min(50, Math.max(5, Number(request.query.limit ?? 20) || 20))
+  const items = engineSearchItems()
+  const tokens = query.toLowerCase().split(/\s+/).map(token => token.trim()).filter(token => token.length >= 2)
+  const results = tokens.length
+    ? items
+        .map(item => ({ ...item, score: scoreEngineSearch(item, tokens) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+        .slice(0, limit)
+    : items
+        .filter(item => item.type === 'system')
+        .map(item => ({ ...item, score: 1 }))
+
+  response.json({
+    query,
+    checkedAt: Date.now(),
+    inventory: {
+      tools: toolDefinitions.length,
+      connectors: CONNECTOR_REGISTRY.length,
+      routes: collectBackendRoutes(app).length,
+      templates: PROJECT_TEMPLATES.length,
+    },
+    results,
+  })
+})
+
+app.post('/api/engine/benchmark', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
+
+  const body = request.body as { model?: string; prompt?: string; maxTokens?: number }
+  const prompt = (body.prompt ?? 'Reply with one concise sentence: Astra engine benchmark complete.').trim().slice(0, 1000)
+  const maxTokens = Math.min(256, Math.max(16, Number(body.maxTokens ?? 64) || 64))
+  let selectedModel = sanitizeModel(body.model)
+  try {
+    const tags = await fetchOllamaTags(2500)
+    const models = tags.models ?? []
+    if (!body.model || !models.some(model => model.name === selectedModel)) selectedModel = bestAvailableModel(models)
+  } catch {
+    selectedModel = sanitizeModel(body.model) || defaultModel
+  }
+
+  const startedAt = Date.now()
+  try {
+    const ollamaResponse = await fetch(`${ollamaBaseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: selectedModel,
+        prompt,
+        stream: false,
+        keep_alive: '60m',
+        options: { ...buildInferenceOptions(0.1, 2048, 'instant'), num_predict: maxTokens },
+      }),
+      signal: AbortSignal.timeout(90_000),
+    })
+    const raw = await ollamaResponse.text()
+    if (!ollamaResponse.ok) {
+      response.status(502).json({ error: raw || `Ollama returned ${ollamaResponse.status}` })
+      return
+    }
+
+    const data = JSON.parse(raw) as {
+      response?: string
+      total_duration?: number
+      load_duration?: number
+      prompt_eval_duration?: number
+      eval_duration?: number
+      prompt_eval_count?: number
+      eval_count?: number
+    }
+    const totalMs = Date.now() - startedAt
+    const evalMs = data.eval_duration ? Math.round(data.eval_duration / 1e6) : null
+    const loadMs = data.load_duration ? Math.round(data.load_duration / 1e6) : null
+    const tokensPerSec = data.eval_count && data.eval_duration
+      ? Math.round(data.eval_count / (data.eval_duration / 1e9))
+      : null
+
+    response.json({
+      checkedAt: Date.now(),
+      model: selectedModel,
+      promptChars: prompt.length,
+      totalMs,
+      loadMs,
+      evalMs,
+      promptTokens: data.prompt_eval_count ?? null,
+      responseTokens: data.eval_count ?? null,
+      tokensPerSec,
+      sample: (data.response ?? '').trim().slice(0, 600),
+    })
+  } catch (err) {
+    response.status(500).json({ error: err instanceof Error ? err.message : 'Benchmark failed' })
+  }
 })
 
 function bearerToken(request: express.Request): string | undefined {
@@ -781,7 +964,7 @@ app.post('/api/auth/register', registerRateLimit, async (request, response) => {
       message: 'Enter the verification code to finish creating your account.',
     })
   } catch (err) {
-    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Ultron identity' })
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not create Astra identity' })
   }
 })
 
@@ -872,7 +1055,19 @@ app.post('/api/auth/logout', async (request, response) => {
 
 async function requireAuth(request: express.Request, response: express.Response): Promise<Awaited<ReturnType<typeof currentUser>> | null> {
   const user = await currentUser(authToken(request))
-  if (!user) response.status(401).json({ error: 'Sign in to Ultron first.' })
+  if (!user) response.status(401).json({ error: 'Sign in to Astra first.' })
+  return user
+}
+
+type ActionPermissionLevel = 'read-only' | 'draft-changes' | 'apply-with-approval' | 'admin-only'
+
+async function requireActionPermission(request: express.Request, response: express.Response, level: ActionPermissionLevel): Promise<NonNullable<Awaited<ReturnType<typeof currentUser>>> | null> {
+  const user = await requireAuth(request, response)
+  if (!user) return null
+  if (level === 'admin-only' && !user.isPlatformAdmin) {
+    response.status(403).json({ error: 'Platform admin access is required.' })
+    return null
+  }
   return user
 }
 
@@ -1057,6 +1252,17 @@ app.get('/api/admin/identity', async (request, response) => {
   }
 })
 
+app.get('/api/admin/audit', async (request, response) => {
+  const user = await requirePlatformAdmin(request, response)
+  if (!user) return
+  try {
+    const limit = Number(request.query.limit ?? 80)
+    response.json({ entries: await auditLogOverview(user.id, limit) })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not load audit log' })
+  }
+})
+
 app.patch('/api/admin/users/:id/platform-admin', async (request, response) => {
   const user = await requirePlatformAdmin(request, response)
   if (!user) return
@@ -1110,6 +1316,8 @@ app.get('/api/project-builder/toolchain', async (_request, response) => {
 })
 
 app.post('/api/project-builder/select-folder', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     const body = request.body as { basePath?: string } | undefined
     const selectedPath = await selectProjectDestinationFolder(body?.basePath)
@@ -1120,6 +1328,8 @@ app.post('/api/project-builder/select-folder', async (request, response) => {
 })
 
 app.post('/api/project-builder/build', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     const result = await buildProject(request.body ?? {})
     await rememberProject(result)
@@ -1129,11 +1339,15 @@ app.post('/api/project-builder/build', async (request, response) => {
   }
 })
 
-app.get('/api/project-builder/projects', async (_request, response) => {
+app.get('/api/project-builder/projects', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   response.json({ projects: await listProjectRecords() })
 })
 
 app.post('/api/reference-builder/scan', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'draft-changes')
+  if (!user) return
   try {
     const visionModel = cachedModelNames.find(isVisionModel)
     const result = await scanReference(request.body ?? {}, {
@@ -1148,6 +1362,8 @@ app.post('/api/reference-builder/scan', async (request, response) => {
 })
 
 app.post('/api/reference-builder/build', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     const visionModel = cachedModelNames.find(isVisionModel)
     const result = await buildReferenceProject(request.body ?? {}, {
@@ -1163,10 +1379,12 @@ app.post('/api/reference-builder/build', async (request, response) => {
 })
 
 app.post('/api/project-builder/projects/:id/actions', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const action = String((request.body as { action?: string } | undefined)?.action ?? '') as ProjectAction
   const approved = Boolean((request.body as { approved?: boolean } | undefined)?.approved)
   if (!approved) {
-    response.status(403).json({ error: 'Approval is required before Ultron runs project actions.' })
+    response.status(403).json({ error: 'Approval is required before Astra runs project actions.' })
     return
   }
   try {
@@ -1176,7 +1394,9 @@ app.post('/api/project-builder/projects/:id/actions', async (request, response) 
   }
 })
 
-app.post('/api/connectors/:id/setup', (request, response) => {
+app.post('/api/connectors/:id/setup', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const connectorId = request.params.id
   const snapshot = getConnectorStatusSnapshot(toolDefinitions.map(tool => tool.function.name), process.env)
   const connector = snapshot.connectors.find(item => item.id === connectorId)
@@ -1195,7 +1415,9 @@ app.post('/api/connectors/:id/setup', (request, response) => {
   response.json({ state: next })
 })
 
-app.post('/api/connectors/:id/test', (request, response) => {
+app.post('/api/connectors/:id/test', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   const connectorId = request.params.id
   const snapshot = getConnectorStatusSnapshot(toolDefinitions.map(tool => tool.function.name), process.env)
   const connector = snapshot.connectors.find(item => item.id === connectorId)
@@ -1275,6 +1497,8 @@ app.get('/api/models', async (_request, response) => {
 })
 
 app.post('/api/chat', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)
@@ -1364,6 +1588,8 @@ app.post('/api/chat', async (request, response) => {
 })
 
 app.post('/api/agent', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)
@@ -1552,6 +1778,8 @@ app.post('/api/agent', async (request, response) => {
 // Run the same prompt against multiple Ollama models simultaneously, streaming
 // all responses concurrently. Each token is tagged with the originating model.
 app.post('/api/compare', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   const body = request.body as {
     messages?: Array<{ role: string; content: string }>
     models?: string[]
@@ -1673,6 +1901,8 @@ app.post('/api/compare', async (request, response) => {
 })
 
 app.post('/api/pull-model', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const { name } = request.body as { name?: string }
   if (!name?.trim()) {
     response.status(400).json({ error: 'Model name is required' })
@@ -1758,7 +1988,9 @@ app.post('/api/pull-model', async (request, response) => {
 
 // ── ask_user answer injection ──────────────────────────────────────────────────
 // Called by the frontend when the user answers a question the agent posed
-app.post('/api/agent/answer', (request, response) => {
+app.post('/api/agent/answer', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const { id, answer } = request.body as { id?: string; answer?: string }
   if (!id || typeof answer !== 'string') {
     response.status(400).json({ error: 'id and answer are required' })
@@ -1785,7 +2017,9 @@ function ensureHistoryDir(): void {
   if (!fs.existsSync(HISTORY_DIR)) fs.mkdirSync(HISTORY_DIR, { recursive: true })
 }
 
-app.get('/api/history', (_request, response) => {
+app.get('/api/history', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   try {
     ensureHistoryDir()
     const files = fs.readdirSync(HISTORY_DIR).filter((f) => f.endsWith('.json'))
@@ -1805,7 +2039,9 @@ app.get('/api/history', (_request, response) => {
 })
 
 // Global history search — MUST be registered before /api/history/:id
-app.get('/api/history/search', (request, response) => {
+app.get('/api/history/search', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   const q = ((request.query.q as string) ?? '').toLowerCase().trim()
   if (!q) { response.json({ results: [] }); return }
   try {
@@ -1834,7 +2070,9 @@ app.get('/api/history/search', (request, response) => {
   }
 })
 
-app.get('/api/history/:id', (request, response) => {
+app.get('/api/history/:id', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   try {
     ensureHistoryDir()
     const id = request.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
@@ -1848,6 +2086,8 @@ app.get('/api/history/:id', (request, response) => {
 })
 
 app.post('/api/history', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     ensureHistoryDir()
     const body = request.body as Partial<HistorySession>
@@ -1869,6 +2109,8 @@ app.post('/api/history', async (request, response) => {
 
 // Rename a history session
 app.patch('/api/history/:id', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     ensureHistoryDir()
     const id = request.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
@@ -1886,6 +2128,8 @@ app.patch('/api/history/:id', async (request, response) => {
 })
 
 app.delete('/api/history/:id', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   try {
     ensureHistoryDir()
     const id = request.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
@@ -1913,27 +2157,37 @@ if (fs.existsSync(distDir)) {
 
 // ── Preview panel API ─────────────────────────────────────────────────────────
 
-app.get('/api/previews', (_req, res) => {
+app.get('/api/previews', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   res.json(getPreviews())
 })
 
-app.get('/api/previews/applied', (_req, res) => {
+app.get('/api/previews/applied', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   res.json(getAppliedPreviews())
 })
 
 app.post('/api/previews/:id/apply', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   const result = await applyPreview(id)
   res.json(JSON.parse(result))
 })
 
 app.post('/api/previews/:id/rollback', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   const result = await rollbackPreview(id)
   res.json(JSON.parse(result))
 })
 
-app.delete('/api/previews/:id', (req, res) => {
+app.delete('/api/previews/:id', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   const removed = discardPreview(id)
   res.json({ ok: removed })
@@ -1942,9 +2196,11 @@ app.delete('/api/previews/:id', (req, res) => {
 // ── Voice transcription endpoint ───────────────────────────────────────────────
 // Accepts raw audio binary (webm/ogg/mp4) from browser MediaRecorder
 app.post('/api/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   try {
     const ext = (req.headers['x-audio-format'] as string) ?? 'webm'
-    const tmpFile = path.join(tmpdir(), `ultron-voice-${Date.now()}.${ext}`)
+    const tmpFile = path.join(tmpdir(), `astra-voice-${Date.now()}.${ext}`)
     await fsPromises.writeFile(tmpFile, req.body as Buffer)
     const result = await transcribeAudio({ file: tmpFile })
     await fsPromises.unlink(tmpFile).catch(() => {})
@@ -1957,6 +2213,8 @@ app.post('/api/transcribe', express.raw({ type: '*/*', limit: '25mb' }), async (
 // ── Smart conversation title ────────────────────────────────────────────────────
 // Uses the first user+assistant turn to generate a concise 4-6 word title
 app.post('/api/title', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   const { messages } = req.body as { messages?: Array<{ role: string; content: string }> }
   if (!messages?.length) { res.json({ title: 'Conversation' }); return }
   try {
@@ -1986,6 +2244,8 @@ app.post('/api/title', async (req, res) => {
 // -- Follow-up + Predictive action generation ---------------------------------
 // Returns SUGGEST questions, optional ASK clarifiers, and PREDICT agent actions.
 app.post('/api/followups', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   const { messages } = req.body as { messages?: Array<{ role: string; content: string }> }
   if (!messages?.length) { res.json({ suggestions: [] }); return }
   try {
@@ -2004,8 +2264,8 @@ app.post('/api/followups', async (req, res) => {
               'SUGGEST: [another useful question, max 12 words]',
               '',
               'Then add ONE of these (not both) only when clearly applicable:',
-              'ASK: [a clarifying question Ultron needs to give a better answer]',
-              'PREDICT: [emoji] [label] | [specific task Ultron can execute with tools, max 20 words]',
+              'ASK: [a clarifying question Astra needs to give a better answer]',
+              'PREDICT: [emoji] [label] | [specific task Astra can execute with tools, max 20 words]',
               '',
               'WHEN TO ADD PREDICT � only when the response involved something actionable:',
               '- Code written/reviewed ? test it, lint it, find edge cases, document it',
@@ -2074,10 +2334,10 @@ async function selectProjectDestinationFolder(basePath: string | undefined): Pro
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = 'Choose where Ultron should create the project folder'
+$dialog.Description = 'Choose where Astra should create the project folder'
 $dialog.ShowNewFolderButton = $true
-if ($env:ULTRON_INITIAL_DIR -and (Test-Path -LiteralPath $env:ULTRON_INITIAL_DIR)) {
-  $dialog.SelectedPath = (Resolve-Path -LiteralPath $env:ULTRON_INITIAL_DIR).Path
+if ($env:ASTRA_INITIAL_DIR -and (Test-Path -LiteralPath $env:ASTRA_INITIAL_DIR)) {
+  $dialog.SelectedPath = (Resolve-Path -LiteralPath $env:ASTRA_INITIAL_DIR).Path
 }
 $result = $dialog.ShowDialog()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
@@ -2089,7 +2349,7 @@ exit 2
   const encoded = Buffer.from(script, 'utf16le').toString('base64')
   try {
     const { stdout } = await execAsync(`powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, {
-      env: { ...process.env, ULTRON_INITIAL_DIR: initialPath },
+      env: { ...process.env, ASTRA_INITIAL_DIR: initialPath },
       timeout: 5 * 60 * 1000,
       windowsHide: false,
     })
@@ -2134,7 +2394,9 @@ app.get('/api/local-file', async (req, res) => {
 
 // ── Memory management endpoints ──────────────────────────────────────────────// These proxy the long-term memory tools so the frontend can list/delete memories
 
-app.get('/api/memories', async (_req, res) => {
+app.get('/api/memories', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   try {
     const result = await executeTool('mem_list', { limit: '200' })
     const entries = await listMemoryEntries()
@@ -2145,6 +2407,8 @@ app.get('/api/memories', async (_req, res) => {
 })
 
 app.delete('/api/memories/:id', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   if (!id) { res.status(400).json({ error: 'Invalid id' }); return }
   try {
@@ -2156,6 +2420,8 @@ app.delete('/api/memories/:id', async (req, res) => {
 })
 
 app.post('/api/memories', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const { content, tags, confidence, source, scope, expiresAt } = req.body as {
     content?: string
     tags?: string
@@ -2183,6 +2449,8 @@ app.post('/api/memories', async (req, res) => {
 })
 
 app.post('/api/memories/:id/promote', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   const body = req.body as { scope?: MemoryScope }
   if (!id) { res.status(400).json({ error: 'Invalid id' }); return }
@@ -2197,8 +2465,10 @@ app.post('/api/memories/:id/promote', async (req, res) => {
 
 // ── Task management ────────────────────────────────────────────────────────────
 
-app.get('/api/tasks', (_req, res) => {
-  const tasksPath = path.join(os.homedir(), '.ultron-tasks.json')
+app.get('/api/tasks', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
+  const tasksPath = path.join(os.homedir(), '.astra-tasks.json')
   try {
     if (!fs.existsSync(tasksPath)) { res.json({ tasks: [] }); return }
     const tasks = JSON.parse(fs.readFileSync(tasksPath, 'utf-8'))
@@ -2207,6 +2477,8 @@ app.get('/api/tasks', (_req, res) => {
 })
 
 app.post('/api/tasks', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const { title, due, priority, tags, notes } = req.body as Record<string, string | undefined>
   if (!title?.trim()) { res.status(400).json({ error: 'title is required' }); return }
   try {
@@ -2224,6 +2496,8 @@ app.post('/api/tasks', async (req, res) => {
 })
 
 app.patch('/api/tasks/:id/done', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   try {
     const result = await executeTool('task_done', { id })
@@ -2234,6 +2508,8 @@ app.patch('/api/tasks/:id/done', async (req, res) => {
 })
 
 app.delete('/api/tasks/:id', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const id = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   try {
     const result = await executeTool('task_delete', { id })
@@ -2247,6 +2523,8 @@ app.delete('/api/tasks/:id', async (req, res) => {
 // AI-rewrites the user's draft for clarity, precision, and specificity
 
 app.post('/api/enhance', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   const { prompt, model } = req.body as { prompt?: string; model?: string }
   if (!prompt?.trim()) { res.status(400).json({ error: 'prompt is required' }); return }
   try {
@@ -2278,7 +2556,7 @@ app.post('/api/enhance', async (req, res) => {
 })
 
 // ── Self-Upgrade ────────────────────────────────────────────────────────────
-// Ultron reads its own codebase and proposes changes via preview_write.
+// Astra reads its own codebase and proposes changes via preview_write.
 // ALL writes go through the preview/approval flow — nothing is applied automatically.
 
 const SELF_UPGRADE_ALLOWED_TOOLS = [
@@ -2286,7 +2564,7 @@ const SELF_UPGRADE_ALLOWED_TOOLS = [
   'diff_files', 'lint_code', 'preview_write',
 ]
 
-const SELF_UPGRADE_SYSTEM = `You are Ultron's self-improvement agent. Analyze the Ultron codebase and implement the requested improvement.
+const SELF_UPGRADE_SYSTEM = `You are Astra's self-improvement agent. Analyze the Astra codebase and implement the requested improvement.
 
 WORKSPACE: ${process.cwd()}
 
@@ -2324,11 +2602,15 @@ function selfUpgradeSafetySnapshot(stage: 'before' | 'after') {
   }
 }
 
-app.get('/api/self-upgrade', (_request, response) => {
+app.get('/api/self-upgrade', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'read-only')
+  if (!user) return
   response.json({ ...getSelfUpgradeSnapshot(), appliedPreviews: getAppliedPreviews(), safety: selfUpgradeSafetySnapshot('before') })
 })
 
-app.patch('/api/self-upgrade/backlog/:id', (request, response) => {
+app.patch('/api/self-upgrade/backlog/:id', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'apply-with-approval')
+  if (!user) return
   const id = request.params.id.replace(/[^a-zA-Z0-9_-]/g, '')
   const item = updateSelfUpgradeBacklogItem(id, request.body ?? {})
   if (!item) { response.status(404).json({ error: 'Backlog item not found' }); return }
@@ -2336,6 +2618,8 @@ app.patch('/api/self-upgrade/backlog/:id', (request, response) => {
 })
 
 app.post('/api/self-upgrade', async (request, response) => {
+  const user = await requireActionPermission(request, response, 'draft-changes')
+  if (!user) return
   const { task, model, packId } = request.body as { task?: string; model?: string; packId?: string }
   const pack = getUpgradePack(packId)
   const taskText = task?.trim() || pack?.task || ''
@@ -2401,6 +2685,8 @@ app.post('/api/self-upgrade', async (request, response) => {
 })
 
 app.post('/api/run-code', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'apply-with-approval')
+  if (!user) return
   const { code, lang } = req.body as { code?: string; lang?: string }
   if (!code?.trim()) { res.json({ output: '', error: false }); return }
 
@@ -2413,7 +2699,7 @@ app.post('/api/run-code', async (req, res) => {
   }
   const l = (lang ?? '').toLowerCase()
   const ext = extMap[l] ?? '.js'
-  const tmpFile = path.join(tmpdir(), `ultron-run-${Date.now()}${ext}`)
+  const tmpFile = path.join(tmpdir(), `astra-run-${Date.now()}${ext}`)
 
   const cmdMap: Record<string, string> = {
     '.py': `python "${tmpFile}"`,
@@ -2447,13 +2733,17 @@ app.get('/api/healer/status', (_req, res) => {
   res.json(getHealerState())
 })
 
-app.post('/api/healer/scan', async (_req, res) => {
+app.post('/api/healer/scan', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'read-only')
+  if (!user) return
   const issues = await scanForIssues(process.cwd())
   res.json({ issues, count: issues.length, errors: issues.filter(i => i.severity === 'error').length })
 })
 
 // Analyze and propose a fix via SSE (streams progress to the frontend)
 app.post('/api/healer/analyze', async (req, res) => {
+  const user = await requireActionPermission(req, res, 'draft-changes')
+  if (!user) return
   const { issueId } = req.body as { issueId?: string }
   const state = getHealerState()
   const issue = state.issues.find(i => i.id === issueId)
@@ -2528,7 +2818,7 @@ app.post('/api/healer/analyze', async (req, res) => {
   }
 })
 // Drop-in replacement for the OpenAI API — lets any OpenAI-compatible client
-// (Python openai library, Continue.dev, LangChain, curl, etc.) use Ultron/Ollama.
+// (Python openai library, Continue.dev, LangChain, curl, etc.) use Astra/Ollama.
 // Usage:  openai.base_url = "http://localhost:8787/v1"
 //         Authorization header is accepted but ignored (local server)
 
@@ -2753,7 +3043,7 @@ app.post('/v1/completions', async (req, res) => {
 })
 
 app.listen(port, async () => {
-  console.log(`Ultron assistant server listening on http://localhost:${port}`)
+  console.log(`Astra assistant server listening on http://localhost:${port}`)
   console.log(`Ollama endpoint: ${ollamaBaseUrl}`)
 
   // Start background scheduler — uses headless agent runner
@@ -2968,7 +3258,7 @@ function buildLeanKnowledgePrompt(messages: ChatMessage[], answerStyle?: Assista
   const stylePrompt = answerStylePrompt(answerStyle)
   return [{
     role: 'system',
-    content: `You are Ultron. Answer the user's factual question directly and briefly. ${stylePrompt} No preamble. If uncertain, say so in one short caveat.`,
+    content: `You are Astra. Answer the user's factual question directly and briefly. ${stylePrompt} No preamble. If uncertain, say so in one short caveat.`,
   }, ...messages]
 }
 
@@ -3078,7 +3368,7 @@ function parseProjectSetupAnswer(answer: string): { projectName: string; basePat
     basePath = normalizeProjectLocationHint(explicitLocation[2])
   }
 
-  return { projectName: projectName || 'ultron-project', basePath }
+  return { projectName: projectName || 'astra-project', basePath }
 }
 
 async function streamProjectBuilderKickoff(response: express.Response, prompt: string): Promise<void> {
@@ -3088,7 +3378,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
   sendEvent(response, 'agent_plan', {
     plan: {
       goal: 'Create a new programming project',
-      assumptions: ['The user wants Ultron to start building, not explain how to build.'],
+      assumptions: ['The user wants Astra to start building, not explain how to build.'],
       steps: ['Ask for the project name.', 'Ask approval for local project creation and tool opening.', 'Create the starter project.', 'Run the first validation pass.', 'Open VS Code and File Explorer.'],
       toolsNeeded: ['project-builder', 'filesystem', 'terminal', 'vscode', 'file explorer'],
       verificationMethod: 'Project Builder writes files and runs the configured build/check command.',
@@ -3101,7 +3391,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
   const projectSetupAnswer = await askSseText(
     response,
     'What should I call it, and which parent folder should I put it inside?',
-    `Template: ${template.label}\nDefault parent: ${DEFAULT_PROJECT_BASE}\nUltron will create a new folder named after the project inside the parent folder you choose. Examples: ${suggestedName} | landing-page on Desktop | api-service at C:\\Projects.`,
+    `Template: ${template.label}\nDefault parent: ${DEFAULT_PROJECT_BASE}\nAstra will create a new folder named after the project inside the parent folder you choose. Examples: ${suggestedName} | landing-page on Desktop | api-service at C:\\Projects.`,
     'project_setup',
     suggestedName
   )
@@ -3117,7 +3407,7 @@ async function streamProjectBuilderKickoff(response: express.Response, prompt: s
 
   const approved = await askSsePermission(
     response,
-    `Allow Ultron to create and open ${projectName}?`,
+    `Allow Astra to create and open ${projectName}?`,
     `Project: ${projectName}\nTemplate: ${template.label}\nLocation: ${basePath}\nActions: create files, run first check/build, open VS Code, open File Explorer.`
   )
   if (!approved) {
@@ -3210,8 +3500,8 @@ async function streamDirectConnectorOpen(response: express.Response, target: { l
   })
   const approved = await askSsePermission(
     response,
-    `Allow Ultron to open ${target.label}?`,
-    `External platform: ${target.label}\nURL: ${target.url}\nApproval lets Ultron open this platform and continue the requested workflow for this run.`,
+    `Allow Astra to open ${target.label}?`,
+    `External platform: ${target.label}\nURL: ${target.url}\nApproval lets Astra open this platform and continue the requested workflow for this run.`,
   )
   if (!approved) {
     const denied = `Permission denied. I did not open ${target.label}.`
@@ -3257,8 +3547,8 @@ async function streamDirectWindowsAppOpen(response: express.Response, target: { 
   })
   const approved = await askSsePermission(
     response,
-    `Allow Ultron to open ${target.label}?`,
-    `Local app/location: ${target.label}\nApp: ${target.app}${target.args ? `\nLocation: ${target.args}` : ''}\nApproval lets Ultron open this app or location and continue the requested workflow for this run.`,
+    `Allow Astra to open ${target.label}?`,
+    `Local app/location: ${target.label}\nApp: ${target.app}${target.args ? `\nLocation: ${target.args}` : ''}\nApproval lets Astra open this app or location and continue the requested workflow for this run.`,
   )
   if (!approved) {
     const denied = `Permission denied. I did not open ${target.label}.`

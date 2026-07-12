@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: astra-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    preDeployCommand: npm run db:push:postgres
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8787
+      - key: APP_ORIGIN
+        value: https://astra-one-red.vercel.app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: astra-postgres
+          property: connectionString
+      - key: AUTH_SESSION_COOKIE
+        value: astra_session
+      - key: AUTH_COOKIE_SAME_SITE
+        value: none
+      - key: AUTH_COOKIE_SECURE
+        value: "1"
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: AUTH_CHALLENGE_DELIVERY
+        value: debug
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: llama3.2
+
+databases:
+  - name: astra-postgres
+    databaseName: astra
+    user: astra

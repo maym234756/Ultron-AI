@@ -53,7 +53,7 @@ export const fetchWebpage: ToolHandler = async (args) => {
   if (!url) return 'Error: url is required'
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Ultron/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Astra/1.0)' },
       signal: AbortSignal.timeout(12_000),
     })
     const html = await res.text()

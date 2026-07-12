@@ -1,11 +1,11 @@
 ================================================================================
-                         ULTRON PRODUCT ROADMAP
+                         ASTRA PRODUCT ROADMAP
                          Prepared: July 3, 2026
 ================================================================================
 
 MISSION
 --------------------------------------------------------------------------------
-Make Ultron better than cloud chat assistants by focusing on what cloud products
+Make Astra better than cloud chat assistants by focusing on what cloud products
 cannot do as well: local privacy, OS-level action, authenticated browser work,
 connector workflows, self-upgrade, transparent routing, and controllable agent
 execution.
@@ -13,7 +13,7 @@ execution.
 Core positioning:
 
   ChatGPT can answer.
-  Ultron can answer, inspect, operate, verify, remember, connect, and improve
+  Astra can answer, inspect, operate, verify, remember, connect, and improve
   itself locally.
 
 --------------------------------------------------------------------------------
@@ -51,11 +51,11 @@ Implemented:
 - Validated with npm run build and focused editor diagnostics.
 
 Goal:
-Make Ultron's automatic decisions visible, trustworthy, and overrideable.
+Make Astra's automatic decisions visible, trustworthy, and overrideable.
 
 Why it matters:
-The prompt router is now one of Ultron's most important intelligence layers. The
-user should see why Ultron chose Chat vs Agent and Instant vs Deep/Research.
+The prompt router is now one of Astra's most important intelligence layers. The
+user should see why Astra chose Chat vs Agent and Instant vs Deep/Research.
 
 Build:
 - Add /api/router/preview endpoint.
@@ -69,7 +69,7 @@ Build:
 - Show a compact decision chip above or below each assistant message:
   - Chat · Instant · 98%
   - Agent · Research · 73%
-- Add hover/click details: "Why Ultron chose this mode".
+- Add hover/click details: "Why Astra chose this mode".
 - Add override buttons:
   - Rerun as Agent
   - Rerun as Chat
@@ -99,7 +99,7 @@ Goal:
 Make routing quality measurable and prevent regressions.
 
 Why it matters:
-Ultron should not merely "feel" smart. It should have a repeatable test suite
+Astra should not merely "feel" smart. It should have a repeatable test suite
 that proves whether its routing and intelligence selection are working.
 
 Build:
@@ -204,8 +204,8 @@ Goal:
 Turn the 52 connector registry from "browser-ready" into first-class workflows.
 
 Why it matters:
-Connectors are one of Ultron's strongest ways to beat ChatGPT/Claude. Cloud chat
-can describe Salesforce or Gmail; Ultron can operate them locally through an
+Connectors are one of Astra's strongest ways to beat ChatGPT/Claude. Cloud chat
+can describe Salesforce or Gmail; Astra can operate them locally through an
 authenticated browser session or configured API token.
 
 Build:
@@ -229,9 +229,9 @@ Build:
   - Stripe/PayPal/Square: review payments, draft billing actions
   - GitHub/Jira/Linear: review issues, summarize work, draft updates
 - Connector audit log:
-  - What Ultron read
-  - What Ultron drafted
-  - What Ultron changed
+  - What Astra read
+  - What Astra drafted
+  - What Astra changed
   - When approval was requested
 
 Expected impact:
@@ -260,7 +260,7 @@ Goal:
 Make speed, routing, tool use, and model behavior visible and measurable.
 
 Why it matters:
-Ultron cannot be optimized reliably without diagnostics. Telemetry should stay
+Astra cannot be optimized reliably without diagnostics. Telemetry should stay
 local and private.
 
 Build:
@@ -312,7 +312,7 @@ Goal:
 Make memory more selective, organized, and trustworthy.
 
 Why it matters:
-Memory is powerful, but noisy memory makes answers worse. Ultron should remember
+Memory is powerful, but noisy memory makes answers worse. Astra should remember
 important things and forget temporary or stale things.
 
 Build:
@@ -324,8 +324,8 @@ Build:
 - Add memory conflict detection:
   - "You previously preferred X, but now said Y. Update memory?"
 - Add memory review panel:
-  - what Ultron remembers about the user
-  - what Ultron remembers about this project
+  - what Astra remembers about the user
+  - what Astra remembers about this project
   - recent auto-saved memories
 
 Expected impact:
@@ -340,7 +340,7 @@ Goal:
 Turn self-upgrade into a structured product improvement loop.
 
 Why it matters:
-Ultron already proposes guarded changes. The next step is making self-upgrade
+Astra already proposes guarded changes. The next step is making self-upgrade
 organized, prioritized, testable, and rollback-aware.
 
 Build:
@@ -377,7 +377,7 @@ Completed build:
 PRIORITY 8 — SPEED + LATENCY SYSTEM
 --------------------------------------------------------------------------------
 Goal:
-Make Ultron feel fast even when local models are slower than cloud inference.
+Make Astra feel fast even when local models are slower than cloud inference.
 
 Why it matters:
 Speed is user experience. Local AI must avoid unnecessary model/tool work.
@@ -530,7 +530,7 @@ SUCCESS METRICS
 - Agent tasks report a done condition and verification result
 - Connector actions never apply sensitive changes without approval
 - Health Command Center remains green after upgrades
-- User can understand why Ultron chose each mode
+- User can understand why Astra chose each mode
 
 ================================================================================
 END OF ROADMAP

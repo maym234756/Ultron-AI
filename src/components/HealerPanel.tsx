@@ -30,7 +30,7 @@ export function HealerPanel({ apiBase, onClose }: Props) {
   async function runScan() {
     setScanning(true)
     try {
-      const r = await fetch(`${apiBase}/api/healer/scan`, { method: 'POST' })
+      const r = await fetch(`${apiBase}/api/healer/scan`, { method: 'POST', credentials: 'include' })
       if (r.ok) setState(await r.json() as HealerState)
     } finally {
       setScanning(false)
@@ -45,6 +45,7 @@ export function HealerPanel({ apiBase, onClose }: Props) {
     try {
       const response = await fetch(`${apiBase}/api/healer/analyze`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ issueId: issue.id }),
       })

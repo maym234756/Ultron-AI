@@ -1,0 +1,21 @@
+{
+  "name": "Astra Local Assistant",
+  "short_name": "Astra",
+  "description": "A local-first AI workspace for chat, tools, memory, projects, and trusted automation.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#f6f3ee",
+  "theme_color": "#101417",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "developer"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

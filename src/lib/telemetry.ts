@@ -1,6 +1,6 @@
 import type { IntelligenceMode, PromptRoute } from '../types'
 
-const TELEMETRY_KEY = 'ultron-telemetry-v1'
+const TELEMETRY_KEY = 'astra-telemetry-v1'
 const MAX_ENTRIES = 200
 
 export type TelemetryEntry = {
@@ -100,13 +100,13 @@ export function recordTelemetry(pending: PendingTelemetry): TelemetryEntry {
   }
   const next = [entry, ...readEntries()].slice(0, MAX_ENTRIES)
   localStorage.setItem(TELEMETRY_KEY, JSON.stringify(next))
-  window.dispatchEvent(new Event('ultron-telemetry-updated'))
+  window.dispatchEvent(new Event('astra-telemetry-updated'))
   return entry
 }
 
 export function clearTelemetry(): void {
   localStorage.removeItem(TELEMETRY_KEY)
-  window.dispatchEvent(new Event('ultron-telemetry-updated'))
+  window.dispatchEvent(new Event('astra-telemetry-updated'))
 }
 
 export function exportTelemetry(): void {
@@ -115,7 +115,7 @@ export function exportTelemetry(): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `ultron-telemetry-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  anchor.download = `astra-telemetry-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   anchor.click()
   URL.revokeObjectURL(url)
 }

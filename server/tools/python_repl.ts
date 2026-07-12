@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolHandler, ToolArgs } from './types.js'
 // Code is base64-encoded to handle multiline safely.
 // stdout/stderr are captured per-call via a StringIO redirect.
 
-const SCRIPT_PATH = join(tmpdir(), 'ultron_repl_server.py')
+const SCRIPT_PATH = join(tmpdir(), 'astra_repl_server.py')
 
 const REPL_SCRIPT = `import sys, io, traceback, base64
 _globals = {"__builtins__": __builtins__}

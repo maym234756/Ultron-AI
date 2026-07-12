@@ -46,3 +46,7 @@ prisma/generated/
 
 # Research / pulled projects (not part of Ultron)
 Project Pulled/
+.vercel
+.env*
+!.env.example
+!.env.production.example

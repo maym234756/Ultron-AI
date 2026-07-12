@@ -6,7 +6,7 @@ import type { ToolDefinition, ToolHandler } from './types.js'
 
 // ── Task store ────────────────────────────────────────────────────────────────
 
-const TASKS_PATH = join(homedir(), '.ultron-tasks.json')
+const TASKS_PATH = join(homedir(), '.astra-tasks.json')
 
 interface Task {
   id: string

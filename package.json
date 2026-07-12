@@ -1,5 +1,5 @@
 {
-  "name": "ultron",
+  "name": "astra",
   "private": true,
   "version": "0.0.2",
   "description": "A local AI desktop assistant powered by Ollama.",
@@ -9,6 +9,7 @@
     "dev": "concurrently -k -n api,web -c cyan,green \"npm:server:dev\" \"npm:web:dev\"",
     "web:dev": "vite",
     "server:dev": "npm run db:generate && tsx watch server/index.ts",
+    "build:web": "tsc -p tsconfig.app.json && vite build",
     "build": "npm run db:generate && tsc -b && vite build && tsc -p tsconfig.server.json",
     "build:electron": "tsc -p tsconfig.electron.json",
     "desktop:build": "npm run build && npm run build:electron",
@@ -17,9 +18,9 @@
     "db:generate": "npm run db:generate:sqlite && npm run db:generate:postgres",
     "db:generate:sqlite": "prisma generate --schema prisma/schema.prisma",
     "db:generate:postgres": "prisma generate --schema prisma/schema.postgres.prisma",
-    "db:push": "set DATABASE_URL=file:./ultron.db&& prisma db push --schema prisma/schema.prisma --skip-generate",
+    "db:push": "set DATABASE_URL=file:./astra.db&& prisma db push --schema prisma/schema.prisma --skip-generate",
     "db:push:postgres": "prisma db push --schema prisma/schema.postgres.prisma --skip-generate",
-    "db:studio": "set DATABASE_URL=file:./ultron.db&& prisma studio --schema prisma/schema.prisma",
+    "db:studio": "set DATABASE_URL=file:./astra.db&& prisma studio --schema prisma/schema.prisma",
     "db:studio:postgres": "prisma studio --schema prisma/schema.postgres.prisma",
     "db:postgres:up": "docker compose -f docker-compose.postgres.yml up -d --wait",
     "db:postgres:down": "docker compose -f docker-compose.postgres.yml down",
@@ -27,6 +28,7 @@
     "db:postgres:logs": "docker compose -f docker-compose.postgres.yml logs -f postgres",
     "db:mail:logs": "docker compose -f docker-compose.postgres.yml logs -f mailpit",
     "test:router": "tsx scripts/router-eval.ts",
+    "test:astra": "tsx scripts/astra-eval.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "start": "node dist-server/index.js",
@@ -34,8 +36,8 @@
     "tray:dev": "concurrently -k -n api,web,tray -c cyan,green,yellow \"npm:server:dev\" \"npm:web:dev\" \"sleep 4 && electron electron/main.ts\""
   },
   "build": {
-    "appId": "com.ultron.localassistant",
-    "productName": "Ultron",
+    "appId": "com.astra.localassistant",
+    "productName": "Astra",
     "asar": true,
     "directories": {
       "output": "desktop-release"
@@ -59,7 +61,7 @@
           ]
         }
       ],
-      "artifactName": "Ultron-Setup-${version}.${ext}"
+      "artifactName": "Astra-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

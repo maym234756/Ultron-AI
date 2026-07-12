@@ -1,0 +1,712 @@
+================================================================================
+                    ASTRA -- IN-DEPTH PRODUCT VALUATION
+                         Updated: July 12, 2026
+================================================================================
+
+EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+Astra is a locally deployed, privacy-first AI assistant platform built around
+Ollama, Node/Express, React, Electron, Prisma, and a broad tool/connector layer.
+It is no longer just a local chat shell or a desktop automation prototype. The
+current product now includes:
+
+  - Local Ollama chat and agent execution
+  - Server-sent streaming for chat, agent, compare, healer, and self-upgrade
+  - 166 registered tool definitions across 30 tool modules
+  - 53 external service connectors with setup and dry-run planning surfaces
+  - Scored Chat/Agent routing and intelligence profile selection
+  - Project Builder, Project Memory, and Reference Builder workflows
+  - Self-Healer and Self-Upgrade systems with preview/rollback controls
+  - OpenAI-compatible /v1 API routes
+  - Health Command Center and Backend Runtime Supervisor
+  - Local identity vault with email verification, password reset, orgs, invites,
+    platform admins, encrypted credential storage, server-side sessions, and
+    audit log visibility
+  - SQLite local runtime and Postgres deployment path
+  - Versioned provider-specific SQL migrations
+  - Windows Electron tray app and installer pipeline
+  - Installable mobile/iPad PWA shell with app manifest, iOS metadata, and a
+    service worker that avoids caching API traffic
+  - Consent-first Run Tracker with browser geolocation, local point storage,
+    live pace/distance metrics, and GPX export
+  - Media/PDF scanning, video frame extraction, local media viewing, AI photo
+    generation, and AI storyboard-to-MP4 generation
+  - Playwright performance audits and structured page extraction
+  - Coding impact search and project quality audit tools
+  - Engine capability search and authenticated response benchmarking
+  - Deterministic Astra evaluation harness for routing, guard, and PWA checks
+
+This is a custom product, not a thin wrapper around a cloud API. Its core value
+comes from local ownership, OS/tool access, privacy, zero cloud inference cost,
+and an expanding trust layer around powerful actions.
+
+Estimated Replacement / Rebuild Cost:  $460,000 - $730,000
+Estimated Strategic / Market Value:    $1,500,000 - $3,800,000+
+Annual Operational Cost (local AI API): $0, assuming existing PC and local Ollama
+Optional Hosted Runtime Cost:           VPS/GPU/SMTP/domain costs only if deployed
+
+================================================================================
+SECTION 1 -- CURRENT PRODUCT INVENTORY
+================================================================================
+
+LIVE CODEBASE METRICS, JULY 12, 2026
+--------------------------------------------------------------------------------
+Source files counted outside node_modules/dist/generated clients:
+
+  TypeScript / TSX files:          79
+  TypeScript / TSX lines:         26,399
+  CSS files:                       2
+  CSS lines:                       6,096
+  Total TS/TSX/CSS source lines:  32,495
+  React component modules:         20
+  Server tool modules:             30
+  Registered tool definitions:     166
+  Connector registry entries:      53
+  Express route declarations:      92
+  Prisma schemas:                  2, SQLite and Postgres
+  Provider SQL migrations:         2, plus migration README
+  PWA assets:                      manifest + service worker
+  Desktop workflow:                GitHub Actions Windows installer build
+  Eval scripts:                    router eval + Astra guard/PWA eval
+
+RECENT VALIDATION STATUS
+--------------------------------------------------------------------------------
+Latest validation run after the July 12 trust/mobile/eval updates:
+
+  npm run test:astra   PASSED, 12/12 deterministic checks
+  npm run build         PASSED, Prisma generate + TypeScript + Vite + server build, no Vite large chunk warning
+  npm run lint          PASSED with warnings only
+
+Known non-blocking warnings:
+  - Existing regex escape/control-character lint warnings
+  - npm audit reports high-severity advisories through Prisma/effect tooling
+
+Recent performance improvement:
+  - Frontend code splitting reduced the initial Vite JS chunk from roughly
+    1,027 kB to 297 kB by lazy-loading the markdown/math renderer and major
+    app panels. The markdown/KaTeX/highlight stack now ships as a separate
+    async MessageContent chunk of roughly 443 kB.
+
+ARCHITECTURE OVERVIEW
+--------------------------------------------------------------------------------
+
+  FRONTEND
+    React 19 + TypeScript + Vite
+    Markdown, math, syntax highlighting, artifacts, code run, panels, command UI
+    PWA manifest + iOS home-screen metadata + production service worker
+
+  API SERVER
+    Express 5 + TypeScript
+    REST + SSE + OpenAI-compatible /v1 routes
+    Server-side session checks on action-capable endpoints
+    Health, runtime supervisor, auth, orgs, vault, tools, builders, previews
+
+  IDENTITY / DATA
+    Prisma Client for SQLite and Postgres
+    Local SQLite default
+    Postgres deployment option
+    Versioned provider-specific SQL migrations
+    Secure HTTP-only session cookies
+    Auth challenges via debug or SMTP delivery
+
+  AI RUNTIME
+    Ollama local inference
+    Chat, agent, routing, context compression, RAG, embeddings, vision-capable path
+
+  DESKTOP / DISTRIBUTION
+    Electron 43 tray app
+    Windows NSIS installer build
+    GitHub Actions artifact/release workflow
+    Mobile/iPad PWA install path for hosted HTTPS deployments
+
+================================================================================
+SECTION 2 -- FEATURE-BY-FEATURE COMPETITIVE ANALYSIS
+================================================================================
+
+LEGEND
+  FULL       Production-grade or materially complete in current codebase
+  UNIQUE     Materially stronger/local capability versus common cloud chat tools
+  PARTIAL    Present but still needs product hardening or platform expansion
+  MISSING    Not present today
+
+CORE AI AND CHAT EXPERIENCE
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+Privacy-first local inference                FULL/UNIQUE   PARTIAL/MISSING
+Zero cloud model API cost                    FULL/UNIQUE   MISSING
+Real-time token streaming                    FULL          FULL
+Markdown/math/code rendering                 FULL          FULL
+Syntax-highlighted code blocks               FULL          FULL
+Line-numbered code blocks                    FULL/UNIQUE   PARTIAL
+Live artifact preview                         FULL          PARTIAL
+Run code from chat blocks                     FULL/UNIQUE   PARTIAL/MISSING
+Model compare, simultaneous streams          FULL/UNIQUE   MISSING
+Voice input and read-aloud                    FULL          PARTIAL
+Voice conversation loop                       FULL/UNIQUE   PARTIAL/MISSING
+Consent-first GPS run tracking                FULL/UNIQUE   PARTIAL
+Prompt enhancer                               FULL/UNIQUE   PARTIAL
+Follow-up chips and smart titles              FULL          FULL
+Configurable answer styles                    FULL          FULL
+Configurable context window                   FULL          PARTIAL
+
+AGENT, TOOLS, AND AUTOMATION
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+166 registered tool definitions              FULL/UNIQUE   MISSING
+30 modular tool modules                       FULL/UNIQUE   MISSING
+Terminal / shell execution                    FULL/UNIQUE   MISSING
+Filesystem actions                            FULL/UNIQUE   LIMITED
+Desktop automation                            FULL/UNIQUE   MISSING
+Browser automation with Playwright            FULL/UNIQUE   MISSING
+Advanced browser/session tooling              FULL/UNIQUE   MISSING
+Playwright performance audits                 FULL/UNIQUE   PARTIAL
+Structured page extraction                    FULL/UNIQUE   PARTIAL
+Git and GitHub tools                          FULL/UNIQUE   PARTIAL
+Database tools                                FULL/UNIQUE   MISSING
+Python REPL                                   FULL/UNIQUE   MISSING
+Whisper/audio transcription                   FULL/UNIQUE   PARTIAL
+Scheduler / task automation                   FULL/UNIQUE   PARTIAL
+Multi-agent execution                         FULL/UNIQUE   PARTIAL
+Preview write/exec approval surface           FULL/UNIQUE   MISSING
+Media/PDF scan and local viewer tools         FULL/UNIQUE   PARTIAL/MISSING
+AI photo generation                           FULL          PARTIAL
+AI storyboard-to-MP4 generation               PARTIAL       PARTIAL/MISSING
+
+TRUST, IDENTITY, AND ADMINISTRATION
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+Server-side session cookies                   FULL          FULL
+Email verification flow                       FULL          FULL
+Password reset flow                           FULL          FULL
+Debug/local auth delivery                     FULL/UNIQUE   MISSING
+SMTP auth delivery                            FULL          FULL
+Organization/workspace membership             FULL          FULL
+Workspace invites                             FULL          FULL
+Platform admin management                     FULL          FULL
+Encrypted credential vault                    FULL/UNIQUE   PARTIAL
+Credential reveal audit entries               FULL/UNIQUE   PARTIAL
+Audit log UI for identity/admin events        FULL          FULL/PARTIAL
+Server-side action route guards               FULL          FULL
+Named action permission levels                PARTIAL       FULL/PARTIAL
+Postgres deployment readiness checks          FULL          FULL
+Versioned SQL migrations                      PARTIAL/FULL  FULL
+
+BUILDERS AND SELF-IMPROVEMENT
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+Project Builder templates                     FULL/UNIQUE   MISSING
+Project Memory                                FULL/UNIQUE   MISSING
+Open folder / VS Code / terminal actions      FULL/UNIQUE   MISSING
+Install/build/dev server project actions      FULL/UNIQUE   MISSING
+Project auto repair loop                      FULL/UNIQUE   MISSING
+Reference Builder from URL/screenshot         FULL/UNIQUE   MISSING
+Visual comparison reports                     FULL/UNIQUE   MISSING
+Self-Healer                                   FULL/UNIQUE   MISSING
+Self-Upgrade backlog/packs                    FULL/UNIQUE   MISSING
+Rollback-aware preview history                FULL/UNIQUE   MISSING
+Deterministic Astra eval harness             PARTIAL/FULL  PARTIAL
+
+OBSERVABILITY AND OPERATIONS
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+Health Command Center                         FULL/UNIQUE   PARTIAL/MISSING
+Backend Runtime Supervisor                    FULL/UNIQUE   MISSING
+Route inventory/status                        FULL/UNIQUE   MISSING
+Model inventory/status                        FULL          FULL
+Deployment readiness checks                   FULL          FULL/PARTIAL
+Connector readiness panel                     FULL/UNIQUE   PARTIAL
+Local service links for Adminer/Mailpit       FULL/UNIQUE   MISSING
+Telemetry export/clear                        FULL          PARTIAL
+
+DISTRIBUTION AND PLATFORM
+--------------------------------------------------------------------------------
+Feature                                      Astra        Cloud Chat Baseline
+Windows desktop tray app                      FULL/UNIQUE   MISSING
+Windows installer release workflow            FULL/UNIQUE   MISSING
+Open in browser / local web app               FULL          FULL
+Installable PWA shell                         FULL          FULL/PARTIAL
+iPad home-screen install support              PARTIAL/FULL  FULL
+Native iOS/Android app                        MISSING       FULL/PARTIAL
+macOS/Linux packaged desktop                  MISSING       PARTIAL
+
+COMPETITIVE SUMMARY
+--------------------------------------------------------------------------------
+Astra is strongest where cloud chat tools are structurally constrained:
+
+  - Local data ownership
+  - OS and desktop automation
+  - Browser session operation
+  - File/project actions
+  - Self-healing and self-upgrade workflows
+  - Zero local inference API cost
+  - Extensible tools and connectors
+  - User-owned identity/vault/workspace data
+
+Cloud chat tools remain stronger in:
+
+  - Frontier model quality at the highest reasoning tier
+  - Native mobile distribution
+  - Enterprise SSO/SOC2 procurement readiness
+  - Global hosted availability without user-managed infrastructure
+  - Very long context windows and managed cloud compute
+
+Astra's differentiated position is not simply "better chat." Its more valuable
+position is "a local-first AI operating layer for action, automation, memory,
+project work, and trusted personal/team workflows."
+
+================================================================================
+SECTION 3 -- REBUILD COST ANALYSIS
+================================================================================
+
+This section estimates replacement cost for an experienced professional team to
+replicate the current Astra feature set from scratch. It assumes senior
+engineers familiar with TypeScript, React, local AI, Prisma, Electron, browser
+automation, and agent/tool architecture.
+
+BACKEND / PLATFORM ENGINEERING
+--------------------------------------------------------------------------------
+Component                                           Hours     Rate      Cost
+Core Express architecture and route system             80     $175    $14,000
+92 REST/SSE/OpenAI route declarations                  135    $175    $23,625
+Agent loop, streaming, tool calling                    70     $200    $14,000
+Scored router and intelligence profiles                35     $175     $6,125
+166 tool definitions and 30 tool modules               185    $175    $32,375
+Connector registry and action planner                  60     $175    $10,500
+OpenAI-compatible /v1 API                              25     $175     $4,375
+RAG, embeddings, long-term memory                      55     $175     $9,625
+Project Builder and Project Memory                     70     $175    $12,250
+Reference Builder and visual compare                   70     $175    $12,250
+Self-Healer and Self-Upgrade                           65     $200    $13,000
+Preview/rollback safety layer                          35     $175     $6,125
+Backend Runtime Supervisor                             25     $175     $4,375
+Health Command Center backend                          25     $175     $4,375
+Identity vault, sessions, auth, orgs, invites          95     $200    $19,000
+Credential encryption and audit logs                   35     $200     $7,000
+SQLite/Postgres provider architecture                  35     $200     $7,000
+Provider-specific migration path                       20     $175     $3,500
+Scheduler, tasks, audio, media, system integrations     65     $175    $11,375
+
+Backend subtotal:                                               ~$214,875
+
+FRONTEND / PRODUCT ENGINEERING
+--------------------------------------------------------------------------------
+Component                                           Hours     Rate      Cost
+React app shell and state architecture                 60     $150     $9,000
+Chat composer, streaming display, message lifecycle     70     $150    $10,500
+Markdown/math/code/artifact rendering                  45     $150     $6,750
+Command center, slash commands, quick actions           35     $150     $5,250
+Agent trace and action timeline                         35     $150     $5,250
+Health, healer, compare, memory, task panels            75     $150    $11,250
+Project and reference builder panels                    70     $150    $10,500
+Connector hub and setup UI                              40     $150     $6,000
+Auth, organization, admin, vault panels                 85     $160    $13,600
+Audit log UI                                            16     $150     $2,400
+Preview panel and rollback UX                           30     $150     $4,500
+Responsive layout and CSS design system                 65     $150     $9,750
+Quiet mode, workspace modes, sidebar surfaces           45     $150     $6,750
+PWA metadata, service worker, mobile install shell      25     $150     $3,750
+Run Tracker panel and GPX export UX                     28     $150     $4,200
+
+Frontend subtotal:                                               ~$109,450
+
+DESIGN, DEVOPS, QA, AND HARDENING
+--------------------------------------------------------------------------------
+Component                                           Hours     Rate      Cost
+UI/UX design system and interaction design             70     $130     $9,100
+Electron tray app and Windows installer packaging       35     $160     $5,600
+GitHub release workflow                                 15     $150     $2,250
+Docker/Postgres/Mailpit local stack                     25     $160     $4,000
+Evaluation harness and regression checks                30     $175     $5,250
+Security review and action-permission hardening         55     $220    $12,100
+Integration QA and manual test cycles                   80     $130    $10,400
+Documentation and valuation materials                   35     $120     $4,200
+
+Design/DevOps/QA subtotal:                                       ~$52,900
+
+DIRECT REBUILD COST ESTIMATE
+--------------------------------------------------------------------------------
+Backend subtotal:       ~$214,875
+Frontend subtotal:      ~$109,450
+Design/DevOps/QA:        ~$52,900
+Direct subtotal:         ~$377,225
+
+Add project management, rework, discovery, coordination, and risk buffer:
+  Conservative overhead:  15%  -> ~$434,000
+  Realistic overhead:     35%  -> ~$509,000
+  First-time team buffer: 55%  -> ~$585,000
+
+Estimated Replacement / Rebuild Cost: $460,000 - $730,000
+
+The high end accounts for the fact that the hardest parts of Astra are not the
+visible screens. They are the integration boundaries: local OS actions, browser
+automation, streaming, tool result management, auth/session safety, model routing,
+project writes, rollback previews, and keeping all of it understandable to users.
+
+================================================================================
+SECTION 4 -- STRATEGIC / MARKET VALUE
+================================================================================
+
+MARKET CONTEXT
+--------------------------------------------------------------------------------
+The AI assistant market is shifting toward three simultaneous needs:
+
+  1. Privacy and data ownership
+     Individuals and companies do not always want proprietary files, customer
+     records, credentials, screenshots, or automation logs leaving their own
+     environment.
+
+  2. Action, not just answers
+     Users increasingly expect AI to open tools, run checks, build projects,
+     manipulate files, operate browsers, compare outputs, and finish work.
+
+  3. Trust and control
+     The more capable the agent becomes, the more valuable permission boundaries,
+     audit trails, previews, rollbacks, and server-side enforcement become.
+
+Astra has moved directly into this market wedge. Its recent upgrades reduce a
+major product risk: the system now has server-side protection for action routes
+instead of relying mainly on frontend login gating.
+
+COMPARABLE PRODUCTS / POSITIONING
+--------------------------------------------------------------------------------
+Product / Category                Typical Position              Astra Advantage
+LM Studio / Jan.ai                Local chat UI                  Far richer tools/actions
+AnythingLLM                       Local/team knowledge agent      Deeper OS/project automation
+OpenDevin/SWE agents              Coding agent                   Broader personal OS workspace
+Cursor / Continue                 Developer coding tools          Wider tool and assistant scope
+ChatGPT / Claude                  Frontier cloud chat             Local ownership and OS actions
+Zapier/Make                       Workflow automation             AI-native local command layer
+Enterprise custom agent builds    Bespoke consulting              Already integrated product base
+
+VALUATION SCENARIOS
+--------------------------------------------------------------------------------
+Scenario 1: Personal power-user asset
+  Value basis: replacement cost, time saved, avoided subscriptions, and
+  differentiated local automation.
+  Estimated value: $500,000 - $850,000
+
+Scenario 2: SMB self-hosted team platform
+  Target: 5-50 user teams needing private AI + browser/project automation.
+  Annual productivity value: $75,000 - $250,000 per team depending on usage.
+  Productized self-hosted license value: $2,000 - $10,000 per customer/year.
+  Estimated platform value at modest traction: $900,000 - $1,800,000
+
+Scenario 3: Regulated or privacy-sensitive enterprise deployment
+  Target: legal, healthcare, finance, government contractors, sales operations,
+  internal tooling teams, and data-sensitive engineering groups.
+  Value drivers: privacy, local/on-prem option, auditability, connector actions,
+  and reduced cloud AI procurement risk.
+  Estimated strategic value: $1,500,000 - $3,800,000+
+
+Scenario 4: Productized startup path
+  Pricing possibilities:
+    - $49-$99/month personal pro license
+    - $199-$499/month team self-hosted license
+    - $2,000-$15,000/year enterprise self-hosted support license
+  At 300 users paying $49/month: $176,400 ARR
+  At 100 team licenses paying $2,000/year: $200,000 ARR
+  At 25 enterprise/self-hosted customers paying $10,000/year: $250,000 ARR
+  At 5x-8x ARR for differentiated AI infrastructure: $0.9M - $2.0M+
+
+================================================================================
+SECTION 5 -- TECHNOLOGY ASSET VALUE
+================================================================================
+
+1. LOCAL AGENT LOOP AND STREAMING ENGINE                         $40K - $70K
+   Custom chat/agent routes, streaming SSE, tool execution, agent plans,
+   pending questions, permission prompts, and model routing.
+
+2. TOOL REGISTRY AND ACTION SURFACE                              $60K - $105K
+  166 tool definitions across 30 modules: terminal, filesystem, desktop,
+   browser, Playwright, git, GitHub, database, memory, RAG, media, tasks,
+  scheduling, system monitor, Python, Whisper, Outlook, scraper, coding audit,
+  media scanning, AI photo/storyboard generation, and more.
+
+3. TRUST AND IDENTITY VAULT                                      $60K - $110K
+   Email verification, password reset, secure session cookies, orgs, invites,
+   roles, platform admins, encrypted credentials, audit events, Postgres support,
+   readiness checks, and protected action routes.
+
+4. BUILDERS AND PROJECT WORKFLOWS                                $55K - $95K
+   Project Builder, Project Memory, project plans, open/run/install/build/dev
+   actions, Reference Builder, visual comparison, and remembered project repair.
+
+5. SELF-HEALER AND SELF-UPGRADE                                  $45K - $85K
+   Scan/analyze loops, preview writes, rollback history, backlog/packs, guardrails,
+   validation reporting, and restricted self-modification path.
+
+6. CONNECTOR REGISTRY AND HUB                                    $30K - $60K
+   53 service entries, readiness detection, setup state, connector audit entries,
+   native action schemas, and dry-run approval planning.
+
+7. HEALTH, TELEMETRY, AND RUNTIME SUPERVISION                    $25K - $50K
+   Capability status, backend runtime snapshot, readiness checks, local service
+   links, telemetry export/clear, route inventory, and model/tool state.
+
+8. FRONTEND PRODUCT SYSTEM                                       $95K - $170K
+  20 React component modules, main workspace shell, panels, command center,
+   quiet mode, workspace modes, chat history, memory manager, vault, org/admin UI,
+  Run Tracker, streaming renderers, artifacts, preview panel, and responsive CSS.
+
+9. DISTRIBUTION AND INSTALL SURFACES                             $20K - $45K
+   Electron tray app, Windows installer workflow, PWA manifest, service worker,
+   iPad/mobile home-screen shell, and production static serving.
+
+10. EVALUATION AND QUALITY HARNESS                               $15K - $35K
+    Router eval plus deterministic Astra eval checking routing, server-side
+  endpoint guards, engine-lab coverage, and PWA API-cache safety.
+
+================================================================================
+SECTION 6 -- RISK FACTORS AND DISCOUNTS
+================================================================================
+
+FACTORS THAT REDUCE VALUE
+--------------------------------------------------------------------------------
+1. Frontier model ceiling
+   Local Ollama models can be excellent, but the strongest hosted frontier models
+   still outperform local models on some reasoning, coding, multimodal, and long
+   context tasks.
+
+2. Native mobile not yet shipped
+   Astra now has an installable PWA/iPad web shell, but not a native iOS or
+   Android application.
+
+3. Cross-platform desktop gap
+   Windows desktop packaging is present. macOS and Linux desktop builds remain
+   future work.
+
+4. Enterprise compliance maturity
+   The product has stronger auth and audit foundations now, but SOC2, SSO/SAML,
+   formal tenant isolation audits, deployment playbooks, and support processes
+   are still required for serious enterprise sales.
+
+5. Security hardening burden
+   Local OS/file/browser actions are a core strength and a risk. Continued work is
+   needed around typed confirmations, per-tool policies, scoped approvals, and
+   audit coverage.
+
+6. Dependency maintenance
+   Ollama, Prisma, React, Vite, Electron, Playwright, and local model stacks will
+   require ongoing upgrades. npm audit currently flags high-severity advisories
+   through Prisma/effect tooling.
+
+7. Bundle size and performance
+  The prior Vite large chunk warning has been eliminated by splitting the
+  markdown/math renderer and heavier panels into async chunks. Continued mobile
+  layout and runtime performance polish would still improve public readiness.
+
+RISK FACTORS RECENTLY REDUCED
+--------------------------------------------------------------------------------
+1. Frontend-only auth gate risk reduced
+   Action-capable backend routes now require signed-in sessions server-side.
+
+2. No mobile path risk reduced
+   PWA manifest, iOS metadata, and service worker support now exist.
+
+3. No migration path risk reduced
+   Provider-specific SQL migrations now exist for SQLite and Postgres.
+
+4. No evaluation harness risk reduced
+   `npm run test:astra` now verifies routing, guard, and PWA safety checks.
+
+5. Admin visibility risk reduced
+   Platform admins can view recent identity/vault/org audit events.
+
+================================================================================
+SECTION 7 -- FINAL VALUATION SUMMARY
+================================================================================
+
+VALUATION METHOD                         RANGE                 MIDPOINT
+--------------------------------------------------------------------------------
+Replacement cost approach                $460K - $730K          $595K
+Personal productivity asset              $500K - $850K          $675K
+SMB/team platform potential              $900K - $1.8M          $1.35M
+Enterprise strategic value               $1.4M - $3.6M+         $2.5M
+Startup/productized ARR potential        $0.9M - $2.0M+         $1.45M
+
+BLENDED FAIR MARKET VALUE, PERSONAL / PRIVATE ASSET
+--------------------------------------------------------------------------------
+  $600,000 - $950,000
+
+BLENDED STRATEGIC VALUE, ENTERPRISE / LICENSING / ACQUISITION
+--------------------------------------------------------------------------------
+  $1,500,000 - $3,800,000+
+
+The valuation increased from the July 3 estimate because Astra added several
+high-value product layers that materially reduce risk and improve distribution:
+
+  - Server-side auth enforcement on action-capable routes
+  - Local identity vault maturation
+  - Organization/admin/audit surfaces
+  - Postgres and migration path
+  - PWA/mobile/iPad install shell
+  - Deterministic eval harness
+  - Engine capability search and response benchmark UI/API
+  - Additional tool/component/source footprint
+  - Media scanning, Playwright audit, coding audit, and Run Tracker additions
+
+================================================================================
+SECTION 8 -- WHAT MAKES ASTRA DEFENSIBLE
+================================================================================
+
+1. LOCAL-FIRST TRUST MODEL
+   Astra can operate over local files, local browser sessions, local screenshots,
+   local memory, and local credentials without sending user data to a cloud model
+   provider by default.
+
+2. ACTION DEPTH
+   Cloud assistants can answer questions about tools. Astra can operate the local
+   environment, write projects, open terminals, run checks, inspect files, use
+   browser automation, and manage remembered project workflows.
+
+3. INTEGRATION SURFACE AREA
+  A 166-tool registry and 53-connector catalog create compounding value. Each new
+   capability can reuse the same agent, UI, permission, audit, and preview layers.
+
+4. TRUST AND AUDITABILITY
+   The recent server-side route protection, session cookies, permission levels,
+   audit log UI, credential vault, and preview/rollback system turn raw power into
+   a product users can reason about.
+
+5. SELF-IMPROVEMENT LOOP
+   Self-Healer and Self-Upgrade create a product feedback cycle: identify issues,
+   propose changes, preview diffs, apply/rollback, and validate.
+
+6. DISTRIBUTION FLEXIBILITY
+   Astra can run as a local browser app, Windows desktop app, OpenAI-compatible
+   local API, and installable PWA shell. This gives it more deployment shapes than
+   a single desktop-only or SaaS-only product.
+
+7. COST STRUCTURE
+   Local inference means no per-token cloud cost when using Ollama. That makes
+   heavy usage economically viable for power users and self-hosted teams.
+
+================================================================================
+SECTION 9 -- INVESTMENT REQUIRED TO REACH $1M+ AND $5M+ VALUE
+================================================================================
+
+CURRENT STATE
+--------------------------------------------------------------------------------
+Astra is now a serious local-first AI operating platform with a stronger trust
+foundation. It is plausibly above $1M strategic value as a technology asset, but
+commercial value depends on packaging, security hardening, distribution, support,
+and proof of repeatable use.
+
+NEXT INVESTMENT TO STRENGTHEN $1M+ POSITION
+--------------------------------------------------------------------------------
+Task                                             Effort       Value Add
+Per-tool permission matrix and typed confirms     40-70 hrs    High
+Mobile layout and runtime performance polish      20-40 hrs    Medium
+Native OAuth connector setup                      100-160 hrs   High
+Enterprise SSO/OIDC/SAML                           50-90 hrs    High
+Tenant/workspace data isolation hardening          80-140 hrs   High
+Security test suite for protected endpoints        40-80 hrs    High
+Audit log filtering/export/retention               25-45 hrs    Medium
+Docker production deployment template              35-60 hrs    Medium
+Mac/Linux desktop packaging                        70-120 hrs   Medium
+Native mobile companion app                       140-220 hrs   High
+Plugin marketplace packaging                       80-140 hrs   High
+Expanded eval benchmark suite                      50-100 hrs   High
+
+PATH TO $5M+ STRATEGIC VALUE
+--------------------------------------------------------------------------------
+Astra would need at least one of these traction paths:
+
+  - 50-100 paying self-hosted teams
+  - Regulated-industry pilot deployments with measurable productivity outcomes
+  - Enterprise connector and audit/compliance proof
+  - Strong plugin ecosystem and third-party tools
+  - Hosted management plane for self-hosted agents
+  - Demonstrated benchmark superiority in local tool-use tasks
+
+================================================================================
+CONCLUSION
+================================================================================
+
+Astra has moved from a powerful personal local assistant into the foundation of
+a defensible local-first AI operating platform. The July 12 upgrades are
+especially important because they address four prior valuation discounts:
+
+  1. Action routes are now protected server-side.
+  2. Mobile/iPad has a real PWA install path.
+  3. Database changes have a versioned migration path.
+  4. Product quality has a deterministic eval harness.
+
+The product still needs native mobile, cross-platform desktop packaging,
+enterprise SSO, deeper tenant isolation, formal security tests, and stronger
+commercial packaging to maximize market value. Even with those gaps, the current
+codebase is a substantial private technology asset.
+
+Fair market value as a private/personal technology asset:
+  $600,000 - $950,000
+
+Strategic value to an enterprise acquirer, licensor, or self-hosted AI platform:
+  $1,500,000 - $3,800,000+
+
+================================================================================
+APPENDIX A -- CURRENT TECHNOLOGY STACK
+================================================================================
+
+Frontend:
+  React 19, TypeScript, Vite 8, react-markdown, remark-gfm, remark-math,
+  rehype-highlight, rehype-katex, KaTeX, highlight.js, lucide-react,
+  PWA manifest, service worker, iOS web app metadata
+
+Backend:
+  Node.js, TypeScript, Express 5, Prisma, Playwright, pdf-parse, node-cron,
+  nodemailer, cors, dotenv
+
+AI / ML:
+  Ollama local inference, configurable local models, nomic-embed-text style
+  embedding path, custom RAG, custom memory store, optional vision-capable models
+
+Data:
+  SQLite local default, Postgres deployment option, provider-specific Prisma
+  clients, provider-specific SQL migrations
+
+Desktop / Distribution:
+  Electron 43, Windows NSIS installer, GitHub Actions release workflow,
+  installable web app shell for mobile/tablet browsers
+
+================================================================================
+APPENDIX B -- CURRENT VALIDATION COMMANDS
+================================================================================
+
+Recommended local validation loop:
+
+  npm run test:astra
+  npm run build
+  npm run lint
+
+Latest known result:
+
+  test:astra: passed 12/12
+  build: passed
+  lint: passed with warnings only
+
+================================================================================
+APPENDIX C -- DOCUMENT CHANGE SUMMARY
+================================================================================
+
+This July 12 update revised the prior July 3 valuation to reflect:
+
+  - 79 TS/TSX files and 32,495 TS/TSX/CSS source lines
+  - 92 Express route declarations
+  - 166 registered tool definitions
+  - 53 connector registry entries
+  - 20 React component modules
+  - Run Tracker panel with local GPS capture and GPX export
+  - Media/PDF scanner, viewer, frame extraction, photo generation, and storyboard video tools
+  - Playwright performance audit and smart extraction tools
+  - Coding impact search and code quality audit tools
+  - Engine capability search and authenticated response benchmark
+  - Server-side action route protection
+  - Identity vault, org/admin, credential vault, and audit log maturity
+  - SQLite/Postgres runtime support and provider SQL migrations
+  - PWA/mobile/iPad install shell
+  - Deterministic Astra eval harness
+  - Updated risk factors and valuation ranges
+
+================================================================================
+         Document prepared for: Astra Product Review -- July 12, 2026
+================================================================================

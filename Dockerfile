@@ -1,0 +1,30 @@
+FROM mcr.microsoft.com/playwright:v1.61.1-noble AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM mcr.microsoft.com/playwright:v1.61.1-noble AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8787
+
+COPY package*.json ./
+RUN npm ci
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist-server ./dist-server
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/public ./public
+
+EXPOSE 8787
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 8787) + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+CMD ["npm", "run", "start"]

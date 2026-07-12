@@ -35,14 +35,14 @@ type SelfUpgradeStore = {
   backlog: SelfUpgradeBacklogItem[]
 }
 
-const storePath = path.join(os.homedir(), '.ultron-self-upgrade.json')
+const storePath = path.join(os.homedir(), '.astra-self-upgrade.json')
 
 export const UPGRADE_PACKS: UpgradePack[] = [
   {
     id: 'router-intelligence',
     label: 'Router Intelligence Pack',
     description: 'Improve Chat/Agent and intelligence-profile decisions, router tests, and decision explanations.',
-    task: 'Improve Ultron router intelligence. Review src/lib/promptRouter.ts, server/promptRouter.ts, scripts/router-eval.ts, and the route decision UI. Add one focused improvement with tests or validation, using preview_write for any file changes.',
+    task: 'Improve Astra router intelligence. Review src/lib/promptRouter.ts, server/promptRouter.ts, scripts/router-eval.ts, and the route decision UI. Add one focused improvement with tests or validation, using preview_write for any file changes.',
     risk: 'medium',
     impact: 'Higher route accuracy and more trustworthy automatic mode selection.',
     filesAffected: ['src/lib/promptRouter.ts', 'server/promptRouter.ts', 'scripts/router-eval.ts', 'src/App.tsx'],
@@ -52,7 +52,7 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     id: 'coding-mission-control',
     label: 'Coding Mission Control Pack',
     description: 'Improve project generation, toolchain readiness, build/repair loops, visual previews, and end-to-end coding orchestration.',
-    task: 'Improve Ultron as an end-to-end coding AI. Review server/projectBuilder.ts, server/projectMemory.ts, server/tools/coding.ts, server/tools/preview.ts, server/tools/playwright.ts, and src/components/ProjectBuilderPanel.tsx. Add one focused improvement that makes project creation, validation, repair, preview, or toolchain setup stronger. Use preview_write for any file changes and validate with npm run build.',
+    task: 'Improve Astra as an end-to-end coding AI. Review server/projectBuilder.ts, server/projectMemory.ts, server/tools/coding.ts, server/tools/preview.ts, server/tools/playwright.ts, and src/components/ProjectBuilderPanel.tsx. Add one focused improvement that makes project creation, validation, repair, preview, or toolchain setup stronger. Use preview_write for any file changes and validate with npm run build.',
     risk: 'medium',
     impact: 'More reliable start-to-finish software creation with clearer project status and stronger build loops.',
     filesAffected: ['server/projectBuilder.ts', 'server/projectMemory.ts', 'server/tools/coding.ts', 'server/tools/preview.ts', 'server/tools/playwright.ts', 'src/components/ProjectBuilderPanel.tsx'],
@@ -62,7 +62,7 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     id: 'connector-pack',
     label: 'Connector Pack',
     description: 'Improve connector setup, approvals, auditability, and native action reliability.',
-    task: 'Improve Ultron connector workflows. Review server/connectors.ts, server/connectorSetup.ts, src/components/ConnectorsPanel.tsx, and connector-related tools. Add one focused reliability or safety improvement using preview_write.',
+    task: 'Improve Astra connector workflows. Review server/connectors.ts, server/connectorSetup.ts, src/components/ConnectorsPanel.tsx, and connector-related tools. Add one focused reliability or safety improvement using preview_write.',
     risk: 'high',
     impact: 'Safer and more useful external-account automation.',
     filesAffected: ['server/connectors.ts', 'server/connectorSetup.ts', 'src/components/ConnectorsPanel.tsx'],
@@ -72,7 +72,7 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     id: 'performance-pack',
     label: 'Performance Pack',
     description: 'Reduce local-model latency and unnecessary tool/context overhead.',
-    task: 'Improve Ultron performance. Review server/index.ts, server/agent.ts, and src/lib/telemetry.ts. Add one focused latency or diagnostics improvement using preview_write and validate it.',
+    task: 'Improve Astra performance. Review server/index.ts, server/agent.ts, and src/lib/telemetry.ts. Add one focused latency or diagnostics improvement using preview_write and validate it.',
     risk: 'medium',
     impact: 'Faster first-token time and clearer latency diagnosis.',
     filesAffected: ['server/index.ts', 'server/agent.ts', 'src/lib/telemetry.ts', 'src/components/HealthPanel.tsx'],
@@ -82,7 +82,7 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     id: 'ui-polish-pack',
     label: 'UI Polish Pack',
     description: 'Improve the chat workspace, loading states, accessibility, and command surfaces.',
-    task: 'Improve Ultron UI polish. Review src/App.tsx, src/App.css, and src/components. Add one focused accessibility, layout, or command-center improvement using preview_write.',
+    task: 'Improve Astra UI polish. Review src/App.tsx, src/App.css, and src/components. Add one focused accessibility, layout, or command-center improvement using preview_write.',
     risk: 'medium',
     impact: 'More professional and controllable workspace experience.',
     filesAffected: ['src/App.tsx', 'src/App.css', 'src/components'],
@@ -92,7 +92,7 @@ export const UPGRADE_PACKS: UpgradePack[] = [
     id: 'memory-pack',
     label: 'Memory Pack',
     description: 'Improve memory quality, promotion, conflict handling, and review workflows.',
-    task: 'Improve Ultron Memory 2.0. Review server/tools/longmem.ts, server/index.ts memory APIs, and src/components/MemoryPanel.tsx. Add one focused memory quality improvement using preview_write.',
+    task: 'Improve Astra Memory 2.0. Review server/tools/longmem.ts, server/index.ts memory APIs, and src/components/MemoryPanel.tsx. Add one focused memory quality improvement using preview_write.',
     risk: 'medium',
     impact: 'Cleaner personalization and less stale context pollution.',
     filesAffected: ['server/tools/longmem.ts', 'server/index.ts', 'src/components/MemoryPanel.tsx'],

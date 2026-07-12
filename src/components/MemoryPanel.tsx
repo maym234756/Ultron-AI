@@ -72,7 +72,7 @@ export function MemoryPanel({ apiBase, onClose }: Props) {
 
   async function refresh() {
     setLoading(true)
-    const response = await fetch(`${apiBase}/api/memories`).catch(() => null)
+    const response = await fetch(`${apiBase}/api/memories`, { credentials: 'include' }).catch(() => null)
     if (response?.ok) {
       const data = await response.json() as MemoryResponse
       setRaw(data.memories ?? '')
@@ -84,13 +84,14 @@ export function MemoryPanel({ apiBase, onClose }: Props) {
   useEffect(() => { void refresh() }, [apiBase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function deleteEntry(id: string) {
-    await fetch(`${apiBase}/api/memories/${id}`, { method: 'DELETE' }).catch(() => {})
+    await fetch(`${apiBase}/api/memories/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {})
     await refresh()
   }
 
   async function promoteEntry(id: string, scope: 'user' | 'project') {
     await fetch(`${apiBase}/api/memories/${id}/promote`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope }),
     }).catch(() => {})
@@ -103,6 +104,7 @@ export function MemoryPanel({ apiBase, onClose }: Props) {
     setConflicts([])
     const response = await fetch(`${apiBase}/api/memories`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         content: newContent.trim(),
@@ -159,7 +161,7 @@ export function MemoryPanel({ apiBase, onClose }: Props) {
             <textarea
               value={newContent}
               onChange={event => setNewContent(event.target.value)}
-              placeholder="What should Ultron remember?"
+              placeholder="What should Astra remember?"
               className="settings-textarea"
               rows={3}
             />

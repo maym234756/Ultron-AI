@@ -73,6 +73,7 @@ function CodeBlock({ node: _node, children, ...rest }: PreProps) {
     try {
       const res = await fetch(`${API_BASE}/api/run-code`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, lang }),
       })
