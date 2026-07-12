@@ -46,7 +46,9 @@ ENV OLLAMA_MODEL=llama3.2
 ENV APP_ORIGIN=
 # SQLite by default; use postgresql://... for a hosted DB
 ENV DATABASE_URL=file:./data/ultron.db
-# Set a long random secret for the credential vault
+# Set a long random secret for the credential vault (strongly recommended — the
+# server will log a warning and fall back to a machine-derived key if unset,
+# but cloud deployments should always set this explicitly).
 ENV CREDENTIAL_ENCRYPTION_KEY=
 
 # Persist SQLite data across container restarts
