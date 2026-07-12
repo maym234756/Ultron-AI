@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2, Loader, RefreshCw, ShieldCheck, ShieldOff, X } from 'lucide-react'
+import { Building2, Loader, MailCheck, RefreshCw, ShieldCheck, ShieldOff, X } from 'lucide-react'
 import type { AuthUser } from './AuthPanel'
 
 type ToastType = 'success' | 'error' | 'info'
@@ -60,6 +60,8 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [busyUserId, setBusyUserId] = useState('')
+  const [testEmail, setTestEmail] = useState(currentUser.email)
+  const [testBusy, setTestBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function refresh() {
@@ -108,6 +110,31 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
       setError(err instanceof Error ? err.message : 'Could not update platform admin access')
     } finally {
       setBusyUserId('')
+    }
+  }
+
+  async function sendAuthDeliveryTest(event: React.FormEvent) {
+    event.preventDefault()
+    if (testBusy) return
+    setTestBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`${apiBase}/api/admin/auth-delivery/test`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: testEmail }),
+      })
+      const data = await response.json() as { delivery?: { mode?: string; email?: string; messageId?: string }; error?: string }
+      if (!response.ok) throw new Error(data.error ?? 'Could not send test email')
+      const detail = data.delivery?.mode === 'email'
+        ? `Test email sent to ${data.delivery.email}${data.delivery.messageId ? ` (${data.delivery.messageId})` : ''}.`
+        : `Debug delivery returned for ${data.delivery?.email ?? testEmail}. SMTP is not active yet.`
+      onNotice(detail, data.delivery?.mode === 'email' ? 'success' : 'info')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send test email')
+    } finally {
+      setTestBusy(false)
     }
   }
 
@@ -161,6 +188,24 @@ export function AdminIdentityPanel({ apiBase, currentUser, onClose, refreshAuth,
                   <strong>{overview.totals.pendingInviteCount}</strong>
                   <span>Pending invites</span>
                 </article>
+              </section>
+
+              <section className="project-builder-projects org-card-stack">
+                <div className="project-builder-section-head">
+                  <span className="settings-section-title">Auth Email Delivery</span>
+                  <span className="panel-hint">Verification and password reset test</span>
+                </div>
+                <form className="org-inline-form" onSubmit={event => void sendAuthDeliveryTest(event)}>
+                  <label>
+                    <span>Test recipient</span>
+                    <input type="email" value={testEmail} onChange={event => setTestEmail(event.target.value)} placeholder="you@example.com" required />
+                  </label>
+                  <button type="submit" className="sidebar-action-btn" disabled={testBusy}>
+                    {testBusy ? <Loader size={13} className="spin" /> : <MailCheck size={13} />}
+                    Send test email
+                  </button>
+                </form>
+                <p className="panel-hint">This uses the same delivery path as account verification and password reset codes.</p>
               </section>
 
               <section className="project-builder-projects org-card-stack">

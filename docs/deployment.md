@@ -57,7 +57,21 @@ Deploy steps:
 5. Deploy the Blueprint.
 6. Open the backend URL and verify `/api/backend/status`.
 
-The Blueprint starts auth email delivery in debug mode so the first deployment can be tested without SMTP. Before a public beta, change `AUTH_CHALLENGE_DELIVERY` to `smtp` and add the SMTP variables from [.env.production.example](../.env.production.example).
+The Blueprint runs auth email delivery in SMTP mode for public clients. Add a real mail provider before inviting users; otherwise signup verification and password reset code delivery will fail closed instead of exposing debug codes in the browser.
+
+Required Render environment values for auth email:
+
+```env
+AUTH_CHALLENGE_DELIVERY="smtp"
+AUTH_SMTP_HOST="smtp.your-provider.com"
+AUTH_SMTP_PORT="587"
+AUTH_SMTP_SECURE="0"
+AUTH_SMTP_USER="your-smtp-user"
+AUTH_SMTP_PASS="your-smtp-password"
+AUTH_MAIL_FROM="Lumivex AI <no-reply@lumivexai.com>"
+```
+
+After the first platform admin account exists, test delivery with `POST /api/admin/auth-delivery/test` while signed in as a platform admin.
 
 Render hosts the API and Postgres. It does not automatically host Ollama for this service. Chat and benchmark routes need either `OLLAMA_BASE_URL` to point at a reachable Ollama runtime or hosted-provider variables (`MODEL_PROVIDER`, `MODEL_API_BASE_URL`, `MODEL_API_KEY`, `MODEL_NAME`). Auth, database, admin, backend status, and non-model routes can still be validated first.
 

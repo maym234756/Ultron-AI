@@ -290,6 +290,16 @@ export async function deliverAuthChallenge(input: AuthChallengeEmail): Promise<A
   }
 }
 
+export async function deliverAuthChallengeTest(email: string): Promise<AuthChallengeDelivery> {
+  return deliverAuthChallenge({
+    email,
+    code: 'TEST00',
+    expiresAt: new Date(Date.now() + 10 * 60_000),
+    type: 'password_reset',
+    displayName: 'Lumivex AI operator',
+  })
+}
+
 export async function deliverOrganizationInvite(input: Omit<OrganizationInviteEmail, 'acceptUrl'>): Promise<OrganizationInviteDelivery> {
   const messageInput: OrganizationInviteEmail = {
     ...input,

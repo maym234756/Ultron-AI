@@ -13,7 +13,7 @@ import { sendEvent, pendingAnswers } from './shared.js'
 import { backendRuntimeMiddleware, backendRuntimeSnapshot, collectBackendRoutes, recordRuntimeEvent } from './backendStatus.js'
 import { authRateLimit } from './authRateLimit.js'
 import { AUTH_COOKIE_DOMAIN, AUTH_COOKIE_SAME_SITE, AUTH_COOKIE_SECURE, AUTH_SESSION_COOKIE, clearSessionCookie, readSessionCookie, setSessionCookie } from './authCookies.js'
-import { authDeliveryStatus } from './authMailer.js'
+import { authDeliveryStatus, deliverAuthChallengeTest } from './authMailer.js'
 import { runAgent, runAgentHeadless } from './agent.js'
 import type { AgentOptions } from './agent.js'
 import { startScheduler } from './tools/scheduler.js'
@@ -963,6 +963,24 @@ const resetRateLimit = authRateLimit({
 
 app.get('/api/auth/status', async (_request, response) => {
   response.json(await identityStatus())
+})
+
+app.post('/api/admin/auth-delivery/test', async (request, response) => {
+  const user = await requirePlatformAdmin(request, response)
+  if (!user) return
+
+  const email = String((request.body as { email?: unknown } | undefined)?.email ?? '').trim().toLowerCase()
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    response.status(400).json({ error: 'A valid test email address is required.' })
+    return
+  }
+
+  try {
+    const delivery = await deliverAuthChallengeTest(email)
+    response.json({ ok: true, delivery })
+  } catch (err) {
+    response.status(400).json({ error: err instanceof Error ? err.message : 'Could not send auth delivery test' })
+  }
 })
 
 app.get('/api/auth/me', async (request, response) => {

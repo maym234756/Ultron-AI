@@ -103,14 +103,16 @@ $env:MODEL_API_KEY = "replace-me"
 $env:MODEL_NAME = "gpt-4o-mini"
 ```
 
-To send real auth emails instead of UI-visible debug codes, also configure SMTP:
+To send real auth emails instead of UI-visible debug codes, configure SMTP. Local development can use Mailpit; public client deployments should use a real provider such as Postmark, SendGrid, Resend SMTP, Mailgun, Brevo, or an equivalent transactional email service:
 
 ```powershell
 $env:AUTH_CHALLENGE_DELIVERY = "smtp"
-$env:AUTH_SMTP_HOST = "127.0.0.1"
-$env:AUTH_SMTP_PORT = "1025"
+$env:AUTH_SMTP_HOST = "smtp.your-provider.com"
+$env:AUTH_SMTP_PORT = "587"
 $env:AUTH_SMTP_SECURE = "0"
-$env:AUTH_MAIL_FROM = "Lumivex AI <no-reply@lumivex.local>"
+$env:AUTH_SMTP_USER = "your-smtp-user"
+$env:AUTH_SMTP_PASS = "your-smtp-password"
+$env:AUTH_MAIL_FROM = "Lumivex AI <no-reply@lumivexai.com>"
 ```
 
 ## Self-Hosted Postgres
@@ -148,7 +150,7 @@ Lumivex AI includes a Prisma-backed identity vault. Local desktop installs defau
 
 - Passwords for the Lumivex AI login are hashed with Node `scrypt`.
 - Credential secrets and notes are encrypted with AES-256-GCM using `CREDENTIAL_ENCRYPTION_KEY` when configured, or a machine-specific fallback for local-only installs.
-- Auth verification and reset codes can be delivered by SMTP when `AUTH_CHALLENGE_DELIVERY` resolves to email mode; otherwise Lumivex AI stays in debug delivery mode for local testing.
+- Auth verification and reset codes can be delivered by SMTP when `AUTH_CHALLENGE_DELIVERY` resolves to email mode; otherwise Lumivex AI stays in debug delivery mode for local testing. Platform admins can send a delivery test from the **Platform Identity Admin** panel after SMTP is configured.
 - Local SQLite runtime data is ignored by Git.
 - Use `npm run db:studio` for the local SQLite store or `npm run db:studio:postgres` for a Postgres deployment; Prisma Studio is an admin/debug surface, not the end-user login UI.
 

@@ -2283,6 +2283,29 @@ html.dark .auth-terms-close {
   align-items: end;
 }
 
+.org-inline-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.org-inline-form label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.org-inline-form input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  box-sizing: border-box;
+}
+
 .org-invite-form {
   grid-template-columns: minmax(0, 1.3fr) minmax(150px, 0.7fr) auto;
 }

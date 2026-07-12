@@ -26,7 +26,19 @@ services:
       - key: CREDENTIAL_ENCRYPTION_KEY
         generateValue: true
       - key: AUTH_CHALLENGE_DELIVERY
-        value: debug
+        value: smtp
+      - key: AUTH_SMTP_HOST
+        sync: false
+      - key: AUTH_SMTP_PORT
+        value: "587"
+      - key: AUTH_SMTP_SECURE
+        value: "0"
+      - key: AUTH_SMTP_USER
+        sync: false
+      - key: AUTH_SMTP_PASS
+        sync: false
+      - key: AUTH_MAIL_FROM
+        value: Lumivex AI <no-reply@lumivexai.com>
       - key: MODEL_PROVIDER
         value: ollama
       - key: MODEL_NAME
