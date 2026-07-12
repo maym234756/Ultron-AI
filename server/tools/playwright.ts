@@ -45,6 +45,7 @@ type TargetArgs = {
   role?: string
   name?: string
   test_id?: string
+  nth?: string
 }
 
 type ResolvedTarget = {
@@ -96,13 +97,24 @@ async function editableValue(target: ResolvedTarget): Promise<string> {
 }
 
 function resolveTarget(page: Page, args: TargetArgs): ResolvedTarget | null {
-  if (args.selector) return { locator: page.locator(args.selector).first(), description: `selector "${args.selector}"` }
-  if (args.test_id) return { locator: page.getByTestId(args.test_id).first(), description: `test id "${args.test_id}"` }
-  if (args.role && args.name) return { locator: page.getByRole(args.role as any, { name: args.name, exact: false }).first(), description: `role "${args.role}" named "${args.name}"` }
-  if (args.label) return { locator: page.getByLabel(args.label, { exact: false }).first(), description: `label "${args.label}"` }
-  if (args.placeholder) return { locator: page.getByPlaceholder(args.placeholder, { exact: false }).first(), description: `placeholder "${args.placeholder}"` }
-  if (args.text) return { locator: page.getByText(args.text, { exact: false }).first(), description: `text "${args.text}"` }
+  const nthIdx = parseInt(args.nth ?? '0', 10) || 0
+  const pick = (locator: import('playwright').Locator) => nthIdx > 0 ? locator.nth(nthIdx) : locator.first()
+  if (args.selector) return { locator: pick(page.locator(args.selector)), description: `selector "${args.selector}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
+  if (args.test_id) return { locator: pick(page.getByTestId(args.test_id)), description: `test id "${args.test_id}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
+  if (args.role && args.name) return { locator: pick(page.getByRole(args.role as any, { name: args.name, exact: false })), description: `role "${args.role}" named "${args.name}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
+  if (args.label) return { locator: pick(page.getByLabel(args.label, { exact: false })), description: `label "${args.label}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
+  if (args.placeholder) return { locator: pick(page.getByPlaceholder(args.placeholder, { exact: false })), description: `placeholder "${args.placeholder}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
+  if (args.text) return { locator: pick(page.getByText(args.text, { exact: false })), description: `text "${args.text}"${nthIdx > 0 ? ` (nth: ${nthIdx})` : ''}` }
   return null
+}
+
+async function screenshotOnFailure(page: Page, actionName: string): Promise<string> {
+  try {
+    const ts = Date.now()
+    const dest = join(homedir(), 'Desktop', `ultron-failure-${actionName}-${ts}.png`)
+    await page.screenshot({ path: dest, fullPage: false }).catch(() => {})
+    return `\nFailure screenshot saved: ${dest}`
+  } catch { return '' }
 }
 
 async function visibleTargetHints(page: Page): Promise<string> {
@@ -142,6 +154,7 @@ async function visibleTargetHints(page: Page): Promise<string> {
 
 async function browserTargetError(page: Page, action: string, target: ResolvedTarget | null, err: unknown): Promise<string> {
   const message = err instanceof Error ? err.message : String(err)
+  const screenshot = await screenshotOnFailure(page, action.replace(/\s+/g, '_'))
   return [
     `Error: Could not ${action}${target ? ` ${target.description}` : ''}.`,
     `Reason: ${message}`,
@@ -149,7 +162,8 @@ async function browserTargetError(page: Page, action: string, target: ResolvedTa
     `Title: ${await page.title().catch(() => '(unknown)')}`,
     'Visible targets:',
     await visibleTargetHints(page),
-  ].join('\n')
+    screenshot,
+  ].filter(Boolean).join('\n')
 }
 
 // ── browser_go ────────────────────────────────────────────────────────────────
@@ -164,6 +178,12 @@ export const browserGoDefinition: ToolDefinition = {
       properties: {
         url: { type: 'string', description: 'Full URL to navigate to.' },
         wait_for: { type: 'string', description: 'Optional CSS selector to wait for after navigation.' },
+        wait_until: {
+          type: 'string',
+          description: 'When to consider navigation complete: domcontentloaded (default), load, networkidle, or commit.',
+          enum: ['domcontentloaded', 'load', 'networkidle', 'commit'],
+        },
+        timeout: { type: 'string', description: 'Navigation timeout in seconds (default 30).' },
       },
       required: ['url'],
     },
@@ -173,9 +193,13 @@ export const browserGoDefinition: ToolDefinition = {
 export const browserGo: ToolHandler = async (args) => {
   const url = (args.url ?? '').trim()
   if (!url) return 'Error: url is required'
+  const waitUntil = (['domcontentloaded', 'load', 'networkidle', 'commit'].includes(args.wait_until ?? ''))
+    ? (args.wait_until as 'domcontentloaded' | 'load' | 'networkidle' | 'commit')
+    : 'domcontentloaded'
+  const timeout = (parseInt(args.timeout ?? '30', 10) || 30) * 1000
   try {
     const page = await getPage()
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.goto(url, { waitUntil, timeout })
     if (args.wait_for) await page.waitForSelector(args.wait_for, { timeout: 10_000 }).catch(() => {})
     return `Navigated to: ${page.url()}\nTitle: ${await page.title()}`
   } catch (err) {
@@ -200,6 +224,7 @@ export const browserClickDefinition: ToolDefinition = {
         role: { type: 'string', description: 'ARIA role, such as button, link, checkbox, textbox, tab, menuitem.' },
         name: { type: 'string', description: 'Accessible name to use with role.' },
         test_id: { type: 'string', description: 'data-testid value.' },
+        nth: { type: 'string', description: 'Zero-based index when multiple matches exist (default 0 = first match).' },
       },
     },
   },
@@ -235,6 +260,7 @@ export const browserFillDefinition: ToolDefinition = {
         name: { type: 'string', description: 'Accessible name to use with role.' },
         test_id: { type: 'string', description: 'data-testid value.' },
         value: { type: 'string', description: 'Text to type.' },
+        nth: { type: 'string', description: 'Zero-based index when multiple matches exist (default 0 = first match).' },
       },
       required: ['value'],
     },

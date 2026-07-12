@@ -73,6 +73,9 @@ import {
   gitCheckout, gitCheckoutDefinition,
   gitBranch, gitBranchDefinition,
   gitClone, gitCloneDefinition,
+  gitAdd, gitAddDefinition,
+  gitStash, gitStashDefinition,
+  gitMerge, gitMergeDefinition,
 } from './git.js'
 import { httpRequest, httpRequestDefinition } from './http.js'
 import { dbQuery, dbQueryDefinition, dbExecute, dbExecuteDefinition } from './database.js'
@@ -88,6 +91,7 @@ import {
   ragSearch, ragSearchDefinition,
   ragStatus, ragStatusDefinition,
   ragClear, ragClearDefinition,
+  ragRepair, ragRepairDefinition,
 } from './rag.js'
 import {
   scheduleTask, scheduleTaskDefinition,
@@ -242,6 +246,9 @@ export const toolDefinitions: ToolDefinition[] = [
   gitCheckoutDefinition,
   gitBranchDefinition,
   gitCloneDefinition,
+  gitAddDefinition,
+  gitStashDefinition,
+  gitMergeDefinition,
   httpRequestDefinition,
   dbQueryDefinition,
   dbExecuteDefinition,
@@ -256,6 +263,7 @@ export const toolDefinitions: ToolDefinition[] = [
   ragSearchDefinition,
   ragStatusDefinition,
   ragClearDefinition,
+  ragRepairDefinition,
   // Scheduler
   scheduleTaskDefinition,
   listSchedulesDefinition,
@@ -418,6 +426,9 @@ const handlers: Record<string, ToolHandler> = {
   git_checkout: gitCheckout,
   git_branch: gitBranch,
   git_clone: gitClone,
+  git_add: gitAdd,
+  git_stash: gitStash,
+  git_merge: gitMerge,
   http_request: httpRequest,
   db_query: dbQuery,
   db_execute: dbExecute,
@@ -432,6 +443,7 @@ const handlers: Record<string, ToolHandler> = {
   rag_search: ragSearch,
   rag_status: ragStatus,
   rag_clear: ragClear,
+  rag_repair: ragRepair,
   // Scheduler
   schedule_task: scheduleTask,
   list_schedules: listSchedules,
