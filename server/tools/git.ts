@@ -1,5 +1,9 @@
 import type { ToolDefinition, ToolHandler } from './types.js'
 import { runTerminal } from './terminal.js'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execAsync = promisify(exec)
 
 // ── git_status ────────────────────────────────────────────────────────────────
 
@@ -74,12 +78,13 @@ export const gitCommitDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'git_commit',
-    description: 'Stage all changes and create a commit with the given message.',
+    description: 'Stage all changes and create a commit with the given message. Use dry_run:"true" to preview the staged diffstat without committing.',
     parameters: {
       type: 'object',
       properties: {
         message: { type: 'string', description: 'Commit message.' },
         add_all: { type: 'string', description: 'Set to "false" to skip git add -A (default stages everything).' },
+        dry_run: { type: 'string', description: 'Set to "true" to preview staged changes (diffstat) without committing.' },
         cwd: { type: 'string', description: 'Repository directory.' },
       },
       required: ['message'],
@@ -87,10 +92,16 @@ export const gitCommitDefinition: ToolDefinition = {
   },
 }
 
-export const gitCommit: ToolHandler = (args) => {
+export const gitCommit: ToolHandler = async (args) => {
   const msg = (args.message ?? '').replace(/"/g, "'")
+  const cwd = args.cwd ?? process.cwd()
+  if (args.dry_run === 'true') {
+    // Stage first (unless skipped), then show diffstat without committing
+    if (args.add_all !== 'false') await runTerminal({ command: 'git add -A', cwd })
+    return runTerminal({ command: 'git diff --cached --stat', cwd })
+  }
   const addStep = args.add_all === 'false' ? '' : 'git add -A ; '
-  return runTerminal({ command: `${addStep}git commit -m "${msg}"`, cwd: args.cwd })
+  return runTerminal({ command: `${addStep}git commit -m "${msg}"`, cwd })
 }
 
 // ── git_push ──────────────────────────────────────────────────────────────────
@@ -99,24 +110,52 @@ export const gitPushDefinition: ToolDefinition = {
   type: 'function',
   function: {
     name: 'git_push',
-    description: 'Push commits to a remote repository.',
+    description: 'Push commits to a remote repository. Checks remote branch divergence before pushing and warns if local branch is behind.',
     parameters: {
       type: 'object',
       properties: {
         remote: { type: 'string', description: 'Remote name (default: origin).' },
         branch: { type: 'string', description: 'Branch to push (default: current branch).' },
         force: { type: 'string', description: 'Set to "true" for force push (use carefully).' },
+        skip_safety: { type: 'string', description: 'Set to "true" to skip behind-remote safety check.' },
         cwd: { type: 'string', description: 'Repository directory.' },
       },
     },
   },
 }
 
-export const gitPush: ToolHandler = (args) => {
+export const gitPush: ToolHandler = async (args) => {
   const remote = args.remote?.trim() || 'origin'
-  const branch = args.branch?.trim() || ''
   const force = args.force === 'true' ? '--force-with-lease ' : ''
-  return runTerminal({ command: `git push ${force}${remote} ${branch}`.trim(), cwd: args.cwd })
+  const cwd = args.cwd ?? process.cwd()
+
+  // Resolve current branch if not provided
+  let branch = args.branch?.trim() || ''
+  if (!branch) {
+    try {
+      const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd })
+      branch = stdout.trim()
+    } catch { /* ignore — git push will use default tracking */ }
+  }
+
+  // Safety check: warn if local branch is behind its upstream (unless forced or skipped)
+  if (!force && args.skip_safety !== 'true' && branch) {
+    try {
+      // Fetch remote refs silently so we have up-to-date tracking info
+      await execAsync(`git fetch ${remote} ${branch} --quiet`, { cwd, timeout: 15_000 }).catch(() => {})
+      const { stdout: revList } = await execAsync(
+        `git rev-list --left-right --count ${remote}/${branch}...HEAD`,
+        { cwd }
+      ).catch(() => ({ stdout: '' }))
+      const parts = revList.trim().split(/\s+/)
+      const behind = parseInt(parts[0] ?? '0', 10)
+      if (behind > 0) {
+        return `Safety check: local branch "${branch}" is ${behind} commit(s) behind "${remote}/${branch}".\nPull and merge first, or set force:"true" / skip_safety:"true" to override.`
+      }
+    } catch { /* safety check failure is non-fatal */ }
+  }
+
+  return runTerminal({ command: `git push ${force}${remote} ${branch}`.trim(), cwd })
 }
 
 // ── git_checkout ──────────────────────────────────────────────────────────────
@@ -187,4 +226,207 @@ export const gitClone: ToolHandler = (args) => {
   const url = (args.url ?? '').trim()
   const dest = args.dest?.trim() ? ` "${args.dest.trim()}"` : ''
   return runTerminal({ command: `git clone "${url}"${dest}`, cwd: args.cwd })
+}
+
+// ── git_add ───────────────────────────────────────────────────────────────────
+
+export const gitAddDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_add',
+    description: 'Selectively stage files or patterns for the next commit. Use "." or omit files to stage everything.',
+    parameters: {
+      type: 'object',
+      properties: {
+        files: { type: 'string', description: 'Space-separated file paths or glob patterns to stage. Defaults to "." (everything).' },
+        patch: { type: 'string', description: 'Set to "true" for interactive hunk staging (-p). Not available in non-interactive mode; use selectively staged files instead.' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitAdd: ToolHandler = (args) => {
+  const files = (args.files ?? '.').trim() || '.'
+  // Reject unsafe shell metacharacters to prevent command injection
+  if (/[;&|`$()<>{}\\\n\r\t]/.test(files)) return Promise.resolve('Error: files contains unsafe characters')
+  return runTerminal({ command: `git add -- ${files}`, cwd: args.cwd })
+}
+
+// ── git_stash ─────────────────────────────────────────────────────────────────
+
+export const gitStashDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_stash',
+    description: 'Stash, pop, list, or drop git stash entries. Saves uncommitted changes and lets you restore them later.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          description: 'Action: push (save, default), pop (restore latest), apply (restore without dropping), list, drop, show.',
+          enum: ['push', 'pop', 'apply', 'list', 'drop', 'show'],
+        },
+        message: { type: 'string', description: 'Description for push action.' },
+        index: { type: 'string', description: 'Stash index number for drop/apply/show (default: 0).' },
+        include_untracked: { type: 'string', description: 'Set to "true" to include untracked files when pushing.' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitStash: ToolHandler = async (args) => {
+  const action = (args.action ?? 'push').toLowerCase()
+  const cwd = args.cwd ?? process.cwd()
+  const idx = parseInt(args.index ?? '0', 10) || 0
+
+  if (action === 'push') {
+    const untracked = args.include_untracked === 'true' ? ' --include-untracked' : ''
+    if (args.message) {
+      // Sanitize message: strip shell metacharacters to prevent injection
+      const safeMsg = args.message.replace(/[`$\\"\n\r\t]/g, '').replace(/'/g, "'\\''")
+      return runTerminal({ command: `git stash push -m '${safeMsg}'${untracked}`, cwd })
+    }
+    return runTerminal({ command: `git stash${untracked}`, cwd })
+  }
+  if (action === 'pop') return runTerminal({ command: `git stash pop stash@{${idx}}`, cwd })
+  if (action === 'apply') return runTerminal({ command: `git stash apply stash@{${idx}}`, cwd })
+  if (action === 'list') return runTerminal({ command: 'git stash list', cwd })
+  if (action === 'drop') return runTerminal({ command: `git stash drop stash@{${idx}}`, cwd })
+  if (action === 'show') return runTerminal({ command: `git stash show -p stash@{${idx}}`, cwd })
+  return `Error: unknown action "${action}". Use push, pop, apply, list, drop, or show.`
+}
+
+// ── git_merge ─────────────────────────────────────────────────────────────────
+
+export const gitMergeDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_merge',
+    description: 'Merge a branch into the current branch. Returns conflict diagnostics if conflicts occur.',
+    parameters: {
+      type: 'object',
+      properties: {
+        branch: { type: 'string', description: 'Branch name to merge.' },
+        no_ff: { type: 'string', description: 'Set to "true" to force a merge commit even for fast-forward merges.' },
+        squash: { type: 'string', description: 'Set to "true" to squash all commits into one (staged only, requires manual commit).' },
+        abort: { type: 'string', description: 'Set to "true" to abort an in-progress conflicted merge.' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitMerge: ToolHandler = async (args) => {
+  const cwd = args.cwd ?? process.cwd()
+  if (args.abort === 'true') return runTerminal({ command: 'git merge --abort', cwd })
+  const b = (args.branch ?? '').trim()
+  if (!b) return 'Error: branch is required (or set abort:"true" to cancel)'
+  const noFf = args.no_ff === 'true' ? ' --no-ff' : ''
+  const squash = args.squash === 'true' ? ' --squash' : ''
+  const result = await runTerminal({ command: `git merge${noFf}${squash} "${b}"`, cwd })
+  // If conflicts detected, append a list of conflicting files
+  if (/CONFLICT/.test(result)) {
+    try {
+      const conflicts = await runTerminal({ command: 'git diff --name-only --diff-filter=U', cwd })
+      return `${result}\n\nConflicting files:\n${conflicts}\n\nFix conflicts, then: git add <files> && git commit\nOr: git_merge abort:"true" to cancel.`
+    } catch { /* fall through */ }
+  }
+  return result
+}
+
+// ── git_tag ────────────────────────────────────────────────────────────────────
+
+export const gitTagDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_tag',
+    description: 'Create, list, or delete git tags.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          description: 'Action: list (default), create, or delete.',
+          enum: ['list', 'create', 'delete'],
+        },
+        name: { type: 'string', description: 'Tag name for create/delete actions.' },
+        message: { type: 'string', description: 'Annotation message for annotated tags.' },
+        ref: { type: 'string', description: 'Commit or branch to tag (default: HEAD).' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitTag: ToolHandler = async (args) => {
+  const action = (args.action ?? 'list').toLowerCase()
+  const cwd = args.cwd ?? process.cwd()
+  const quote = (value: string) => value.replace(/[\n\r]+/g, ' ').replace(/["\\$`]/g, '\\$&')
+
+  if (action === 'list') {
+    return runTerminal({ command: 'git tag -l --sort=-version:refname', cwd })
+  }
+
+  const name = (args.name ?? '').trim()
+  if (!name) return 'Error: name is required for create/delete actions'
+
+  if (action === 'create') {
+    const ref = (args.ref ?? 'HEAD').trim() || 'HEAD'
+    if (args.message) {
+      return runTerminal({
+        command: `git tag -a "${quote(name)}" -m "${quote(args.message)}" "${quote(ref)}"`,
+        cwd,
+      })
+    }
+    return runTerminal({ command: `git tag "${quote(name)}" "${quote(ref)}"`, cwd })
+  }
+
+  if (action === 'delete') {
+    return runTerminal({ command: `git tag -d "${quote(name)}"`, cwd })
+  }
+
+  return 'Error: unknown action. Use list, create, or delete.'
+}
+
+// ── git_cherry_pick ────────────────────────────────────────────────────────────
+
+export const gitCherryPickDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_cherry_pick',
+    description: 'Apply a commit from another branch, with conflict diagnostics when needed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        commit: { type: 'string', description: 'Commit SHA or range to cherry-pick.' },
+        no_commit: { type: 'string', description: 'Set to "true" to stage changes without committing.' },
+        abort: { type: 'string', description: 'Set to "true" to abort an in-progress cherry-pick.' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitCherryPick: ToolHandler = async (args) => {
+  const cwd = args.cwd ?? process.cwd()
+  if (args.abort === 'true') return runTerminal({ command: 'git cherry-pick --abort', cwd })
+
+  const commit = (args.commit ?? '').trim()
+  if (!commit) return 'Error: commit is required (or set abort:"true" to cancel)'
+
+  const quote = (value: string) => value.replace(/[\n\r]+/g, ' ').replace(/["\\$`]/g, '\\$&')
+  const noCommit = args.no_commit === 'true' ? ' -n' : ''
+  const result = await runTerminal({ command: `git cherry-pick${noCommit} "${quote(commit)}"`, cwd })
+
+  if (/CONFLICT/.test(result)) {
+    try {
+      const conflicts = await runTerminal({ command: 'git diff --name-only --diff-filter=U', cwd })
+      return `${result}\n\nConflicting files:\n${conflicts}\n\nResolve conflicts then: git add <files> && git commit`
+    } catch { /* fall through */ }
+  }
+
+  return result
 }

@@ -97,19 +97,76 @@ Completed in tenth build increment:
 - Validation passed: npx tsc -p tsconfig.server.json --noEmit
 - Validation passed: npx oxlint server/tools/github.ts server/tools/registry.ts
 
-Immediate next increments:
+Completed in eleventh build increment:
+- Added git_add tool for selective file staging with path/pattern inputs and unsafe-char guard.
+- Added git_stash tool with push/pop/apply/list/drop/show actions and untracked-files support.
+- Added git_merge tool with --no-ff/--squash/abort modes and conflict file diagnostics.
+- Upgraded git_commit with dry_run:"true" flag to preview staged diffstat before committing.
+- Upgraded git_push with remote/branch safety check (warns when local is behind upstream).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/git.ts server/tools/registry.ts
+
+Completed in twelfth build increment:
+- Upgraded http_request with retries (0–3) on 429/5xx, exponential/Retry-After backoff.
+- Added form_body param for application/x-www-form-urlencoded POST support.
+- Added max_response_kb truncation (default 32 KB, max 512 KB).
+- Added secret redaction in error messages (Authorization, X-API-Key values redacted).
+- Added redirect: "follow" and canonical URL in response output.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/http.ts
+
+Completed in thirteenth build increment:
+- Added rag_repair tool for orphan-chunk cleanup with dry_run preview.
+- Added configurable embedding model: RAG_EMBED_MODEL env var and per-call model param on rag_index and rag_search.
+- Upgraded browser_go with wait_until param (domcontentloaded, load, networkidle, commit) and timeout param.
+- Added nth param to browser_click and browser_fill for selecting the nth matching element.
+- Added auto screenshot-on-failure for all browser target errors (saved to Desktop).
+- Updated registered tool count from 153 to 157 (git_add, git_stash, git_merge, rag_repair).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/git.ts server/tools/http.ts server/tools/rag.ts server/tools/playwright.ts server/tools/registry.ts
+
+Completed in fourteenth build increment:
+- Added gh_create_branch tool: creates a new branch from any ref or SHA.
+- Added gh_create_pr tool: creates a pull request (draft support, auto-resolves base branch).
+- Added gh_comment tool: posts a comment to any issue or PR.
+- Added gh_label tool: adds or removes labels on issues/PRs.
+- Added gh_assign tool: adds or removes assignees on issues/PRs.
+- Added gh_close tool: closes or reopens an issue or PR (with close reason support).
+- Added gh_merge_pr tool: merges a PR with merge/squash/rebase method selection.
+- Updated registered tool count from 157 to 168.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/github.ts server/tools/registry.ts
+
+Completed in fifteenth build increment:
+- Added db_schema tool: inspects all tables, columns, types, and indexes in a SQLite database.
+- Added db_transaction tool: runs multiple SQL statements atomically with auto-rollback on failure.
+- Added db_backup tool: creates a timestamped backup copy of a SQLite database file.
+- Added db_query_paged tool: paginated SELECT queries with page/page_size and total row count.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/database.ts server/tools/registry.ts
+
+Completed in sixteenth build increment:
+- Upgraded search_web with real HTML result scraping (DuckDuckGo HTML endpoint).
+- Results now include title, URL, and snippet for each organic result (up to 20).
+- Added limit param for controlling result count.
+- Kept instant-answer/abstract layer for direct answers alongside web results.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/search.ts
+
+
 1. Playwright Browser Automation Core
     - DONE: Add browser_assert for URL/title/text/selector assertions.
     - DONE: Add browser_snapshot for structured accessibility/DOM summaries.
-   - Add retry policy controls: timeout, wait_until, exact matching, nth match.
-   - Add screenshots-on-failure for debugging.
+    - DONE: Add wait_until param to browser_go (load, networkidle, commit, domcontentloaded).
+    - DONE: Add nth param to browser_click and browser_fill.
+    - DONE: Add screenshots-on-failure for debugging.
    - Add smoke test page and automated tool handler tests.
 
 2. Local RAG / Knowledge Base
     - DONE: Add chunk deduplication, file hashing, and incremental re-indexing.
     - DONE: Add source citations with file path, chunk index, and score.
-   - Add index health repair and orphan cleanup.
-   - Add configurable embedding model/provider.
+    - DONE: Add index health repair and orphan cleanup (rag_repair).
+    - DONE: Add configurable embedding model/provider (RAG_EMBED_MODEL env + model param).
    - Add tests for indexing, search ranking, clear, and URL indexing.
 
 3. Advanced Browser Automation
@@ -155,8 +212,9 @@ Immediate next increments:
 
 9. GitHub Integration
      - DONE: Add token health check and permission reporting.
-   - Add branch/PR creation workflow.
-   - Add issue/PR comments, labels, assignees, and milestones.
+    - DONE: Add branch/PR creation workflow.
+    - DONE: Add issue/PR comments, labels, assignees.
+    - DONE: Add close/reopen and PR merge workflow.
      - DONE: Add rate-limit diagnostics and pagination.
 
 10. Browser Discovery and Web Fetch
@@ -184,10 +242,10 @@ Immediate next increments:
     - Add validation for cron expressions.
 
 14. Git Toolkit
-    - Add dry-run commit summary and diffstat.
-    - Add selective file staging.
-    - Add remote/branch safety checks before push.
-    - Add merge/rebase conflict diagnostics.
+    - DONE: Add dry-run commit summary and diffstat.
+    - DONE: Add selective file staging (git_add).
+    - DONE: Add remote/branch safety checks before push.
+    - DONE: Add merge/rebase conflict diagnostics (git_merge, git_stash).
 
 15. Long-Term Semantic Memory
     - Add embedding-backed recall shared with RAG where possible.
@@ -244,16 +302,18 @@ Immediate next increments:
     - Add progress reporting.
 
 24. HTTP Client
-    - Add retries, redirects, timeout, and response size limits.
-    - Add auth helpers and secret redaction.
-    - Add JSON/form helpers.
-    - Add curl import/export.
+    - DONE: Add retries on 429/5xx with Retry-After support (max 3 retries).
+    - DONE: Add redirect follow and canonical URL in response.
+    - DONE: Add response size limits (max_response_kb, default 32 KB).
+    - DONE: Add form_body helper (application/x-www-form-urlencoded).
+    - DONE: Add secret redaction in error messages.
+   - Add curl import/export.
 
 25. SQLite Database Tools
-    - Add schema inspection and query explain.
-    - Add transaction support.
-    - Add backup before destructive execution.
-    - Add result pagination.
+    - DONE: Add schema inspection and query explain.
+    - DONE: Add transaction support.
+    - DONE: Add backup before destructive execution.
+    - DONE: Add result pagination.
 
 26. Conversation Memory
     - Add namespaces and metadata.
@@ -269,10 +329,175 @@ Immediate next increments:
     - Add non-interactive safety guardrails.
 
 28. Web Search
+    - DONE: Real organic result scraping with titles, URLs, and snippets.
+    - DONE: Multiple result layers (HTML scrape + instant answer API).
+    - DONE: Configurable result limit.
     - Add multiple providers where available.
-    - Add result URLs, snippets, dates, and source ranking.
     - Add query refinement suggestions.
     - Add timeout/retry diagnostics.
 
 Recommended next file to edit:
 server/tools/playwright.ts, then server/tools/rag.ts, then server/tools/playwright_adv.ts.
+
+Completed in seventeenth build increment:
+- Added timezone display support and max_retries retry-on-failure to schedule_task.
+- Added schedule_enable and schedule_disable tools (enable/disable without deletion).
+- Added run history (last 10 runs) to AgentSchedule and surfaced in listSchedules output.
+- Improved cron validator to return helpful examples on invalid expressions.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/scheduler.ts
+
+Completed in eighteenth build increment:
+- Added timeout_sec and allowed_tools params to agent_run.
+- Added max_parallel param to agent_parallel (cap concurrent sub-agents).
+- Improved agent_parallel to report partial failures clearly (e.g. "3/5 tasks succeeded").
+- Added agent_status diagnostic tool (runner init status, defaults).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/multiagent.ts
+
+Completed in nineteenth build increment:
+- Added timeout_sec param and named session support to python_exec.
+- Added idle-session cleanup (sessions unused for 10+ min auto-close).
+- Added repl_packages tool (list installed Python packages with optional filter).
+- Added DataFrame output detection (labels pandas-style output with 📊).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/python_repl.ts
+
+Completed in twentieth build increment:
+- Added diff_only param to write_file for line-diff preview before writing.
+- Added workspace_tree tool (recursive directory tree, configurable depth).
+- Added encoding param to read_file (utf-8 default, base64 for binary files).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/filesystem.ts
+
+Completed in twenty-first build increment:
+- Added cross-platform support to sys_stats and sys_processes (Linux/macOS branches).
+- Added sys_services tool (Windows service listing with filter/status params).
+- Added sys_ports tool (open listening ports, cross-platform).
+- Added sys_platform tool to sysmon.ts.
+- Added dry_run support to sys_kill.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/sysmon.ts
+
+Completed in twenty-second build increment:
+- Added ffmpeg progress reporting (frame= parsing) to create_slideshow and convert_video.
+- Added probe_media tool (ffprobe JSON metadata for any media file).
+- Added preset param to convert_video (720p, 1080p, 480p, audio-only, compress, gif).
+- Added trim_video tool (ffmpeg -ss/-to clip with Desktop output).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/media.ts
+
+Completed in twenty-third build increment:
+- Added mode param to analyze_image (describe/ocr) with optimized OCR prompt.
+- Added include_confidence param and model name in results.
+- Added region param for crop/region analysis (with sharp detection).
+- Added analyze_screenshot tool (capture then analyze in one call, cross-platform).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/vision.ts
+
+Completed in twenty-fourth build increment:
+- Added timestamps param to transcribe_audio (segment-level [HH:MM.sss] output).
+- Added language detection reporting (prepended to all transcription results).
+- Added whisper_status tool (check installation without transcribing, includes Python/torch info).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/whisper.ts
+
+Completed in twenty-fifth build increment:
+- Added mem_update tool (edit existing memory entry content/tags/scope with re-embedding).
+- Added duplicate detection to mem_save (cosine similarity > 0.92 warning + force override).
+- Added mem_search_tags tool (filter memories by tags without embedding lookup).
+- Added scope param to mem_recall (filter search to user/project/temporary memories).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/longmem.ts
+
+Completed in twenty-sixth build increment:
+- Added dry_run param to desktop_click (previews action without executing).
+- Added key sequence validation to desktop_send_keys (blocks Win key, Ctrl+Esc, Ctrl+Alt+Delete).
+- Added desktop_active_window tool (title, PID, app name, window bounds of foreground window).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/desktop.ts
+
+Completed in twenty-seventh build increment:
+- Created new server/tools/cache.ts with in-memory tool result cache (200-entry LRU, TTL).
+- Added cache_status, cache_get, cache_set, cache_clear tools.
+- Exported tryCache/setCache helpers for use by other tools.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/cache.ts
+
+Completed in twenty-eighth build increment:
+- Added git_tag tool (list/create/delete annotated and lightweight tags).
+- Added git_cherry_pick tool (apply commits with conflict diagnostics and abort support).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/git.ts
+
+Completed in twenty-ninth build increment:
+- Added curl_import tool (parse curl command string into http_request params).
+- Added curl_export tool (convert http_request params to curl command with secret redaction).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/http.ts
+
+Completed in thirtieth build increment:
+- Added validateArgs() and clampInt() helpers to server/tools/types.ts.
+- Provides standardized required-field checking and value validation for all tools.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+
+Completed in thirty-first build increment:
+- Created server/tools/plugins.ts with plugin_list, plugin_enable, plugin_disable, plugin_create, plugin_read tools.
+- Builds on the existing plugins/loader.ts plugin system.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/plugins.ts
+
+Completed in thirty-second build increment:
+- Created server/tools/webhooks.ts with webhook_register, webhook_list, webhook_delete, webhook_toggle tools.
+- Added POST /api/webhooks/:id ingest endpoint to server/index.ts (async agent task trigger).
+- Added GET /api/webhooks listing endpoint.
+- Added GET /api/tool-timing endpoint for tool execution timing stats.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/webhooks.ts
+
+Completed in thirty-third build increment:
+- Created server/tools/platform.ts with isWindows/isMac/isLinux helpers, windowsOnly/requirePlatform guards.
+- Added sys_platform tool (OS, arch, shell, admin status, feature availability matrix).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/platform.ts
+
+Completed in thirty-fourth build increment:
+- Added per-tool execution timing telemetry to executeTool in registry.ts.
+- Tracks call count, total/avg/last duration, and error rate per tool.
+- Exports getToolTimingStats() and getRecentTimingLog() for API and Health Center use.
+- Wired to GET /api/tool-timing endpoint.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/registry.ts
+
+Completed in thirty-fifth build increment (PWA Mobile App):
+- Installed vite-plugin-pwa.
+- Updated vite.config.ts with VitePWA plugin (manifest, workbox, autoUpdate).
+- Added iOS/Android PWA meta tags to index.html (apple-mobile-web-app-*, theme-color, viewport-fit=cover).
+- Created src/components/PWAInstallPrompt.tsx (Android install banner + iOS "Add to Home Screen" instructions).
+- Added PWAInstallPrompt to App.tsx.
+- Generated placeholder icon-192.png and icon-512.png in public/ (replace with real icons).
+- Users can now install Ultron on iPhone/Android by visiting the app URL in their mobile browser.
+- Validation passed: vite build succeeds, generates manifest.webmanifest and sw.js.
+
+Tool count after increments 17-35: 210+ registered tools.
+New tools added in 17-35: schedule_enable, schedule_disable, agent_status, repl_packages, workspace_tree, sys_services, sys_ports, sys_platform, probe_media, trim_video, analyze_screenshot, whisper_status, mem_update, mem_search_tags, desktop_active_window, cache_status, cache_get, cache_set, cache_clear, git_tag, git_cherry_pick, curl_import, curl_export, plugin_list, plugin_enable, plugin_disable, plugin_create, plugin_read, webhook_register, webhook_list, webhook_delete, webhook_toggle.
+
+Completed in thirty-sixth build increment (Terminal + iPad/iPhone PWA):
+- Upgraded run_terminal to cross-platform: Linux/macOS now default to bash; supports bash, sh, zsh, fish, powershell, cmd.
+- Added env param to run_terminal: inject extra environment variables (merged with process.env).
+- Added command risk classification: every run_terminal result now includes [risk safe|caution|destructive] with the reason.
+- ENOENT shell-not-found errors now include a helpful hint naming the missing executable.
+- Upgraded PWAInstallPrompt: detects iPad vs iPhone (including iPadOS 13+ "Macintosh" UA with maxTouchPoints).
+- iPad prompt shows toolbar-specific "Share icon in toolbar" instructions; iPhone shows bottom-bar instructions.
+- Added visual share-icon glyph (□↑) for iOS install flow.
+- Added display-mode:standalone check to suppress banner when already installed.
+- Added mobile-web-app-capable meta tag and user-scalable=no to index.html viewport.
+- Added iPad-specific CSS media query (481px–1024px): keeps two-column sidebar rail layout on tablets.
+- Tablet sidebar: 200px wide left rail with touch-friendly 36px action buttons.
+- Tablet composer: sticky bottom with safe-area-inset-bottom support.
+- Tablet layout: two-column prompt grid, 82% max-width message bubbles.
+- Safe-area padding-left/right for landscape iPad notch (USB-C corner devices).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx tsc -p tsconfig.app.json --noEmit
+- Validation passed: npx oxlint server/tools/terminal.ts src/components/PWAInstallPrompt.tsx
+- Validation passed: vite build succeeds.

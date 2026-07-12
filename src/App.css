@@ -845,6 +845,217 @@ html.dark .app-shell.quiet-ui {
   }
 }
 
+/* ── Mobile-phone layout (≤480px) ──────────────────────────────── */
+@media (max-width: 480px) {
+  /* Stack shell vertically and give chat area all remaining space */
+  .app-shell {
+    flex-direction: column;
+    min-height: 100dvh; /* dynamic viewport height: accounts for browser chrome */
+  }
+
+  /* Sidebar folds to a slimmer banner; collapsed hides entirely */
+  .sidebar {
+    padding: 12px 14px !important;
+    gap: 10px;
+    overflow-x: hidden;
+  }
+  .sidebar.collapsed {
+    height: 0;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  /* Reduce chat panel padding and lock composer at viewport bottom */
+  .chat-panel {
+    padding: 12px 10px;
+    padding-bottom: 0;
+    /* leave room for the fixed composer */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Message list should scroll above the fixed composer */
+  .message-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  /* Composer sticks to the very bottom of the viewport on phones */
+  .composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    border-radius: 8px 8px 0 0;
+    margin: 0 -10px;
+    padding: 10px;
+    /* Safe-area inset for iOS notch phones */
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  /* Compact composer textarea on phones */
+  .composer textarea {
+    min-height: 38px;
+  }
+
+  /* Tool tray scrolls horizontally rather than wrapping */
+  .composer-tool-tray {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .composer-tool-tray::-webkit-scrollbar { display: none; }
+
+  /* Prevent tool result / agent trace blocks from blowing out horizontal layout */
+  .tool-block,
+  .agent-trace,
+  .message-bubble {
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Tool result code blocks: scroll horizontally instead of overflowing */
+  .tool-block pre,
+  .tool-result-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Shrink avatars slightly on very small screens */
+  .avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Welcome screen prompt grid: single column */
+  .prompt-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Action timeline: single column on phones */
+  .action-timeline {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Compact workspace switcher on phones */
+  .workspace-switcher {
+    gap: 4px;
+  }
+  .workspace-switcher button {
+    font-size: 11px;
+    padding: 0 8px;
+    min-height: 26px;
+  }
+
+  /* Header: stack controls below title */
+  .chat-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* ── Tablet / iPad layout (481px – 1024px) ─────────────────────────────────
+   Covers iPad mini, iPad Air, iPad Pro in portrait and landscape.
+   Keeps the sidebar visible as a compact left rail rather than stacking it
+   above the chat panel, giving tablet users the same two-column feel as
+   desktop but with tighter spacing and touch-friendly tap targets.
+──────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 481px) and (max-width: 1024px) {
+  /* Keep sidebar as a left rail */
+  .app-shell {
+    flex-direction: row;
+    min-height: 100dvh;
+  }
+
+  /* Narrower sidebar that doesn't crowd the chat area */
+  .sidebar {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+
+  /* Collapsed sidebar hides off-screen (slide left) */
+  .sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    border-right: 0;
+  }
+
+  /* Chat panel takes remaining space */
+  .chat-panel {
+    flex: 1;
+    min-width: 0;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Message list scrolls, composer stays fixed at bottom */
+  .message-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Composer respects the safe-area inset (e.g. iPad with home bar) */
+  .composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  /* Tool tray scrolls horizontally on narrow tablets */
+  .composer-tool-tray {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .composer-tool-tray::-webkit-scrollbar { display: none; }
+
+  /* Larger touch targets for sidebar action buttons */
+  .sidebar-action-btn {
+    min-height: 36px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  /* Two-column prompt grid on tablets */
+  .prompt-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* Message bubbles: slightly wider than phone, not as wide as desktop */
+  .message-bubble {
+    max-width: 82%;
+  }
+
+  /* Safe-area padding for landscape notch (iPad Pro with USB-C corner) */
+  .app-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* iPad Pro 12.9" in landscape (≈1366px) falls outside the 1024px cap above and receives full desktop styles — no override needed. */
+
 /* ── Agent mode toggle ── */
 .agent-toggle {
   display: flex;

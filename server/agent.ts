@@ -141,50 +141,168 @@ function shouldPreflightPathPermission(prompt: string): boolean {
   return /\b(review|analy[sz]e|audit|inspect|scan|check|look through|open|list|read|search|folder|directory|project|codebase|repo|repository|file explorer)\b/i.test(prompt)
 }
 
-// Extract and remove <think>...</think> blocks emitted by reasoning models (qwen3, deepseek-r1, etc.)
+// Extract and remove ALL <think>...</think> blocks emitted by reasoning models (qwen3, deepseek-r1, etc.)
+// Joins multiple thought blocks with a blank line separator.
 function extractThinkingBlock(text: string): { thinking: string | null; rest: string } {
-  const start = text.indexOf('<think>')
-  const end = text.indexOf('</think>')
-  if (start === -1 || end === -1 || end < start) return { thinking: null, rest: text }
-  const thinking = text.slice(start + 7, end).trim()
-  const rest = (text.slice(0, start) + text.slice(end + 8)).trim()
-  return { thinking: thinking || null, rest }
+  const OPEN = '<think>'
+  const CLOSE = '</think>'
+  const thoughts: string[] = []
+  let rest = text
+
+  while (true) {
+    const start = rest.indexOf(OPEN)
+    if (start === -1) break
+    const end = rest.indexOf(CLOSE, start + OPEN.length)
+    if (end === -1) break
+    const thought = rest.slice(start + OPEN.length, end).trim()
+    if (thought) thoughts.push(thought)
+    rest = rest.slice(0, start) + rest.slice(end + CLOSE.length)
+  }
+
+  rest = rest.trim()
+  return { thinking: thoughts.length > 0 ? thoughts.join('\n\n') : null, rest }
 }
 
-// Extract ALL tool calls from a response (supports parallel calls on consecutive JSON lines)
-function extractAllToolCalls(text: string): ToolCallParsed[] {
+// Attempt to repair and parse a partial (truncated) JSON fragment by closing unclosed braces.
+// Note: this only repairs unclosed object braces — unclosed strings or arrays are not repaired.
+// The caller must verify that the result contains expected tool call properties before using it.
+function tryPartialJson(fragment: string): Record<string, unknown> | null {
+  const trimmed = fragment.trim()
+  if (!trimmed.startsWith('{')) return null
+  let open = 0
+  for (const ch of trimmed) {
+    if (ch === '{') open++
+    else if (ch === '}') open--
+  }
+  if (open <= 0) return null
+  try {
+    return JSON.parse(trimmed + '}'.repeat(open)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+// Extract ALL tool calls from a response.
+// Supports:
+//   1. Ultron native format:  {"tool":"name","args":{...}}
+//   2. OpenAI function_call:  {"function_call":{"name":"...","arguments":"..."}}
+//   3. OpenAI tool_calls:     {"tool_calls":[{"function":{"name":"...","arguments":"..."}}]}
+//   4. Fenced code blocks with language tags (```json ... ```) — delimiters are skipped
+//   5. Partial JSON recovery for the last truncated line when allowPartial=true
+function extractAllToolCalls(text: string, allowPartial = false): ToolCallParsed[] {
   const lines = text.split('\n')
   const calls: ToolCallParsed[] = []
   let preamble = ''
   let foundFirst = false
+  let lastPartialCandidate = ''
 
   for (const line of lines) {
     let l = line.trim()
-    if (l.startsWith('```')) continue
+    // Skip fence delimiter lines (``` or ```json, ```typescript, etc.)
+    if (/^```/.test(l)) continue
+    // Strip inline backtick wrapping
     l = l.replace(/^`+|`+$/g, '').trim()
 
     if (!l.startsWith('{')) {
       if (!foundFirst) preamble += (preamble ? '\n' : '') + line
       continue
     }
+
+    let parsed: Record<string, unknown> | null = null
     try {
-      const parsed = JSON.parse(l) as Record<string, unknown>
-      if (typeof parsed.tool === 'string' && parsed.args !== null && typeof parsed.args === 'object') {
-        if (!foundFirst) { foundFirst = true; preamble = preamble.trim() }
-        calls.push({
-          name: parsed.tool,
-          args: parsed.args as Record<string, string>,
-          preamble: calls.length === 0 ? preamble : '',
-        })
+      parsed = JSON.parse(l) as Record<string, unknown>
+    } catch {
+      lastPartialCandidate = l
+      continue
+    }
+
+    if (typeof parsed.tool === 'string' && parsed.args !== null && typeof parsed.args === 'object') {
+      // Ultron native format
+      if (!foundFirst) { foundFirst = true; preamble = preamble.trim() }
+      calls.push({
+        name: parsed.tool,
+        args: parsed.args as Record<string, string>,
+        preamble: calls.length === 0 ? preamble : '',
+      })
+    } else if (typeof parsed.function_call === 'object' && parsed.function_call !== null) {
+      // OpenAI legacy function_call format
+      const fc = parsed.function_call as Record<string, unknown>
+      const name = typeof fc.name === 'string' ? fc.name : ''
+      let args: Record<string, string> = {}
+      if (typeof fc.arguments === 'string') {
+        try { args = JSON.parse(fc.arguments) as Record<string, string> } catch { /* ignore */ }
+      } else if (fc.arguments !== null && typeof fc.arguments === 'object') {
+        args = fc.arguments as Record<string, string>
       }
-    } catch { /* not valid JSON */ }
+      if (name) {
+        if (!foundFirst) { foundFirst = true; preamble = preamble.trim() }
+        calls.push({ name, args, preamble: calls.length === 0 ? preamble : '' })
+      }
+    } else if (Array.isArray(parsed.tool_calls)) {
+      // OpenAI tool_calls array format
+      for (const tc of parsed.tool_calls as Array<Record<string, unknown>>) {
+        const fn = typeof tc.function === 'object' && tc.function !== null ? tc.function as Record<string, unknown> : null
+        if (!fn) continue
+        const name = typeof fn.name === 'string' ? fn.name : ''
+        let args: Record<string, string> = {}
+        if (typeof fn.arguments === 'string') {
+          try { args = JSON.parse(fn.arguments) as Record<string, string> } catch { /* ignore */ }
+        } else if (fn.arguments !== null && typeof fn.arguments === 'object') {
+          args = fn.arguments as Record<string, string>
+        }
+        if (name) {
+          if (!foundFirst) { foundFirst = true; preamble = preamble.trim() }
+          calls.push({ name, args, preamble: calls.length === 0 ? preamble : '' })
+        }
+      }
+    }
   }
+
+  // Partial JSON recovery: try to auto-close the last truncated JSON line
+  if (allowPartial && calls.length === 0 && lastPartialCandidate) {
+    const repaired = tryPartialJson(lastPartialCandidate)
+    if (repaired && typeof repaired.tool === 'string' && repaired.args !== null && typeof repaired.args === 'object') {
+      calls.push({
+        name: repaired.tool,
+        args: repaired.args as Record<string, string>,
+        preamble: preamble.trim(),
+      })
+    }
+  }
+
   return calls
 }
 
 function extractToolCall(text: string): ToolCallParsed | null {
   const calls = extractAllToolCalls(text)
   return calls.length > 0 ? calls[0] : null
+}
+
+// Trim conversation history to stay within estimated context-window budget.
+// Keeps the system prompt (history[0]) and the last user message intact;
+// drops the oldest assistant/tool-result pairs from the middle when the
+// total estimated character count would exceed 80% of numCtx * 4 chars/token.
+function trimHistoryToCtx(history: OllamaMessage[], numCtx: number): OllamaMessage[] {
+  const charBudget = Math.floor(numCtx * 0.80 * 4)
+  const total = history.reduce((sum, m) => sum + m.content.length, 0)
+  if (total <= charBudget || history.length <= 2) return history
+
+  const systemMsg = history[0]
+  const lastMsg = history[history.length - 1]
+  const middle = history.slice(1, -1)
+
+  let remaining = charBudget - (systemMsg?.content.length ?? 0) - (lastMsg?.content.length ?? 0)
+  if (remaining <= 0) return [systemMsg, lastMsg].filter(Boolean) as OllamaMessage[]
+
+  const retained: OllamaMessage[] = []
+  for (let i = middle.length - 1; i >= 0; i--) {
+    if (middle[i].content.length <= remaining) {
+      retained.unshift(middle[i])
+      remaining -= middle[i].content.length
+    }
+  }
+
+  return [systemMsg, ...retained, lastMsg].filter(Boolean) as OllamaMessage[]
 }
 
 function latestUserPrompt(messages: Array<{ role: 'user' | 'assistant'; content: string }>): string {
@@ -692,6 +810,7 @@ export async function runAgent(
 
     let ollamaRes: Response
     let fetchAttempts = 0
+    const FETCH_RETRY_DELAYS = [2000, 4000] // ms between attempts 1→2 and 2→3
     while (true) {
       try {
         ollamaRes = await fetch(`${ollamaBaseUrl}/api/chat`, {
@@ -699,7 +818,7 @@ export async function runAgent(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model,
-            messages: history,
+            messages: trimHistoryToCtx(history, numCtx),
             stream: true,
             keep_alive: '60m',
             options: agentInferenceOptions(temperature, numCtx, intelligenceMode),
@@ -709,10 +828,11 @@ export async function runAgent(
         break // success
       } catch (fetchErr) {
         fetchAttempts++
-        // Auto-retry once on transient network errors (not on timeout/abort)
-        if (fetchAttempts === 1 && !abortSignal.aborted && !stepAbort.signal.aborted) {
-          console.log(`[agent] step ${step}: fetch failed, retrying in 2s…`)
-          await new Promise(r => setTimeout(r, 2000))
+        const retryDelay = FETCH_RETRY_DELAYS[fetchAttempts - 1]
+        // Auto-retry up to 3 attempts with exponential back-off (not on timeout/abort)
+        if (retryDelay !== undefined && !abortSignal.aborted && !stepAbort.signal.aborted) {
+          console.log(`[agent] step ${step}: fetch attempt ${fetchAttempts} failed, retrying in ${retryDelay}ms…`)
+          await new Promise(r => setTimeout(r, retryDelay))
           continue
         }
         clearTimeout(stepTimer)
@@ -737,13 +857,21 @@ export async function runAgent(
       return
     }
 
-    // Parse NDJSON stream from Ollama — batch tokens before emitting to reduce SSE overhead
+    // Parse NDJSON stream from Ollama — batch tokens before emitting to reduce SSE overhead.
+    // Think-tag suppression: tokens inside <think>...</think> are accumulated but NOT forwarded
+    // to the client, eliminating the visible flicker caused by post-hoc set_content replacement.
     const reader = ollamaRes.body!.getReader()
     const decoder = new TextDecoder()
     let streamBuf = ''
     let fullContent = ''
     let tokenBatch = ''
     let finalData: OllamaChatChunk | null = null
+
+    // Streaming-safe <think> suppression state
+    const THINK_OPEN_TAG = '<think>'
+    const THINK_CLOSE_TAG = '</think>'
+    let inThinkStream = false
+    let thinkScanBuf = '' // chars not yet committed as visible or hidden
 
     function flushTokenBatch() {
       if (tokenBatch && !response.writableEnded) {
@@ -752,10 +880,61 @@ export async function runAgent(
       }
     }
 
+    function appendVisibleToken(tok: string) {
+      tokenBatch += tok
+      if (tokenBatch.length >= 10 || tokenBatch.includes('\n') || tokenBatch.endsWith('. ') || tokenBatch.endsWith('! ') || tokenBatch.endsWith('? ')) {
+        flushTokenBatch()
+      }
+    }
+
+    function processStreamToken(token: string) {
+      fullContent += token
+      thinkScanBuf += token
+
+      // Process the scan buffer in a loop — one iteration per tag boundary found
+      while (thinkScanBuf.length > 0) {
+        if (inThinkStream) {
+          const closeIdx = thinkScanBuf.indexOf(THINK_CLOSE_TAG)
+          if (closeIdx !== -1) {
+            // End of think block: discard up to and including </think>, then continue
+            inThinkStream = false
+            thinkScanBuf = thinkScanBuf.slice(closeIdx + THINK_CLOSE_TAG.length)
+          } else {
+            // Still inside think block: keep only tail that could be a partial close tag
+            const tail = THINK_CLOSE_TAG.length - 1
+            if (thinkScanBuf.length > tail) thinkScanBuf = thinkScanBuf.slice(thinkScanBuf.length - tail)
+            break
+          }
+        } else {
+          const openIdx = thinkScanBuf.indexOf(THINK_OPEN_TAG)
+          if (openIdx !== -1) {
+            // Emit everything before the opening tag, then enter think mode
+            if (openIdx > 0) appendVisibleToken(thinkScanBuf.slice(0, openIdx))
+            inThinkStream = true
+            thinkScanBuf = thinkScanBuf.slice(openIdx + THINK_OPEN_TAG.length)
+          } else {
+            // No think tag: emit everything except a potential partial tag at the tail
+            const tail = THINK_OPEN_TAG.length - 1
+            if (thinkScanBuf.length > tail) {
+              appendVisibleToken(thinkScanBuf.slice(0, thinkScanBuf.length - tail))
+              thinkScanBuf = thinkScanBuf.slice(thinkScanBuf.length - tail)
+            }
+            break
+          }
+        }
+      }
+    }
+
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) { flushTokenBatch(); break }
+        if (done) {
+          // Flush any remaining scan buffer (not inside a think block)
+          if (!inThinkStream && thinkScanBuf) appendVisibleToken(thinkScanBuf)
+          thinkScanBuf = ''
+          flushTokenBatch()
+          break
+        }
         streamBuf += decoder.decode(value, { stream: true })
         const lines = streamBuf.split('\n')
         streamBuf = lines.pop() ?? ''
@@ -764,15 +943,14 @@ export async function runAgent(
           let chunk: OllamaChatChunk
           try { chunk = JSON.parse(line) as OllamaChatChunk } catch { continue }
           if (chunk.message?.content) {
-            const token = chunk.message.content
-            fullContent += token
-            tokenBatch += token
-            // Flush on natural boundaries to keep streaming feel smooth
-            if (tokenBatch.length >= 10 || tokenBatch.includes('\n') || tokenBatch.endsWith('. ') || tokenBatch.endsWith('! ') || tokenBatch.endsWith('? ')) {
-              flushTokenBatch()
-            }
+            processStreamToken(chunk.message.content)
           }
-          if (chunk.done) { flushTokenBatch(); finalData = chunk }
+          if (chunk.done) {
+            if (!inThinkStream && thinkScanBuf) appendVisibleToken(thinkScanBuf)
+            thinkScanBuf = ''
+            flushTokenBatch()
+            finalData = chunk
+          }
         }
       }
     } catch (streamErr) {
@@ -792,17 +970,19 @@ export async function runAgent(
       return
     }
 
-    // Strip <think> blocks from reasoning models; emit them as trace events.
-    // Also correct what the client displayed (it streamed the raw think tags).
+    // Post-stream: strip ALL remaining <think> blocks (handles models that don't stream them
+    // cleanly, or multi-block reasoning). Since streaming already suppressed them from the
+    // client, the set_content event here only fires if the clean text differs from what
+    // was already displayed (i.e., only if a think block leaked through during streaming).
     const { thinking: thinkContent, rest: responseContent } = extractThinkingBlock(fullContent)
     if (thinkContent) {
       sendEvent(response, 'thinking', { content: thinkContent })
-      // Replace client-displayed content with the cleaned version
       sendEvent(response, 'set_content', { content: responseContent })
     }
 
-    // Check for tool call(s) — supports parallel calls (multiple JSON lines)
-    const allToolCalls = extractAllToolCalls(responseContent)
+    // Check for tool call(s) — supports parallel calls (multiple JSON lines).
+    // Enable partial JSON recovery so a cut-off response can still dispatch a tool.
+    const allToolCalls = extractAllToolCalls(responseContent, true)
     const toolCall = allToolCalls[0] ?? null
 
     if (allToolCalls.length > 0) {
@@ -827,7 +1007,7 @@ export async function runAgent(
       sendEvent(response, 'agent_task_state', { status: 'using_tools', detail: `Using ${allToolCalls.length} tool call(s); ${Math.max(0, taskPlan.toolBudget - toolsUsed)} remaining before this step.` })
 
       // Execute all tool calls — single call sequential, multiple calls in parallel
-      const MAX_RESULT = 4000
+      const MAX_RESULT = 6000
 
       async function runOneTool(tc: ToolCallParsed): Promise<{ tc: ToolCallParsed; result: string; callId: string }> {
         const callId = crypto.randomUUID()

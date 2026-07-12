@@ -330,3 +330,312 @@ export const ghSearch: ToolHandler = async (args) => {
     }).join('\n\n')
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
+
+// ── gh_create_branch ──────────────────────────────────────────────────────────
+
+export const ghCreateBranchDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_create_branch',
+    description: 'Create a new branch in a GitHub repository from an existing branch or commit SHA.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:     { type: 'string', description: 'owner/repo.' },
+        branch:   { type: 'string', description: 'Name of the new branch to create.' },
+        from:     { type: 'string', description: 'Source branch name or commit SHA (default: repository default branch).' },
+      },
+      required: ['repo', 'branch'],
+    },
+  },
+}
+
+export const ghCreateBranch: ToolHandler = async (args) => {
+  if (!args.repo || !args.branch) return 'Error: repo and branch are required'
+  try {
+    // Resolve source ref to SHA
+    let sha: string
+    const source = args.from?.trim()
+    if (source && /^[0-9a-f]{40}$/i.test(source)) {
+      sha = source
+    } else {
+      const repoData = await ghFetch(`/repos/${args.repo}`) as { default_branch?: string; message?: string }
+      const err = formatGitHubError(repoData)
+      if (err) return err
+      const ref = source ?? repoData.default_branch ?? 'main'
+      const refData = await ghFetch(`/repos/${args.repo}/git/refs/heads/${encodeURIComponent(ref)}`) as { object?: { sha?: string }; message?: string }
+      const refErr = formatGitHubError(refData)
+      if (refErr) return refErr
+      sha = refData.object?.sha ?? ''
+      if (!sha) return `Error: could not resolve SHA for ref '${ref}'`
+    }
+    const data = await ghFetch(`/repos/${args.repo}/git/refs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: `refs/heads/${args.branch}`, sha }),
+    }) as { ref?: string; object?: { sha?: string }; message?: string }
+    const error = formatGitHubError(data)
+    if (error) return error
+    return `Created branch '${args.branch}' at ${data.object?.sha?.slice(0, 7) ?? sha.slice(0, 7)} in ${args.repo}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_create_pr ──────────────────────────────────────────────────────────────
+
+export const ghCreatePrDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_create_pr',
+    description: 'Create a pull request in a GitHub repository.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:   { type: 'string', description: 'owner/repo.' },
+        title:  { type: 'string', description: 'PR title.' },
+        head:   { type: 'string', description: 'Head branch name (the branch with your changes).' },
+        base:   { type: 'string', description: 'Base branch to merge into (e.g. "main"). Defaults to repo default branch.' },
+        body:   { type: 'string', description: 'PR description (Markdown).' },
+        draft:  { type: 'string', description: 'Set to "true" to create as a draft PR.' },
+      },
+      required: ['repo', 'title', 'head'],
+    },
+  },
+}
+
+export const ghCreatePr: ToolHandler = async (args) => {
+  if (!args.repo || !args.title || !args.head) return 'Error: repo, title, and head are required'
+  try {
+    let base = args.base?.trim()
+    if (!base) {
+      const repoData = await ghFetch(`/repos/${args.repo}`) as { default_branch?: string; message?: string }
+      const err = formatGitHubError(repoData)
+      if (err) return err
+      base = repoData.default_branch ?? 'main'
+    }
+    const payload: Record<string, unknown> = { title: args.title, head: args.head, base }
+    if (args.body) payload.body = args.body
+    if (args.draft === 'true') payload.draft = true
+    const data = await ghFetch(`/repos/${args.repo}/pulls`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }) as { number?: number; html_url?: string; message?: string }
+    const error = formatGitHubError(data)
+    if (error) return error
+    return `Created PR #${data.number}: ${data.html_url}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_comment ────────────────────────────────────────────────────────────────
+
+export const ghCommentDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_comment',
+    description: 'Add a comment to a GitHub issue or pull request.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:   { type: 'string', description: 'owner/repo.' },
+        number: { type: 'string', description: 'Issue or PR number.' },
+        body:   { type: 'string', description: 'Comment text (Markdown supported).' },
+      },
+      required: ['repo', 'number', 'body'],
+    },
+  },
+}
+
+export const ghComment: ToolHandler = async (args) => {
+  if (!args.repo || !args.number || !args.body) return 'Error: repo, number, and body are required'
+  try {
+    const num = parseInt(args.number, 10)
+    if (!Number.isFinite(num)) return 'Error: number must be an integer'
+    const data = await ghFetch(`/repos/${args.repo}/issues/${num}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: args.body }),
+    }) as { id?: number; html_url?: string; message?: string }
+    const error = formatGitHubError(data)
+    if (error) return error
+    return `Comment posted: ${data.html_url}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_label ──────────────────────────────────────────────────────────────────
+
+export const ghLabelDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_label',
+    description: 'Add or remove labels on a GitHub issue or pull request.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:    { type: 'string', description: 'owner/repo.' },
+        number:  { type: 'string', description: 'Issue or PR number.' },
+        add:     { type: 'string', description: 'Comma-separated labels to add.' },
+        remove:  { type: 'string', description: 'Comma-separated labels to remove.' },
+      },
+      required: ['repo', 'number'],
+    },
+  },
+}
+
+export const ghLabel: ToolHandler = async (args) => {
+  if (!args.repo || !args.number) return 'Error: repo and number are required'
+  if (!args.add && !args.remove) return 'Error: at least one of add or remove is required'
+  try {
+    const num = parseInt(args.number, 10)
+    if (!Number.isFinite(num)) return 'Error: number must be an integer'
+    const results: string[] = []
+    if (args.add) {
+      const labels = args.add.split(',').map((l: string) => l.trim()).filter(Boolean)
+      const data = await ghFetch(`/repos/${args.repo}/issues/${num}/labels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labels }),
+      }) as unknown[] | { message?: string }
+      const error = formatGitHubError(data)
+      if (error) return error
+      results.push(`Added: ${labels.join(', ')}`)
+    }
+    if (args.remove) {
+      const labels = args.remove.split(',').map((l: string) => l.trim()).filter(Boolean)
+      for (const label of labels) {
+        await ghFetch(`/repos/${args.repo}/issues/${num}/labels/${encodeURIComponent(label)}`, { method: 'DELETE' })
+      }
+      results.push(`Removed: ${labels.join(', ')}`)
+    }
+    return results.join('\n') || 'Done.'
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_assign ─────────────────────────────────────────────────────────────────
+
+export const ghAssignDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_assign',
+    description: 'Add or remove assignees on a GitHub issue or pull request.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:    { type: 'string', description: 'owner/repo.' },
+        number:  { type: 'string', description: 'Issue or PR number.' },
+        add:     { type: 'string', description: 'Comma-separated GitHub usernames to assign.' },
+        remove:  { type: 'string', description: 'Comma-separated GitHub usernames to unassign.' },
+      },
+      required: ['repo', 'number'],
+    },
+  },
+}
+
+export const ghAssign: ToolHandler = async (args) => {
+  if (!args.repo || !args.number) return 'Error: repo and number are required'
+  if (!args.add && !args.remove) return 'Error: at least one of add or remove is required'
+  try {
+    const num = parseInt(args.number, 10)
+    if (!Number.isFinite(num)) return 'Error: number must be an integer'
+    const results: string[] = []
+    if (args.add) {
+      const assignees = args.add.split(',').map((a: string) => a.trim()).filter(Boolean)
+      const data = await ghFetch(`/repos/${args.repo}/issues/${num}/assignees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignees }),
+      }) as { assignees?: Array<{ login: string }>; message?: string }
+      const error = formatGitHubError(data)
+      if (error) return error
+      results.push(`Assigned: ${assignees.join(', ')}`)
+    }
+    if (args.remove) {
+      const assignees = args.remove.split(',').map((a: string) => a.trim()).filter(Boolean)
+      await ghFetch(`/repos/${args.repo}/issues/${num}/assignees`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignees }),
+      })
+      results.push(`Unassigned: ${assignees.join(', ')}`)
+    }
+    return results.join('\n') || 'Done.'
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_close ──────────────────────────────────────────────────────────────────
+
+export const ghCloseDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_close',
+    description: 'Close or reopen a GitHub issue or pull request.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:    { type: 'string', description: 'owner/repo.' },
+        number:  { type: 'string', description: 'Issue or PR number.' },
+        action:  { type: 'string', description: '"close" (default) or "reopen".' },
+        reason:  { type: 'string', description: 'Close reason for issues: "completed" (default) or "not_planned".' },
+      },
+      required: ['repo', 'number'],
+    },
+  },
+}
+
+export const ghClose: ToolHandler = async (args) => {
+  if (!args.repo || !args.number) return 'Error: repo and number are required'
+  try {
+    const num = parseInt(args.number, 10)
+    if (!Number.isFinite(num)) return 'Error: number must be an integer'
+    const action = args.action === 'reopen' ? 'open' : 'closed'
+    const payload: Record<string, unknown> = { state: action }
+    if (action === 'closed' && args.reason) payload.state_reason = args.reason
+    const data = await ghFetch(`/repos/${args.repo}/issues/${num}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }) as { number?: number; state?: string; html_url?: string; message?: string }
+    const error = formatGitHubError(data)
+    if (error) return error
+    return `Issue/PR #${data.number} is now ${data.state}: ${data.html_url}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── gh_merge_pr ───────────────────────────────────────────────────────────────
+
+export const ghMergePrDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'gh_merge_pr',
+    description: 'Merge a pull request in a GitHub repository.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo:    { type: 'string', description: 'owner/repo.' },
+        number:  { type: 'string', description: 'PR number.' },
+        method:  { type: 'string', description: 'Merge method: "merge" (default), "squash", or "rebase".' },
+        message: { type: 'string', description: 'Optional commit message for the merge.' },
+      },
+      required: ['repo', 'number'],
+    },
+  },
+}
+
+export const ghMergePr: ToolHandler = async (args) => {
+  if (!args.repo || !args.number) return 'Error: repo and number are required'
+  try {
+    const num = parseInt(args.number, 10)
+    if (!Number.isFinite(num)) return 'Error: number must be an integer'
+    const method = ['squash', 'rebase'].includes(args.method ?? '') ? args.method : 'merge'
+    const payload: Record<string, unknown> = { merge_method: method }
+    if (args.message) payload.commit_message = args.message
+    const data = await ghFetch(`/repos/${args.repo}/pulls/${num}/merge`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }) as { merged?: boolean; message?: string; sha?: string }
+    if (data.merged === false) return `PR #${num} was not merged: ${data.message ?? 'unknown reason'}`
+    const error = formatGitHubError(data)
+    if (error) return error
+    return `PR #${num} merged (${method}) — SHA: ${data.sha?.slice(0, 7) ?? '?'}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}

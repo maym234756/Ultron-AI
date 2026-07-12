@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto'
 import type { ToolDefinition, ToolHandler } from './types.js'
 
 const OLLAMA_URL = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
-const EMBED_MODEL = 'nomic-embed-text'
+/** Default embedding model: set RAG_EMBED_MODEL env var to override (e.g. mxbai-embed-large). */
+const DEFAULT_EMBED_MODEL = process.env.RAG_EMBED_MODEL ?? 'nomic-embed-text'
 const STORE_PATH = path.resolve(process.cwd(), '.rag-store.jsonl')
 const CHUNK_SIZE = 600
 const CHUNK_OVERLAP = 60
@@ -27,17 +28,17 @@ interface RagChunk {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function embedText(text: string): Promise<number[]> {
+async function embedText(text: string, model?: string): Promise<number[]> {
   const res = await fetch(`${OLLAMA_URL}/api/embed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: EMBED_MODEL, input: text }),
+    body: JSON.stringify({ model: model ?? DEFAULT_EMBED_MODEL, input: text }),
     signal: AbortSignal.timeout(30_000),
   })
   if (!res.ok) throw new Error(`Embed error ${res.status}: ${await res.text()}`)
   const data = await res.json() as { embeddings?: number[][] }
   const emb = data.embeddings?.[0]
-  if (!emb?.length) throw new Error('No embedding returned — is nomic-embed-text pulled?')
+  if (!emb?.length) throw new Error('No embedding returned — is ' + (model ?? DEFAULT_EMBED_MODEL) + ' pulled?')
   return emb
 }
 
@@ -120,6 +121,7 @@ export const ragIndexDefinition: ToolDefinition = {
         path: { type: 'string', description: 'Absolute or relative path to file or directory to index.' },
         force: { type: 'string', description: 'Set to "true" to re-index already-indexed files.' },
         recursive: { type: 'string', description: 'Set to "false" to skip subdirectories (default: recurse).' },
+        model: { type: 'string', description: 'Ollama embedding model to use (default: RAG_EMBED_MODEL env var or nomic-embed-text).' },
       },
       required: ['path'],
     },
@@ -174,7 +176,7 @@ export const ragIndex: ToolHandler = async (args) => {
       const chunks = chunkText(content)
       retainedChunks = retainedChunks.filter((chunk) => chunk.file !== filePath)
       for (let i = 0; i < chunks.length; i++) {
-        const embedding = await embedText(chunks[i])
+        const embedding = await embedText(chunks[i], args.model)
         const chunk: RagChunk = {
           id: `${filePath}:${i}`,
           file: filePath,
@@ -214,6 +216,7 @@ export const ragSearchDefinition: ToolDefinition = {
         query: { type: 'string', description: 'Natural language search query.' },
         top_k: { type: 'string', description: 'Number of results to return (default 5).' },
         file_filter: { type: 'string', description: 'Optional: filter results to files matching this substring.' },
+        model: { type: 'string', description: 'Ollama embedding model to use for the query (should match the model used during indexing).' },
       },
       required: ['query'],
     },
@@ -231,7 +234,7 @@ export const ragSearch: ToolHandler = async (args) => {
 
   if (filter) chunks = chunks.filter((c) => c.file.toLowerCase().includes(filter))
 
-  const qEmbed = await embedText(query)
+  const qEmbed = await embedText(query, args.model)
   const scored = chunks
     .map((c) => ({ ...c, score: cosineSim(qEmbed, c.embedding) }))
     .sort((a, b) => b.score - a.score)
@@ -369,6 +372,56 @@ export const ragIndexUrl: ToolHandler = async (args) => {
     }
     return `Indexed ${indexed} chunks from ${args.url} (${text.length} chars extracted).`
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── rag_repair ────────────────────────────────────────────────────────────────
+
+export const ragRepairDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'rag_repair',
+    description: 'Scan the knowledge base index for orphan chunks (referencing files that no longer exist on disk) and optionally remove them. Safe to run anytime to keep the index clean.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dry_run: { type: 'string', description: 'Set to "true" to preview orphan files without removing them (default: false — removes orphans).' },
+      },
+    },
+  },
+}
+
+export const ragRepair: ToolHandler = async (args) => {
+  if (!existsSync(STORE_PATH)) return 'Knowledge base is empty — nothing to repair.'
+  const chunks = await loadAllChunks()
+  if (chunks.length === 0) return 'Knowledge base is empty — nothing to repair.'
+
+  // Separate URL chunks (never orphaned) from file chunks
+  const fileChunks = chunks.filter((c) => !c.file.startsWith('http'))
+  const urlChunks = chunks.filter((c) => c.file.startsWith('http'))
+
+  // Identify orphaned file sources
+  const orphanFiles = new Set<string>()
+  for (const chunk of fileChunks) {
+    if (!existsSync(chunk.file) && !orphanFiles.has(chunk.file)) {
+      orphanFiles.add(chunk.file)
+    }
+  }
+
+  if (orphanFiles.size === 0) {
+    return `Knowledge base is healthy. ${chunks.length} total chunks, no orphan file references found.`
+  }
+
+  const orphanCount = fileChunks.filter((c) => orphanFiles.has(c.file)).length
+  const orphanList = Array.from(orphanFiles).map((f) => `  - ${path.relative(process.cwd(), f)}`).join('\n')
+
+  if (args.dry_run === 'true') {
+    return `Dry run — found ${orphanFiles.size} orphan source(s) with ${orphanCount} chunk(s):\n${orphanList}\n\nRun rag_repair without dry_run to remove them.`
+  }
+
+  // Remove orphan chunks
+  const healthy = [...fileChunks.filter((c) => !orphanFiles.has(c.file)), ...urlChunks]
+  await rewriteStore(healthy)
+  return `Removed ${orphanCount} orphan chunk(s) from ${orphanFiles.size} missing file(s):\n${orphanList}\n\nKnowledge base now has ${healthy.length} chunk(s).`
 }
 
 // ── Auto-context helper (used by index.ts for ambient injection) ───────────────

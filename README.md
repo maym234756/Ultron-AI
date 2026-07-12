@@ -49,6 +49,60 @@ GitHub downloads are produced by `.github/workflows/desktop-release.yml`:
 
 Users still need Ollama installed and running locally, with at least one model pulled, because Ultron stays fully local and does not call cloud model APIs.
 
+## Cloud Deployment
+
+Ultron can be deployed to any Linux server or cloud platform (Railway, Render, Fly.io, DigitalOcean, etc.) using the included `Dockerfile`.
+
+### Quick cloud deploy with Docker
+
+```bash
+# Build the image
+docker build -t ultron .
+
+# Run with your own values
+docker run -d \
+  -p 8787:8787 \
+  -e APP_ORIGIN="https://ultron.example.com" \
+  -e OLLAMA_BASE_URL="http://your-ollama-host:11434" \
+  -e OLLAMA_MODEL="llama3.2" \
+  -e DATABASE_URL="******db.example.com:5432/ultron?schema=public" \
+  -e CREDENTIAL_ENCRYPTION_KEY="replace-with-64-char-random-secret" \
+  -v ultron_data:/app/data \
+  ultron
+```
+
+Put Nginx or a cloud load balancer in front and terminate HTTPS there.  Ultron's
+Express server will then be reachable at `https://ultron.example.com`.
+
+### Environment variables for cloud
+
+| Variable | Purpose |
+|---|---|
+| `APP_ORIGIN` | Your public HTTPS URL — added to CORS allow-list |
+| `OLLAMA_BASE_URL` | URL of your Ollama instance (must be reachable by the server) |
+| `DATABASE_URL` | Postgres connection string (recommended for multi-user cloud deploys) |
+| `CREDENTIAL_ENCRYPTION_KEY` | Long random secret for the credential vault AES-256-GCM encryption |
+| `VITE_API_URL` | *Build-time only* — set when the front-end is hosted on a **different** origin than the API |
+
+See `.env.example` for a full list of options.
+
+## Install on iPhone (PWA)
+
+Ultron ships as a fully installable Progressive Web App.  Once the server is
+deployed behind HTTPS, follow these steps on your iPhone:
+
+1. Open **Safari** and navigate to your Ultron URL (e.g. `https://ultron.example.com`).
+2. Tap the **Share** button (square with an arrow pointing up).
+3. Scroll down and tap **Add to Home Screen**.
+4. Keep the name **Ultron** and tap **Add**.
+
+The Ultron icon will appear on your home screen.  Tapping it opens Ultron in
+full-screen standalone mode — no browser chrome, just the app.
+
+> **Note:** Ollama must still be running and reachable by the server. The iPhone
+> app connects to the same backend as any other browser; it does not run a local
+> model on the device.
+
 ## Configuration
 
 Copy `.env.example` to `.env` or set environment variables in your shell:

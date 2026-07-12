@@ -58,6 +58,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { TemplatesPanel } from './components/TemplatesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
+import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
 import { AuthPanel } from './components/AuthPanel'
 import { AdminIdentityPanel } from './components/AdminIdentityPanel'
@@ -301,7 +302,8 @@ const WORKSPACE_QUICK_ACTIONS: Record<WorkspaceMode, QuickAction[]> = {
 
 // In dev, call Express directly (bypasses Vite proxy which drops SSE connections on idle).
 // CORS is open on the Express server so this works fine.
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+// Set VITE_API_URL at build time to point the frontend at a remote backend (e.g. cloud deployment).
+const API_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 function inviteTokenFromLocation(): string {
   if (typeof window === 'undefined') return ''
@@ -2716,6 +2718,7 @@ function App() {
         />
       </div>
     )}
+    <PWAInstallPrompt />
   </>
   )
 }

@@ -1,7 +1,7 @@
 import { X, SlidersHorizontal } from 'lucide-react'
 import type { AppSettings, IntelligenceMode } from '../types'
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const API_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 const INTELLIGENCE_MODES: Array<{ value: IntelligenceMode; label: string; hint: string }> = [
   { value: 'instant', label: 'Instant', hint: 'Short answers, fast-model routing, minimal context overhead.' },

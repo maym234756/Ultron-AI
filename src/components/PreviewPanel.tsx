@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Check, X, ChevronDown, ChevronRight, FileCode2, Terminal, AlertTriangle } from 'lucide-react'
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const API_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 export interface PendingPreview {
   id: string

@@ -22,7 +22,7 @@ import {
 } from './observer.js'
 import { initMultiAgent } from './tools/multiagent.js'
 import { loadPlugins } from './plugins/loader.js'
-import { registerPlugin, executeTool, toolDefinitions } from './tools/registry.js'
+import { registerPlugin, executeTool, toolDefinitions, getToolTimingStats, getRecentTimingLog } from './tools/registry.js'
 import { detectMemoryConflicts, listMemoryEntries, promoteMemoryEntry } from './tools/longmem.js'
 import type { MemoryScope } from './tools/longmem.js'
 import { transcribeAudio } from './tools/whisper.js'
@@ -410,6 +410,62 @@ app.get('/api/health', async (_request, response) => {
   }
 })
 
+// Deep health check — verifies Ollama reachability, database, tool registry, and PWA build.
+const healthDeepRateLimit = authRateLimit({ id: 'health-deep', windowMs: 60_000, max: 20 })
+app.get('/api/health/deep', healthDeepRateLimit, async (_request, response) => {
+  const checkedAt = Date.now()
+  const checks: Array<{ id: string; label: string; ok: boolean; detail: string; latencyMs?: number }> = []
+
+  // 1. Ollama reachability + model list
+  const ollamaStart = Date.now()
+  let ollamaOk = false
+  try {
+    const tags = await fetchOllamaTags(2500)
+    const count = (tags.models ?? []).length
+    ollamaOk = true
+    checks.push({ id: 'ollama', label: 'Ollama engine', ok: true, detail: `${count} model(s) available`, latencyMs: Date.now() - ollamaStart })
+  } catch (err) {
+    checks.push({ id: 'ollama', label: 'Ollama engine', ok: false, detail: err instanceof Error ? err.message : 'Ollama unreachable', latencyMs: Date.now() - ollamaStart })
+  }
+
+  // 2. Database (provider + target check)
+  checks.push({
+    id: 'database',
+    label: 'Database',
+    ok: true,
+    detail: `${databaseProvider} · ${summarizeDatabaseTarget(databaseUrl)}`,
+  })
+
+  // 3. Tool registry
+  checks.push({
+    id: 'tools',
+    label: 'Tool registry',
+    ok: toolDefinitions.length > 0,
+    detail: `${toolDefinitions.length} tool(s) registered`,
+  })
+
+  // 4. PWA service worker (present in production build)
+  const swPath = path.join(distDir, 'sw.js')
+  const hasSW = fs.existsSync(swPath)
+  checks.push({
+    id: 'pwa',
+    label: 'PWA service worker',
+    ok: hasSW,
+    detail: hasSW ? 'sw.js present in dist' : 'No sw.js found — run npm run build to generate it',
+  })
+
+  // 5. Fast model warmup
+  checks.push({
+    id: 'warmup',
+    label: 'Model warmup',
+    ok: warmupStatus.primaryOk || Boolean(cachedFastModel),
+    detail: warmupStatus.detail,
+  })
+
+  const ok = checks.every(c => c.ok)
+  response.status(ok ? 200 : 503).json({ ok, checkedAt, ollamaOk, checks })
+})
+
 app.get('/api/backend/status', (_request, response) => {
   response.json(backendRuntimeSnapshot({
     routes: collectBackendRoutes(app),
@@ -736,6 +792,19 @@ async function finalizeSessionInvite(session: { token: string; user: { id: strin
     }
   }
 }
+
+// Rate limiters for the main inference endpoints — generous but prevents runaway abuse
+// on locally-networked or publicly-exposed deployments.
+const chatRateLimit = authRateLimit({
+  id: 'chat',
+  windowMs: 60_000,
+  max: 60,
+})
+const agentRateLimit = authRateLimit({
+  id: 'agent',
+  windowMs: 60_000,
+  max: 30,
+})
 
 const registerRateLimit = authRateLimit({
   id: 'register',
@@ -1274,7 +1343,7 @@ app.get('/api/models', async (_request, response) => {
   }
 })
 
-app.post('/api/chat', async (request, response) => {
+app.post('/api/chat', chatRateLimit, async (request, response) => {
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)
@@ -1363,7 +1432,7 @@ app.post('/api/chat', async (request, response) => {
   }
 })
 
-app.post('/api/agent', async (request, response) => {
+app.post('/api/agent', agentRateLimit, async (request, response) => {
   const body = request.body as AssistantRequest
   const messages = normalizeMessages(body.messages)
   const intelligenceMode = normalizeIntelligenceMode(body.intelligenceMode)
@@ -2750,6 +2819,58 @@ app.post('/v1/completions', async (req, res) => {
   req.body = { model: m, messages: [{ role: 'user', content: prompt ?? '' }], stream, temperature: t }
   // Re-invoke via internal redirect
   res.redirect(307, '/v1/chat/completions')
+})
+
+// ── Webhook ingest — POST /api/webhooks/:id ────────────────────────────────
+// External services POST here to trigger a registered agent task.
+// Optionally validates X-Webhook-Secret header.
+;(async () => {
+  const { loadWebhooks, findWebhook, recordWebhookTrigger } = await import('./tools/webhooks.js')
+  app.post('/api/webhooks/:id', express.text({ type: '*/*', limit: '512kb' }), async (req, res) => {
+    const { id } = req.params as { id: string }
+    const hook = findWebhook(id)
+    if (!hook) { res.status(404).json({ error: 'Webhook not found' }); return }
+    if (!hook.enabled) { res.status(403).json({ error: 'Webhook is disabled' }); return }
+
+    // Validate secret if present in the registered hook
+    const incomingSecret = req.headers['x-webhook-secret'] as string | undefined
+    if (incomingSecret && incomingSecret !== hook.secret) {
+      res.status(401).json({ error: 'Invalid webhook secret' }); return
+    }
+
+    // Template substitution: {{body}} and {{event}}
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {})
+    const event = (req.headers['x-event-type'] as string | undefined) ?? ''
+    const task = hook.task
+      .replace(/\{\{body\}\}/g, body.slice(0, 2000))
+      .replace(/\{\{event\}\}/g, event)
+
+    const model = hook.model === 'default' ? defaultModel : hook.model
+
+    res.json({ ok: true, id, name: hook.name, message: 'Webhook received — running agent task' })
+
+    // Run the agent task asynchronously (do not block the HTTP response)
+    recordWebhookTrigger(id)
+    runAgentHeadless(task, {
+      model,
+      temperature: 0.7,
+      systemContent: `You were triggered by webhook "${hook.name}". Complete the requested task.`,
+      ollamaBaseUrl,
+      maxIterations: 20,
+    }).catch((err: unknown) => {
+      console.error(`[webhook] task error for "${hook.name}":`, err instanceof Error ? err.message : String(err))
+    })
+  })
+
+  app.get('/api/webhooks', (_req, res) => {
+    const hooks = loadWebhooks()
+    res.json(hooks.map(h => ({ id: h.id, name: h.name, enabled: h.enabled, triggerCount: h.triggerCount, lastTriggeredAt: h.lastTriggeredAt })))
+  })
+})().catch(console.error)
+
+// ── Tool timing stats ─────────────────────────────────────────────────────────
+app.get('/api/tool-timing', (_req, res) => {
+  res.json({ stats: getToolTimingStats(), recent: getRecentTimingLog(50) })
 })
 
 app.listen(port, async () => {

@@ -19,6 +19,7 @@ export const desktopClickDefinition: ToolDefinition = {
         y: { type: 'string', description: 'Y screen coordinate.' },
         button: { type: 'string', description: 'left (default) or right.' },
         double: { type: 'string', description: 'Set "true" for double-click.' },
+        dry_run: { type: 'string', description: 'Set "true" to preview the click without executing it.' },
       },
       required: ['x', 'y'],
     },
@@ -30,6 +31,10 @@ export const desktopClick: ToolHandler = (args) => {
   const y = parseInt(args.y ?? '0', 10)
   const right = args.button === 'right'
   const dbl = args.double === 'true'
+  if (args.dry_run === 'true') {
+    const mode = [dbl ? 'double' : null, right ? 'right' : 'left'].filter(Boolean).join('/')
+    return Promise.resolve(`DRY RUN: Would click at (${x}, ${y}) [${mode}]. Verify coordinates with take_screenshot first.`)
+  }
   const downFlag = right ? '0x8' : '0x2'
   const upFlag = right ? '0x10' : '0x4'
   const script = `
@@ -97,8 +102,47 @@ export const desktopSendKeysDefinition: ToolDefinition = {
 
 export const desktopSendKeys: ToolHandler = (args) => {
   if (!args.keys) return Promise.resolve('Error: keys required')
+  if (/\{LWIN\}/i.test(args.keys) || /\^\{ESC\}/i.test(args.keys) || /\^%\{DELETE\}/i.test(args.keys)) {
+    return Promise.resolve(`Error: key sequence '${args.keys}' is blocked for safety. Blocked sequences: Win key, Ctrl+Esc, Ctrl+Alt+Delete.`)
+  }
   const k = args.keys.replace(/'/g, "''")
   return runTerminal({ command: `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${k}'); Write-Output "Sent: ${k}"` })
+}
+
+// ── desktop_active_window ─────────────────────────────────────────────────────
+
+export const desktopActiveWindowDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'desktop_active_window',
+    description: 'Get the currently active foreground window title, process, PID, and bounds.',
+    parameters: { type: 'object', properties: {} },
+  },
+}
+
+export const desktopActiveWindow: ToolHandler = () => {
+  const script = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+public class user32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+}
+"@
+$handle = [user32]::GetForegroundWindow()
+$process = Get-Process | Where-Object { $_.MainWindowHandle -eq $handle } | Select-Object -First 1
+if ($process) {
+  $rect = New-Object RECT
+  [user32]::GetWindowRect($handle, [ref]$rect) | Out-Null
+  $title = if ($process.MainWindowTitle) { $process.MainWindowTitle } else { '(untitled)' }
+  Write-Output "Active window: $title (PID: $($process.Id), App: $($process.Name), Bounds: left=$($rect.Left), top=$($rect.Top), right=$($rect.Right), bottom=$($rect.Bottom))"
+} else {
+  Write-Output "No active foreground window found."
+}
+`.trim()
+  return runTerminal({ command: script })
 }
 
 // ── desktop_find_window ───────────────────────────────────────────────────────
