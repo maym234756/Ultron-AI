@@ -78,7 +78,7 @@ import {
   gitMerge, gitMergeDefinition,
 } from './git.js'
 import { httpRequest, httpRequestDefinition } from './http.js'
-import { dbQuery, dbQueryDefinition, dbExecute, dbExecuteDefinition } from './database.js'
+import { dbQuery, dbQueryDefinition, dbExecute, dbExecuteDefinition, dbSchema, dbSchemaDefinition, dbTransaction, dbTransactionDefinition, dbBackup, dbBackupDefinition, dbQueryPaged, dbQueryPagedDefinition } from './database.js'
 import {
   browserNewTab, browserNewTabDefinition,
   browserTabs, browserTabsDefinition,
@@ -114,7 +114,7 @@ import { transcribeAudio, transcribeAudioDefinition, installWhisper, installWhis
 import { memSave, memSaveDefinition, memRecall, memRecallDefinition, memList, memListDefinition, memForget, memForgetDefinition } from './longmem.js'
 import { sysStats, sysStatsDefinition, sysProcesses, sysProcessesDefinition, sysKill, sysKillDefinition, sysRun, sysRunDefinition, sysEnv, sysEnvDefinition } from './sysmon.js'
 import { fileRead, fileReadDefinition, fileWrite, fileWriteDefinition, fileList, fileListDefinition, fileMove, fileMoveDefinition, fileDelete, fileDeleteDefinition, fileSearch, fileSearchDefinition, fileInfo, fileInfoDefinition, folderCreate, folderCreateDefinition, folderDelete, folderDeleteDefinition, folderCopy, folderCopyDefinition, openInExplorer, openInExplorerDefinition } from './userfiles.js'
-import { ghSetToken, ghSetTokenDefinition, ghAuthStatus, ghAuthStatusDefinition, ghRepos, ghReposDefinition, ghIssues, ghIssuesDefinition, ghPrs, ghPrsDefinition, ghCreateIssue, ghCreateIssueDefinition, ghRepoInfo, ghRepoInfoDefinition, ghSearch, ghSearchDefinition } from './github.js'
+import { ghSetToken, ghSetTokenDefinition, ghAuthStatus, ghAuthStatusDefinition, ghRepos, ghReposDefinition, ghIssues, ghIssuesDefinition, ghPrs, ghPrsDefinition, ghCreateIssue, ghCreateIssueDefinition, ghRepoInfo, ghRepoInfoDefinition, ghSearch, ghSearchDefinition, ghCreateBranch, ghCreateBranchDefinition, ghCreatePr, ghCreatePrDefinition, ghComment, ghCommentDefinition, ghLabel, ghLabelDefinition, ghAssign, ghAssignDefinition, ghClose, ghCloseDefinition, ghMergePr, ghMergePrDefinition } from './github.js'
 import { desktopClick, desktopClickDefinition, desktopType, desktopTypeDefinition, desktopSendKeys, desktopSendKeysDefinition, desktopFindWindow, desktopFindWindowDefinition, desktopListWindows, desktopListWindowsDefinition, desktopGetCursorPos, desktopGetCursorPosDefinition, desktopScroll, desktopScrollDefinition } from './desktop.js'
 import { agentRun, agentRunDefinition, agentParallel, agentParallelDefinition } from './multiagent.js'
 import {
@@ -252,6 +252,10 @@ export const toolDefinitions: ToolDefinition[] = [
   httpRequestDefinition,
   dbQueryDefinition,
   dbExecuteDefinition,
+  dbSchemaDefinition,
+  dbTransactionDefinition,
+  dbBackupDefinition,
+  dbQueryPagedDefinition,
   notifyDefinition,
   browserNewTabDefinition,
   browserTabsDefinition,
@@ -316,6 +320,13 @@ export const toolDefinitions: ToolDefinition[] = [
   ghCreateIssueDefinition,
   ghRepoInfoDefinition,
   ghSearchDefinition,
+  ghCreateBranchDefinition,
+  ghCreatePrDefinition,
+  ghCommentDefinition,
+  ghLabelDefinition,
+  ghAssignDefinition,
+  ghCloseDefinition,
+  ghMergePrDefinition,
   // Desktop automation
   desktopClickDefinition,
   desktopTypeDefinition,
@@ -432,6 +443,10 @@ const handlers: Record<string, ToolHandler> = {
   http_request: httpRequest,
   db_query: dbQuery,
   db_execute: dbExecute,
+  db_schema: dbSchema,
+  db_transaction: dbTransaction,
+  db_backup: dbBackup,
+  db_query_paged: dbQueryPaged,
   notify: notify,
   browser_new_tab: browserNewTab,
   browser_tabs: browserTabs,
@@ -495,6 +510,13 @@ const handlers: Record<string, ToolHandler> = {
   gh_create_issue: ghCreateIssue,
   gh_repo_info: ghRepoInfo,
   gh_search: ghSearch,
+  gh_create_branch: ghCreateBranch,
+  gh_create_pr: ghCreatePr,
+  gh_comment: ghComment,
+  gh_label: ghLabel,
+  gh_assign: ghAssign,
+  gh_close: ghClose,
+  gh_merge_pr: ghMergePr,
   // Desktop automation
   desktop_click: desktopClick,
   desktop_type: desktopType,

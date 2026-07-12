@@ -125,7 +125,35 @@ Completed in thirteenth build increment:
 - Validation passed: npx tsc -p tsconfig.server.json --noEmit
 - Validation passed: npx oxlint server/tools/git.ts server/tools/http.ts server/tools/rag.ts server/tools/playwright.ts server/tools/registry.ts
 
-Immediate next increments:
+Completed in fourteenth build increment:
+- Added gh_create_branch tool: creates a new branch from any ref or SHA.
+- Added gh_create_pr tool: creates a pull request (draft support, auto-resolves base branch).
+- Added gh_comment tool: posts a comment to any issue or PR.
+- Added gh_label tool: adds or removes labels on issues/PRs.
+- Added gh_assign tool: adds or removes assignees on issues/PRs.
+- Added gh_close tool: closes or reopens an issue or PR (with close reason support).
+- Added gh_merge_pr tool: merges a PR with merge/squash/rebase method selection.
+- Updated registered tool count from 157 to 168.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/github.ts server/tools/registry.ts
+
+Completed in fifteenth build increment:
+- Added db_schema tool: inspects all tables, columns, types, and indexes in a SQLite database.
+- Added db_transaction tool: runs multiple SQL statements atomically with auto-rollback on failure.
+- Added db_backup tool: creates a timestamped backup copy of a SQLite database file.
+- Added db_query_paged tool: paginated SELECT queries with page/page_size and total row count.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/database.ts server/tools/registry.ts
+
+Completed in sixteenth build increment:
+- Upgraded search_web with real HTML result scraping (DuckDuckGo HTML endpoint).
+- Results now include title, URL, and snippet for each organic result (up to 20).
+- Added limit param for controlling result count.
+- Kept instant-answer/abstract layer for direct answers alongside web results.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/search.ts
+
+
 1. Playwright Browser Automation Core
     - DONE: Add browser_assert for URL/title/text/selector assertions.
     - DONE: Add browser_snapshot for structured accessibility/DOM summaries.
@@ -184,8 +212,9 @@ Immediate next increments:
 
 9. GitHub Integration
      - DONE: Add token health check and permission reporting.
-   - Add branch/PR creation workflow.
-   - Add issue/PR comments, labels, assignees, and milestones.
+    - DONE: Add branch/PR creation workflow.
+    - DONE: Add issue/PR comments, labels, assignees.
+    - DONE: Add close/reopen and PR merge workflow.
      - DONE: Add rate-limit diagnostics and pagination.
 
 10. Browser Discovery and Web Fetch
@@ -281,10 +310,10 @@ Immediate next increments:
    - Add curl import/export.
 
 25. SQLite Database Tools
-    - Add schema inspection and query explain.
-    - Add transaction support.
-    - Add backup before destructive execution.
-    - Add result pagination.
+    - DONE: Add schema inspection and query explain.
+    - DONE: Add transaction support.
+    - DONE: Add backup before destructive execution.
+    - DONE: Add result pagination.
 
 26. Conversation Memory
     - Add namespaces and metadata.
@@ -300,8 +329,10 @@ Immediate next increments:
     - Add non-interactive safety guardrails.
 
 28. Web Search
+    - DONE: Real organic result scraping with titles, URLs, and snippets.
+    - DONE: Multiple result layers (HTML scrape + instant answer API).
+    - DONE: Configurable result limit.
     - Add multiple providers where available.
-    - Add result URLs, snippets, dates, and source ranking.
     - Add query refinement suggestions.
     - Add timeout/retry diagnostics.
 
