@@ -13,12 +13,13 @@ The Vercel production frontend is live at:
 
 ```text
 https://astra-one-red.vercel.app
+https://www.lumivexai.com
 ```
 
 Set this origin on the backend:
 
 ```env
-APP_ORIGIN="https://astra-one-red.vercel.app"
+APP_ORIGIN="https://astra-one-red.vercel.app,https://lumivexai.com,https://www.lumivexai.com"
 ```
 
 After the backend is deployed, set this Vercel environment variable and redeploy:
@@ -67,7 +68,7 @@ Start from [.env.production.example](../.env.production.example). The critical v
 ```env
 NODE_ENV="production"
 PORT="8787"
-APP_ORIGIN="https://astra-one-red.vercel.app"
+APP_ORIGIN="https://astra-one-red.vercel.app,https://lumivexai.com,https://www.lumivexai.com"
 DATABASE_URL="postgresql://astra:replace-me@db.example.com:5432/astra?schema=public"
 AUTH_COOKIE_SAME_SITE="none"
 AUTH_COOKIE_SECURE="1"
