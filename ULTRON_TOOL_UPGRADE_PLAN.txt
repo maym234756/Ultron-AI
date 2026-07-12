@@ -481,3 +481,23 @@ Completed in thirty-fifth build increment (PWA Mobile App):
 
 Tool count after increments 17-35: 210+ registered tools.
 New tools added in 17-35: schedule_enable, schedule_disable, agent_status, repl_packages, workspace_tree, sys_services, sys_ports, sys_platform, probe_media, trim_video, analyze_screenshot, whisper_status, mem_update, mem_search_tags, desktop_active_window, cache_status, cache_get, cache_set, cache_clear, git_tag, git_cherry_pick, curl_import, curl_export, plugin_list, plugin_enable, plugin_disable, plugin_create, plugin_read, webhook_register, webhook_list, webhook_delete, webhook_toggle.
+
+Completed in thirty-sixth build increment (Terminal + iPad/iPhone PWA):
+- Upgraded run_terminal to cross-platform: Linux/macOS now default to bash; supports bash, sh, zsh, fish, powershell, cmd.
+- Added env param to run_terminal: inject extra environment variables (merged with process.env).
+- Added command risk classification: every run_terminal result now includes [risk safe|caution|destructive] with the reason.
+- ENOENT shell-not-found errors now include a helpful hint naming the missing executable.
+- Upgraded PWAInstallPrompt: detects iPad vs iPhone (including iPadOS 13+ "Macintosh" UA with maxTouchPoints).
+- iPad prompt shows toolbar-specific "Share icon in toolbar" instructions; iPhone shows bottom-bar instructions.
+- Added visual share-icon glyph (□↑) for iOS install flow.
+- Added display-mode:standalone check to suppress banner when already installed.
+- Added mobile-web-app-capable meta tag and user-scalable=no to index.html viewport.
+- Added iPad-specific CSS media query (481px–1024px): keeps two-column sidebar rail layout on tablets.
+- Tablet sidebar: 200px wide left rail with touch-friendly 36px action buttons.
+- Tablet composer: sticky bottom with safe-area-inset-bottom support.
+- Tablet layout: two-column prompt grid, 82% max-width message bubbles.
+- Safe-area padding-left/right for landscape iPad notch (USB-C corner devices).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx tsc -p tsconfig.app.json --noEmit
+- Validation passed: npx oxlint server/tools/terminal.ts src/components/PWAInstallPrompt.tsx
+- Validation passed: vite build succeeds.

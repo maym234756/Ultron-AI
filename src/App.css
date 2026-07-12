@@ -962,6 +962,100 @@ html.dark .app-shell.quiet-ui {
   }
 }
 
+/* ── Tablet / iPad layout (481px – 1024px) ─────────────────────────────────
+   Covers iPad mini, iPad Air, iPad Pro in portrait and landscape.
+   Keeps the sidebar visible as a compact left rail rather than stacking it
+   above the chat panel, giving tablet users the same two-column feel as
+   desktop but with tighter spacing and touch-friendly tap targets.
+──────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 481px) and (max-width: 1024px) {
+  /* Keep sidebar as a left rail */
+  .app-shell {
+    flex-direction: row;
+    min-height: 100dvh;
+  }
+
+  /* Narrower sidebar that doesn't crowd the chat area */
+  .sidebar {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+
+  /* Collapsed sidebar hides off-screen (slide left) */
+  .sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    border-right: 0;
+  }
+
+  /* Chat panel takes remaining space */
+  .chat-panel {
+    flex: 1;
+    min-width: 0;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Message list scrolls, composer stays fixed at bottom */
+  .message-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Composer respects the safe-area inset (e.g. iPad with home bar) */
+  .composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  /* Tool tray scrolls horizontally on narrow tablets */
+  .composer-tool-tray {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .composer-tool-tray::-webkit-scrollbar { display: none; }
+
+  /* Larger touch targets for sidebar action buttons */
+  .sidebar-action-btn {
+    min-height: 36px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  /* Two-column prompt grid on tablets */
+  .prompt-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* Message bubbles: slightly wider than phone, not as wide as desktop */
+  .message-bubble {
+    max-width: 82%;
+  }
+
+  /* Safe-area padding for landscape notch (iPad Pro with USB-C corner) */
+  .app-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* iPad Pro 12.9" landscape (1366px) — treat like full desktop, no override needed */
+
 /* ── Agent mode toggle ── */
 .agent-toggle {
   display: flex;

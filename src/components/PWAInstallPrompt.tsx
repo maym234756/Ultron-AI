@@ -6,20 +6,39 @@ type BeforeInstallPromptEvent = Event & {
 
 const DISMISS_KEY = 'ultron-pwa-install-dismissed'
 
+type DeviceKind = 'iphone' | 'ipad' | 'android' | 'other'
+
+function detectDevice(): DeviceKind {
+  const ua = navigator.userAgent
+  // iPad on iPadOS 13+ reports as Macintosh with touch support
+  if (/ipad/i.test(ua)) return 'ipad'
+  if (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return 'ipad'
+  if (/iphone|ipod/i.test(ua)) return 'iphone'
+  if (/android/i.test(ua)) return 'android'
+  return 'other'
+}
+
+function isRunningStandalone(): boolean {
+  return (
+    ('standalone' in window.navigator &&
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true) ||
+    window.matchMedia('(display-mode: standalone)').matches
+  )
+}
+
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showBanner, setShowBanner] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
+  const [device, setDevice] = useState<DeviceKind>('other')
 
   useEffect(() => {
-    // Don't show if permanently dismissed
     if (localStorage.getItem(DISMISS_KEY)) return
+    if (isRunningStandalone()) return
 
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
-    const isInStandalone = ('standalone' in window.navigator) && (window.navigator as Navigator & { standalone?: boolean }).standalone
+    const kind = detectDevice()
+    setDevice(kind)
 
-    if (ios && !isInStandalone) {
-      setIsIOS(true)
+    if (kind === 'iphone' || kind === 'ipad') {
       const timer = window.setTimeout(() => setShowBanner(true), 3000)
       return () => window.clearTimeout(timer)
     }
@@ -48,6 +67,13 @@ export function PWAInstallPrompt() {
     setShowBanner(false)
   }
 
+  const isIOS = device === 'iphone' || device === 'ipad'
+  const isIPad = device === 'ipad'
+
+  const shareIconHint = isIPad
+    ? 'Tap the Share icon (□↑) in the toolbar, then "Add to Home Screen"'
+    : 'Tap the Share button (□↑) at the bottom, then "Add to Home Screen"'
+
   return (
     <div
       style={{
@@ -55,31 +81,35 @@ export function PWAInstallPrompt() {
         bottom: 0,
         left: 0,
         right: 0,
-        background: '#1a1a2e',
-        borderTop: '1px solid #333',
-        padding: '12px 16px',
-        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        borderTop: '1px solid rgba(99,102,241,0.35)',
+        padding: '14px 20px',
+        paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: 12,
         zIndex: 9999,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
         color: '#fff',
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
       }}
     >
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>📱 Install Ultron on your phone</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isIPad ? '📱 Install Ultron on your iPad' : isIOS ? '📱 Install Ultron on your iPhone' : '📱 Install Ultron'}
+        </div>
         {isIOS ? (
-          <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
-            Tap the Share button ↑ then "Add to Home Screen"
+          <div style={{ fontSize: 12, color: '#b0b8d4', marginTop: 4, lineHeight: 1.4 }}>
+            {shareIconHint}
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#b0b8d4', marginTop: 4 }}>
             Add to your home screen for the full app experience
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
         {!isIOS && (
           <button
             onClick={() => void handleInstall()}
@@ -87,26 +117,45 @@ export function PWAInstallPrompt() {
               background: '#6366f1',
               color: '#fff',
               border: 'none',
-              borderRadius: 8,
-              padding: '8px 16px',
+              borderRadius: 10,
+              padding: '9px 18px',
               cursor: 'pointer',
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: 13,
+              whiteSpace: 'nowrap',
             }}
           >
             Install
           </button>
         )}
+        {isIOS && (
+          <div
+            style={{
+              background: 'rgba(99,102,241,0.18)',
+              border: '1px solid rgba(99,102,241,0.5)',
+              borderRadius: 10,
+              padding: '9px 14px',
+              fontSize: 22,
+              lineHeight: 1,
+              cursor: 'default',
+              userSelect: 'none',
+            }}
+            aria-hidden="true"
+          >
+            □↑
+          </div>
+        )}
         <button
           onClick={handleDismiss}
           style={{
             background: 'transparent',
-            color: '#aaa',
-            border: '1px solid #444',
-            borderRadius: 8,
-            padding: '8px 12px',
+            color: '#9ca3af',
+            border: '1px solid #374151',
+            borderRadius: 10,
+            padding: '9px 14px',
             cursor: 'pointer',
             fontSize: 13,
+            whiteSpace: 'nowrap',
           }}
         >
           Later
