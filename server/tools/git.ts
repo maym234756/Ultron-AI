@@ -249,7 +249,7 @@ export const gitAddDefinition: ToolDefinition = {
 export const gitAdd: ToolHandler = (args) => {
   const files = (args.files ?? '.').trim() || '.'
   // Reject unsafe shell metacharacters to prevent command injection
-  if (/[;&|`$()<>{}\\\n\r\t]/.test(files)) return 'Error: files contains unsafe characters'
+  if (/[;&|`$()<>{}\\\n\r\t]/.test(files)) return Promise.resolve('Error: files contains unsafe characters')
   return runTerminal({ command: `git add -- ${files}`, cwd: args.cwd })
 }
 
@@ -334,5 +334,99 @@ export const gitMerge: ToolHandler = async (args) => {
       return `${result}\n\nConflicting files:\n${conflicts}\n\nFix conflicts, then: git add <files> && git commit\nOr: git_merge abort:"true" to cancel.`
     } catch { /* fall through */ }
   }
+  return result
+}
+
+// ── git_tag ────────────────────────────────────────────────────────────────────
+
+export const gitTagDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_tag',
+    description: 'Create, list, or delete git tags.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          description: 'Action: list (default), create, or delete.',
+          enum: ['list', 'create', 'delete'],
+        },
+        name: { type: 'string', description: 'Tag name for create/delete actions.' },
+        message: { type: 'string', description: 'Annotation message for annotated tags.' },
+        ref: { type: 'string', description: 'Commit or branch to tag (default: HEAD).' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitTag: ToolHandler = async (args) => {
+  const action = (args.action ?? 'list').toLowerCase()
+  const cwd = args.cwd ?? process.cwd()
+  const quote = (value: string) => value.replace(/[\n\r]+/g, ' ').replace(/["\\$`]/g, '\\$&')
+
+  if (action === 'list') {
+    return runTerminal({ command: 'git tag -l --sort=-version:refname', cwd })
+  }
+
+  const name = (args.name ?? '').trim()
+  if (!name) return 'Error: name is required for create/delete actions'
+
+  if (action === 'create') {
+    const ref = (args.ref ?? 'HEAD').trim() || 'HEAD'
+    if (args.message) {
+      return runTerminal({
+        command: `git tag -a "${quote(name)}" -m "${quote(args.message)}" "${quote(ref)}"`,
+        cwd,
+      })
+    }
+    return runTerminal({ command: `git tag "${quote(name)}" "${quote(ref)}"`, cwd })
+  }
+
+  if (action === 'delete') {
+    return runTerminal({ command: `git tag -d "${quote(name)}"`, cwd })
+  }
+
+  return 'Error: unknown action. Use list, create, or delete.'
+}
+
+// ── git_cherry_pick ────────────────────────────────────────────────────────────
+
+export const gitCherryPickDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'git_cherry_pick',
+    description: 'Apply a commit from another branch, with conflict diagnostics when needed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        commit: { type: 'string', description: 'Commit SHA or range to cherry-pick.' },
+        no_commit: { type: 'string', description: 'Set to "true" to stage changes without committing.' },
+        abort: { type: 'string', description: 'Set to "true" to abort an in-progress cherry-pick.' },
+        cwd: { type: 'string', description: 'Repository directory.' },
+      },
+    },
+  },
+}
+
+export const gitCherryPick: ToolHandler = async (args) => {
+  const cwd = args.cwd ?? process.cwd()
+  if (args.abort === 'true') return runTerminal({ command: 'git cherry-pick --abort', cwd })
+
+  const commit = (args.commit ?? '').trim()
+  if (!commit) return 'Error: commit is required (or set abort:"true" to cancel)'
+
+  const quote = (value: string) => value.replace(/[\n\r]+/g, ' ').replace(/["\\$`]/g, '\\$&')
+  const noCommit = args.no_commit === 'true' ? ' -n' : ''
+  const result = await runTerminal({ command: `git cherry-pick${noCommit} "${quote(commit)}"`, cwd })
+
+  if (/CONFLICT/.test(result)) {
+    try {
+      const conflicts = await runTerminal({ command: 'git diff --name-only --diff-filter=U', cwd })
+      return `${result}\n\nConflicting files:\n${conflicts}\n\nResolve conflicts then: git add <files> && git commit`
+    } catch { /* fall through */ }
+  }
+
   return result
 }

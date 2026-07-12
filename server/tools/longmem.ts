@@ -93,6 +93,18 @@ function parseExpiration(value: unknown): string | null {
   return Number.isFinite(time) ? new Date(time).toISOString() : null
 }
 
+function parseScopeFilter(value: unknown): MemoryScope | null {
+  return value === 'project' || value === 'temporary' || value === 'user' ? value : null
+}
+
+function formatMemorySummary(entry: MemEntry): string {
+  return `[${entry.id}] ${entry.timestamp.slice(0, 10)} · ${entry.scope} · confidence ${(entry.confidence * 100).toFixed(0)}% · source ${entry.source}: ${entry.content.slice(0, 120)}${entry.content.length > 120 ? '...' : ''}${entry.tags.length ? ` [${entry.tags.join(', ')}]` : ''}${entry.expiresAt ? ` · expires ${entry.expiresAt.slice(0, 10)}` : ''}`
+}
+
+function previewContent(content: string, limit = 100): string {
+  return `${content.slice(0, limit)}${content.length > limit ? '...' : ''}`
+}
+
 export async function listMemoryEntries(includeExpired = false): Promise<MemEntry[]> {
   const entries = await loadEntries()
   return includeExpired ? entries : entries.filter(entry => !isExpired(entry))
@@ -149,6 +161,7 @@ export const memSaveDefinition: ToolDefinition = {
         source: { type: 'string', description: 'Where this memory came from, e.g. user, project, agent, import.' },
         scope: { type: 'string', description: 'Memory scope: user, project, or temporary.' },
         expiresAt: { type: 'string', description: 'Optional expiration date/time for temporary memories.' },
+        force: { type: 'string', description: 'Set "true" to save even if a likely duplicate is detected.' },
       },
       required: ['content'],
     },
@@ -160,6 +173,14 @@ export const memSave: ToolHandler = async (args) => {
   try {
     const embedding = await embedText(args.content)
     const scope = normalizeScope(args.scope)
+    const entries = await loadEntries()
+    const duplicate = entries
+      .filter(entry => entry.scope === scope && !isExpired(entry))
+      .map(entry => ({ entry, score: cosineSim(embedding, entry.embedding) }))
+      .sort((a, b) => b.score - a.score)[0]
+    if (duplicate && duplicate.score > 0.92 && args.force !== 'true') {
+      return `Duplicate detected (similarity: ${duplicate.score.toFixed(2)}). Existing entry: ${previewContent(duplicate.entry.content)}. Use mem_update to update it, or set force:'true' to save anyway.`
+    }
     const entry: MemEntry = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       timestamp: new Date().toISOString(),
@@ -177,6 +198,50 @@ export const memSave: ToolHandler = async (args) => {
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
+// ── mem_update ────────────────────────────────────────────────────────────────
+
+export const memUpdateDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'mem_update',
+    description: 'Update an existing long-term memory entry by ID and re-embed its content.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Memory ID to update.' },
+        content: { type: 'string', description: 'New content for the memory.' },
+        tags: { type: 'string', description: 'Optional comma-separated replacement tags.' },
+        scope: { type: 'string', description: 'Optional replacement scope: user, project, or temporary.' },
+      },
+      required: ['id', 'content'],
+    },
+  },
+}
+
+export const memUpdate: ToolHandler = async (args) => {
+  if (!args.id) return 'Error: id required'
+  if (!args.content) return 'Error: content required'
+  try {
+    const entries = await loadEntries()
+    const idx = entries.findIndex(entry => entry.id === args.id)
+    if (idx < 0) return `No memory with id: ${args.id}`
+    const current = entries[idx]
+    const scope = Object.prototype.hasOwnProperty.call(args, 'scope') ? normalizeScope(args.scope) : current.scope
+    const tags = Object.prototype.hasOwnProperty.call(args, 'tags') ? parseTags(args.tags) : current.tags
+    entries[idx] = {
+      ...current,
+      content: args.content,
+      tags,
+      scope,
+      embedding: await embedText(args.content),
+      timestamp: new Date().toISOString(),
+      expiresAt: scope === 'temporary' ? current.expiresAt : null,
+    }
+    await saveEntries(entries)
+    return `Updated memory ${formatMemorySummary(entries[idx])}`
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
 // ── mem_recall ────────────────────────────────────────────────────────────────
 
 export const memRecallDefinition: ToolDefinition = {
@@ -190,6 +255,7 @@ export const memRecallDefinition: ToolDefinition = {
         query: { type: 'string', description: 'What to look for.' },
         top_k: { type: 'string', description: 'Max results (default 5).' },
         tag: { type: 'string', description: 'Optional tag filter.' },
+        scope: { type: 'string', description: 'Optional scope filter: user, project, or temporary.' },
       },
       required: ['query'],
     },
@@ -199,12 +265,14 @@ export const memRecallDefinition: ToolDefinition = {
 export const memRecall: ToolHandler = async (args) => {
   if (!args.query) return 'Error: query required'
   try {
-    const entries = await loadEntries()
+    const entries = await listMemoryEntries()
     if (!entries.length) return 'Long-term memory is empty.'
     const qEmbed = await embedText(args.query)
     const k = parseInt(args.top_k ?? '5', 10) || 5
     let candidates = entries
     if (args.tag) candidates = candidates.filter(e => e.tags.includes(args.tag))
+    const scope = parseScopeFilter(args.scope)
+    if (scope) candidates = candidates.filter(e => e.scope === scope)
     const scored = candidates
       .map(e => ({ e, score: cosineSim(qEmbed, e.embedding) }))
       .sort((a, b) => b.score - a.score)
@@ -213,6 +281,38 @@ export const memRecall: ToolHandler = async (args) => {
     return scored.map(({ e, score }) =>
       `[${e.id}] (${(score * 100).toFixed(0)}% match) ${e.timestamp.slice(0, 10)} · ${e.scope} · confidence ${(e.confidence * 100).toFixed(0)}%\n${e.content}${e.tags.length ? `\nTags: ${e.tags.join(', ')}` : ''}`
     ).join('\n\n')
+  } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
+}
+
+// ── mem_search_tags ───────────────────────────────────────────────────────────
+
+export const memSearchTagsDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'mem_search_tags',
+    description: 'Search long-term memory by tags only. Returns memories containing all specified tags.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tags: { type: 'string', description: 'Comma-separated tags that must all be present.' },
+        scope: { type: 'string', description: 'Optional scope filter: user, project, or temporary.' },
+      },
+      required: ['tags'],
+    },
+  },
+}
+
+export const memSearchTags: ToolHandler = async (args) => {
+  if (!args.tags) return 'Error: tags required'
+  try {
+    const tags = parseTags(args.tags)
+    if (!tags.length) return 'Error: tags required'
+    let entries = await listMemoryEntries()
+    const scope = parseScopeFilter(args.scope)
+    if (scope) entries = entries.filter(entry => entry.scope === scope)
+    entries = entries.filter(entry => tags.every(tag => entry.tags.includes(tag)))
+    if (!entries.length) return 'No memories found.'
+    return entries.map(formatMemorySummary).join('\n')
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 
@@ -240,9 +340,7 @@ export const memList: ToolHandler = async (args) => {
     const limit = parseInt(args.limit ?? '20', 10) || 20
     entries = entries.slice(-limit).reverse()
     if (!entries.length) return 'No memories found.'
-    return entries.map(e =>
-      `[${e.id}] ${e.timestamp.slice(0, 10)} · ${e.scope} · confidence ${(e.confidence * 100).toFixed(0)}% · source ${e.source}: ${e.content.slice(0, 120)}${e.content.length > 120 ? '...' : ''}${e.tags.length ? ` [${e.tags.join(', ')}]` : ''}${e.expiresAt ? ` · expires ${e.expiresAt.slice(0, 10)}` : ''}`
-    ).join('\n')
+    return entries.map(formatMemorySummary).join('\n')
   } catch (err) { return `Error: ${err instanceof Error ? err.message : String(err)}` }
 }
 

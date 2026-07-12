@@ -158,3 +158,216 @@ export const httpRequest: ToolHandler = async (args) => {
   }
   return 'HTTP request failed' + (maxRetries > 0 ? ' after ' + (maxRetries + 1) + ' attempts' : '') + ': ' + lastError
 }
+
+function tokenizeCurlCommand(input: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]
+
+    if (quote === "'") {
+      if (ch === "'") {
+        quote = null
+      } else {
+        current += ch
+      }
+      continue
+    }
+
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = null
+      } else if (ch === '\\' && i + 1 < input.length) {
+        current += input[++i]
+      } else {
+        current += ch
+      }
+      continue
+    }
+
+    if (/\s/.test(ch)) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch
+      continue
+    }
+
+    if (ch === '\\' && i + 1 < input.length) {
+      current += input[++i]
+      continue
+    }
+
+    current += ch
+  }
+
+  if (current) tokens.push(current)
+  return tokens
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function normalizeHeaderValueForExport(name: string, value: string): string {
+  return name.toLowerCase() === 'authorization' ? 'REDACTED' : value
+}
+
+// ── curl_import ────────────────────────────────────────────────────────────────
+
+export const curlImportDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'curl_import',
+    description: 'Parse a curl command and convert it into equivalent http_request params.',
+    parameters: {
+      type: 'object',
+      properties: {
+        curl_command: { type: 'string', description: 'Full curl command string to parse.' },
+      },
+      required: ['curl_command'],
+    },
+  },
+}
+
+export const curlImport: ToolHandler = async (args) => {
+  const curlCommand = (args.curl_command ?? '').trim()
+  if (!curlCommand) return 'Error: curl_command is required'
+
+  const tokens = tokenizeCurlCommand(curlCommand)
+  if (tokens.length === 0) return 'Error: curl_command is empty'
+
+  let method = ''
+  let url = ''
+  let body = ''
+  let auth = ''
+  const headers: Record<string, string> = {}
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    const next = tokens[i + 1] ?? ''
+
+    if (i === 0 && token === 'curl') continue
+    if ((token === '-X' || token === '--request') && next) {
+      method = next.toUpperCase()
+      i++
+      continue
+    }
+    if ((token === '-H' || token === '--header') && next) {
+      const sep = next.indexOf(':')
+      if (sep > -1) {
+        headers[next.slice(0, sep).trim()] = next.slice(sep + 1).trim()
+      }
+      i++
+      continue
+    }
+    if ((token === '-d' || token === '--data' || token === '--data-raw') && next) {
+      body = next
+      i++
+      continue
+    }
+    if ((token === '-u' || token === '--user') && next) {
+      auth = `basic:${next}`
+      i++
+      continue
+    }
+    if ((token === '--url') && next) {
+      url = next
+      i++
+      continue
+    }
+    if (!token.startsWith('-')) {
+      url = token
+    }
+  }
+
+  if (!url) return 'Error: could not determine URL from curl_command'
+  if (!method) method = body ? 'POST' : 'GET'
+
+  return JSON.stringify({
+    url,
+    method,
+    headers: JSON.stringify(headers),
+    body: body || undefined,
+    auth: auth || undefined,
+    note: 'Use these params with http_request to replay this request.',
+  }, null, 2)
+}
+
+// ── curl_export ────────────────────────────────────────────────────────────────
+
+export const curlExportDefinition: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'curl_export',
+    description: 'Convert http_request params into an equivalent curl command.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Full URL to request.' },
+        method: { type: 'string', description: 'HTTP method to use.' },
+        headers: { type: 'string', description: 'JSON object of request headers.' },
+        body: { type: 'string', description: 'Raw request body.' },
+        auth: { type: 'string', description: 'Auth shorthand: "bearer:TOKEN" or "basic:user:pass"' },
+        form_body: { type: 'string', description: 'URL-encoded form fields as a JSON object.' },
+      },
+      required: ['url'],
+    },
+  },
+}
+
+export const curlExport: ToolHandler = async (args) => {
+  const url = (args.url ?? '').trim()
+  if (!url) return 'Error: url is required'
+
+  const method = (args.method ?? (args.body || args.form_body ? 'POST' : 'GET')).toUpperCase()
+  const headers: Record<string, string> = {}
+
+  if (args.headers) {
+    try {
+      Object.assign(headers, JSON.parse(args.headers) as Record<string, string>)
+    } catch {
+      return 'Error: headers must be valid JSON, e.g. {"Content-Type":"application/json"}'
+    }
+  }
+
+  let data = args.body ?? ''
+  if (args.form_body) {
+    try {
+      const fields = JSON.parse(args.form_body) as Record<string, string>
+      data = Object.entries(fields)
+        .map(([key, value]) => encodeURIComponent(key) + '=' + encodeURIComponent(value))
+        .join('&')
+      if (!headers['Content-Type']) headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    } catch {
+      return 'Error: form_body must be a JSON object, e.g. {"username":"alice"}'
+    }
+  }
+
+  let basicAuth = ''
+  if (args.auth) {
+    if (args.auth.startsWith('bearer:')) {
+      headers.Authorization = 'Bearer ' + args.auth.slice(7)
+    } else if (args.auth.startsWith('basic:')) {
+      basicAuth = 'REDACTED'
+    }
+  }
+
+  const parts = [`curl -X ${method} ${shellQuote(url)}`]
+
+  for (const [name, value] of Object.entries(headers)) {
+    parts.push(`-H ${shellQuote(`${name}: ${normalizeHeaderValueForExport(name, value)}`)}`)
+  }
+
+  if (basicAuth) parts.push(`-u ${shellQuote(basicAuth)}`)
+  if (data) parts.push(`-d ${shellQuote(data)}`)
+
+  return parts.join(' \\\n  ')
+}

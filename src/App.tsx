@@ -58,6 +58,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { TemplatesPanel } from './components/TemplatesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { ProjectBuilderPanel } from './components/ProjectBuilderPanel'
+import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { ReferenceBuilderPanel } from './components/ReferenceBuilderPanel'
 import { AuthPanel } from './components/AuthPanel'
 import { AdminIdentityPanel } from './components/AdminIdentityPanel'
@@ -2716,6 +2717,7 @@ function App() {
         />
       </div>
     )}
+    <PWAInstallPrompt />
   </>
   )
 }

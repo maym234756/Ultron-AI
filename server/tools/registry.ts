@@ -145,6 +145,38 @@ import {
   taskUpdate, taskUpdateDefinition,
   dailyBriefing, dailyBriefingDefinition,
 } from './tasks.js'
+// Inc 17: scheduler enable/disable
+import { scheduleEnable, scheduleEnableDefinition, scheduleDisable, scheduleDisableDefinition } from './scheduler.js'
+// Inc 18: agent_status
+import { agentStatus, agentStatusDefinition } from './multiagent.js'
+// Inc 19: repl_packages
+import { replPackages, replPackagesDefinition } from './python_repl.js'
+// Inc 20: workspace_tree
+import { workspaceTree, workspaceTreeDefinition } from './filesystem.js'
+// Inc 21: sysmon new tools
+import { sysServices, sysServicesDefinition, sysPorts, sysPortsDefinition } from './sysmon.js'
+// Inc 22: media new tools
+import { probeMedia, probeMediaDefinition, trimVideo, trimVideoDefinition } from './media.js'
+// Inc 23: analyze_screenshot
+import { analyzeScreenshot, analyzeScreenshotDefinition } from './vision.js'
+// Inc 24: whisper_status
+import { whisperStatus, whisperStatusDefinition } from './whisper.js'
+// Inc 25: mem_update, mem_search_tags
+import { memUpdate, memUpdateDefinition, memSearchTags, memSearchTagsDefinition } from './longmem.js'
+// Inc 26: desktop_active_window
+import { desktopActiveWindow, desktopActiveWindowDefinition } from './desktop.js'
+// Inc 27: cache tools
+import { cacheStatus, cacheStatusDefinition, cacheGet, cacheGetDefinition, cacheSet, cacheSetDefinition, cacheClear, cacheClearDefinition } from './cache.js'
+// Inc 28: git_tag, git_cherry_pick
+import { gitTag, gitTagDefinition, gitCherryPick, gitCherryPickDefinition } from './git.js'
+// Inc 29: curl tools
+import { curlImport, curlImportDefinition, curlExport, curlExportDefinition } from './http.js'
+// Inc 31: plugin management
+import { pluginList, pluginListDefinition, pluginEnable, pluginEnableDefinition, pluginDisable, pluginDisableDefinition, pluginCreate, pluginCreateDefinition, pluginRead, pluginReadDefinition } from './plugins.js'
+// Inc 32: webhooks
+import { webhookRegister, webhookRegisterDefinition, webhookList, webhookListDefinition, webhookDelete, webhookDeleteDefinition, webhookToggle, webhookToggleDefinition } from './webhooks.js'
+// Inc 33: sys_platform
+import { sysPlatform, sysPlatformDefinition } from './platform.js'
 
 const connectorActionDryRunDefinition: ToolDefinition = {
   type: 'function',
@@ -367,6 +399,54 @@ export const toolDefinitions: ToolDefinition[] = [
   taskUpdateDefinition,
   dailyBriefingDefinition,
   connectorActionDryRunDefinition,
+  // Inc 17: scheduler enable/disable
+  scheduleEnableDefinition,
+  scheduleDisableDefinition,
+  // Inc 18: agent_status
+  agentStatusDefinition,
+  // Inc 19: repl_packages
+  replPackagesDefinition,
+  // Inc 20: workspace_tree
+  workspaceTreeDefinition,
+  // Inc 21: sysmon additions
+  sysServicesDefinition,
+  sysPortsDefinition,
+  // Inc 22: media additions
+  probeMediaDefinition,
+  trimVideoDefinition,
+  // Inc 23: analyze_screenshot
+  analyzeScreenshotDefinition,
+  // Inc 24: whisper_status
+  whisperStatusDefinition,
+  // Inc 25: mem_update, mem_search_tags
+  memUpdateDefinition,
+  memSearchTagsDefinition,
+  // Inc 26: desktop_active_window
+  desktopActiveWindowDefinition,
+  // Inc 27: cache tools
+  cacheStatusDefinition,
+  cacheGetDefinition,
+  cacheSetDefinition,
+  cacheClearDefinition,
+  // Inc 28: git_tag, git_cherry_pick
+  gitTagDefinition,
+  gitCherryPickDefinition,
+  // Inc 29: curl tools
+  curlImportDefinition,
+  curlExportDefinition,
+  // Inc 31: plugin management
+  pluginListDefinition,
+  pluginEnableDefinition,
+  pluginDisableDefinition,
+  pluginCreateDefinition,
+  pluginReadDefinition,
+  // Inc 32: webhooks
+  webhookRegisterDefinition,
+  webhookListDefinition,
+  webhookDeleteDefinition,
+  webhookToggleDefinition,
+  // Inc 33: sys_platform
+  sysPlatformDefinition,
 ]
 
 const handlers: Record<string, ToolHandler> = {
@@ -557,6 +637,96 @@ const handlers: Record<string, ToolHandler> = {
   task_update: taskUpdate,
   daily_briefing: dailyBriefing,
   connector_action_dry_run: connectorActionDryRun,
+  // Inc 17: scheduler enable/disable
+  schedule_enable: scheduleEnable,
+  schedule_disable: scheduleDisable,
+  // Inc 18: agent_status
+  agent_status: agentStatus,
+  // Inc 19: repl_packages
+  repl_packages: replPackages,
+  // Inc 20: workspace_tree
+  workspace_tree: workspaceTree,
+  // Inc 21: sysmon additions
+  sys_services: sysServices,
+  sys_ports: sysPorts,
+  // Inc 22: media additions
+  probe_media: probeMedia,
+  trim_video: trimVideo,
+  // Inc 23: analyze_screenshot
+  analyze_screenshot: analyzeScreenshot,
+  // Inc 24: whisper_status
+  whisper_status: whisperStatus,
+  // Inc 25: mem_update, mem_search_tags
+  mem_update: memUpdate,
+  mem_search_tags: memSearchTags,
+  // Inc 26: desktop_active_window
+  desktop_active_window: desktopActiveWindow,
+  // Inc 27: cache tools
+  cache_status: cacheStatus,
+  cache_get: cacheGet,
+  cache_set: cacheSet,
+  cache_clear: cacheClear,
+  // Inc 28: git_tag, git_cherry_pick
+  git_tag: gitTag,
+  git_cherry_pick: gitCherryPick,
+  // Inc 29: curl tools
+  curl_import: curlImport,
+  curl_export: curlExport,
+  // Inc 31: plugin management
+  plugin_list: pluginList,
+  plugin_enable: pluginEnable,
+  plugin_disable: pluginDisable,
+  plugin_create: pluginCreate,
+  plugin_read: pluginRead,
+  // Inc 32: webhooks
+  webhook_register: webhookRegister,
+  webhook_list: webhookList,
+  webhook_delete: webhookDelete,
+  webhook_toggle: webhookToggle,
+  // Inc 33: sys_platform
+  sys_platform: sysPlatform,
+}
+
+// ── Tool execution timing telemetry ──────────────────────────────────────────
+
+interface TimingRecord {
+  tool: string
+  durationMs: number
+  success: boolean
+  ts: number
+}
+
+const _timingLog: TimingRecord[] = []
+const _MAX_TIMING_LOG = 200
+
+// Per-tool aggregate stats
+const _toolStats = new Map<string, { calls: number; totalMs: number; errors: number; lastMs: number }>()
+
+function _recordTiming(tool: string, durationMs: number, success: boolean): void {
+  _timingLog.push({ tool, durationMs, success, ts: Date.now() })
+  if (_timingLog.length > _MAX_TIMING_LOG) _timingLog.splice(0, _timingLog.length - _MAX_TIMING_LOG)
+  const s = _toolStats.get(tool) ?? { calls: 0, totalMs: 0, errors: 0, lastMs: 0 }
+  s.calls++
+  s.totalMs += durationMs
+  if (!success) s.errors++
+  s.lastMs = durationMs
+  _toolStats.set(tool, s)
+}
+
+export function getToolTimingStats(): { tool: string; calls: number; avgMs: number; lastMs: number; errorRate: string }[] {
+  return Array.from(_toolStats.entries())
+    .map(([tool, s]) => ({
+      tool,
+      calls: s.calls,
+      avgMs: Math.round(s.totalMs / s.calls),
+      lastMs: s.lastMs,
+      errorRate: `${Math.round((s.errors / s.calls) * 100)}%`,
+    }))
+    .sort((a, b) => b.avgMs - a.avgMs)
+}
+
+export function getRecentTimingLog(limit = 50): TimingRecord[] {
+  return _timingLog.slice(-limit)
 }
 
 export async function executeTool(name: string, args: ToolArgs): Promise<string> {
@@ -564,9 +734,13 @@ export async function executeTool(name: string, args: ToolArgs): Promise<string>
   if (!handler) {
     return `Error: Unknown tool "${name}". Available: ${Object.keys(handlers).join(', ')}`
   }
+  const start = Date.now()
   try {
-    return await handler(args)
+    const result = await handler(args)
+    _recordTiming(name, Date.now() - start, !result.startsWith('Error:'))
+    return result
   } catch (err) {
+    _recordTiming(name, Date.now() - start, false)
     return `Tool "${name}" error: ${err instanceof Error ? err.message : String(err)}`
   }
 }

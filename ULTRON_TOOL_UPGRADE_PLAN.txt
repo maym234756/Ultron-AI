@@ -338,3 +338,146 @@ Completed in sixteenth build increment:
 
 Recommended next file to edit:
 server/tools/playwright.ts, then server/tools/rag.ts, then server/tools/playwright_adv.ts.
+
+Completed in seventeenth build increment:
+- Added timezone display support and max_retries retry-on-failure to schedule_task.
+- Added schedule_enable and schedule_disable tools (enable/disable without deletion).
+- Added run history (last 10 runs) to AgentSchedule and surfaced in listSchedules output.
+- Improved cron validator to return helpful examples on invalid expressions.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/scheduler.ts
+
+Completed in eighteenth build increment:
+- Added timeout_sec and allowed_tools params to agent_run.
+- Added max_parallel param to agent_parallel (cap concurrent sub-agents).
+- Improved agent_parallel to report partial failures clearly (e.g. "3/5 tasks succeeded").
+- Added agent_status diagnostic tool (runner init status, defaults).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/multiagent.ts
+
+Completed in nineteenth build increment:
+- Added timeout_sec param and named session support to python_exec.
+- Added idle-session cleanup (sessions unused for 10+ min auto-close).
+- Added repl_packages tool (list installed Python packages with optional filter).
+- Added DataFrame output detection (labels pandas-style output with 📊).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/python_repl.ts
+
+Completed in twentieth build increment:
+- Added diff_only param to write_file for line-diff preview before writing.
+- Added workspace_tree tool (recursive directory tree, configurable depth).
+- Added encoding param to read_file (utf-8 default, base64 for binary files).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/filesystem.ts
+
+Completed in twenty-first build increment:
+- Added cross-platform support to sys_stats and sys_processes (Linux/macOS branches).
+- Added sys_services tool (Windows service listing with filter/status params).
+- Added sys_ports tool (open listening ports, cross-platform).
+- Added sys_platform tool to sysmon.ts.
+- Added dry_run support to sys_kill.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/sysmon.ts
+
+Completed in twenty-second build increment:
+- Added ffmpeg progress reporting (frame= parsing) to create_slideshow and convert_video.
+- Added probe_media tool (ffprobe JSON metadata for any media file).
+- Added preset param to convert_video (720p, 1080p, 480p, audio-only, compress, gif).
+- Added trim_video tool (ffmpeg -ss/-to clip with Desktop output).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/media.ts
+
+Completed in twenty-third build increment:
+- Added mode param to analyze_image (describe/ocr) with optimized OCR prompt.
+- Added include_confidence param and model name in results.
+- Added region param for crop/region analysis (with sharp detection).
+- Added analyze_screenshot tool (capture then analyze in one call, cross-platform).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/vision.ts
+
+Completed in twenty-fourth build increment:
+- Added timestamps param to transcribe_audio (segment-level [HH:MM.sss] output).
+- Added language detection reporting (prepended to all transcription results).
+- Added whisper_status tool (check installation without transcribing, includes Python/torch info).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/whisper.ts
+
+Completed in twenty-fifth build increment:
+- Added mem_update tool (edit existing memory entry content/tags/scope with re-embedding).
+- Added duplicate detection to mem_save (cosine similarity > 0.92 warning + force override).
+- Added mem_search_tags tool (filter memories by tags without embedding lookup).
+- Added scope param to mem_recall (filter search to user/project/temporary memories).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/longmem.ts
+
+Completed in twenty-sixth build increment:
+- Added dry_run param to desktop_click (previews action without executing).
+- Added key sequence validation to desktop_send_keys (blocks Win key, Ctrl+Esc, Ctrl+Alt+Delete).
+- Added desktop_active_window tool (title, PID, app name, window bounds of foreground window).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/desktop.ts
+
+Completed in twenty-seventh build increment:
+- Created new server/tools/cache.ts with in-memory tool result cache (200-entry LRU, TTL).
+- Added cache_status, cache_get, cache_set, cache_clear tools.
+- Exported tryCache/setCache helpers for use by other tools.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/cache.ts
+
+Completed in twenty-eighth build increment:
+- Added git_tag tool (list/create/delete annotated and lightweight tags).
+- Added git_cherry_pick tool (apply commits with conflict diagnostics and abort support).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/git.ts
+
+Completed in twenty-ninth build increment:
+- Added curl_import tool (parse curl command string into http_request params).
+- Added curl_export tool (convert http_request params to curl command with secret redaction).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/http.ts
+
+Completed in thirtieth build increment:
+- Added validateArgs() and clampInt() helpers to server/tools/types.ts.
+- Provides standardized required-field checking and value validation for all tools.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+
+Completed in thirty-first build increment:
+- Created server/tools/plugins.ts with plugin_list, plugin_enable, plugin_disable, plugin_create, plugin_read tools.
+- Builds on the existing plugins/loader.ts plugin system.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/plugins.ts
+
+Completed in thirty-second build increment:
+- Created server/tools/webhooks.ts with webhook_register, webhook_list, webhook_delete, webhook_toggle tools.
+- Added POST /api/webhooks/:id ingest endpoint to server/index.ts (async agent task trigger).
+- Added GET /api/webhooks listing endpoint.
+- Added GET /api/tool-timing endpoint for tool execution timing stats.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/webhooks.ts
+
+Completed in thirty-third build increment:
+- Created server/tools/platform.ts with isWindows/isMac/isLinux helpers, windowsOnly/requirePlatform guards.
+- Added sys_platform tool (OS, arch, shell, admin status, feature availability matrix).
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/platform.ts
+
+Completed in thirty-fourth build increment:
+- Added per-tool execution timing telemetry to executeTool in registry.ts.
+- Tracks call count, total/avg/last duration, and error rate per tool.
+- Exports getToolTimingStats() and getRecentTimingLog() for API and Health Center use.
+- Wired to GET /api/tool-timing endpoint.
+- Validation passed: npx tsc -p tsconfig.server.json --noEmit
+- Validation passed: npx oxlint server/tools/registry.ts
+
+Completed in thirty-fifth build increment (PWA Mobile App):
+- Installed vite-plugin-pwa.
+- Updated vite.config.ts with VitePWA plugin (manifest, workbox, autoUpdate).
+- Added iOS/Android PWA meta tags to index.html (apple-mobile-web-app-*, theme-color, viewport-fit=cover).
+- Created src/components/PWAInstallPrompt.tsx (Android install banner + iOS "Add to Home Screen" instructions).
+- Added PWAInstallPrompt to App.tsx.
+- Generated placeholder icon-192.png and icon-512.png in public/ (replace with real icons).
+- Users can now install Ultron on iPhone/Android by visiting the app URL in their mobile browser.
+- Validation passed: vite build succeeds, generates manifest.webmanifest and sw.js.
+
+Tool count after increments 17-35: 210+ registered tools.
+New tools added in 17-35: schedule_enable, schedule_disable, agent_status, repl_packages, workspace_tree, sys_services, sys_ports, sys_platform, probe_media, trim_video, analyze_screenshot, whisper_status, mem_update, mem_search_tags, desktop_active_window, cache_status, cache_get, cache_set, cache_clear, git_tag, git_cherry_pick, curl_import, curl_export, plugin_list, plugin_enable, plugin_disable, plugin_create, plugin_read, webhook_register, webhook_list, webhook_delete, webhook_toggle.

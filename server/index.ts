@@ -22,7 +22,7 @@ import {
 } from './observer.js'
 import { initMultiAgent } from './tools/multiagent.js'
 import { loadPlugins } from './plugins/loader.js'
-import { registerPlugin, executeTool, toolDefinitions } from './tools/registry.js'
+import { registerPlugin, executeTool, toolDefinitions, getToolTimingStats, getRecentTimingLog } from './tools/registry.js'
 import { detectMemoryConflicts, listMemoryEntries, promoteMemoryEntry } from './tools/longmem.js'
 import type { MemoryScope } from './tools/longmem.js'
 import { transcribeAudio } from './tools/whisper.js'
@@ -2750,6 +2750,58 @@ app.post('/v1/completions', async (req, res) => {
   req.body = { model: m, messages: [{ role: 'user', content: prompt ?? '' }], stream, temperature: t }
   // Re-invoke via internal redirect
   res.redirect(307, '/v1/chat/completions')
+})
+
+// ── Webhook ingest — POST /api/webhooks/:id ────────────────────────────────
+// External services POST here to trigger a registered agent task.
+// Optionally validates X-Webhook-Secret header.
+;(async () => {
+  const { loadWebhooks, findWebhook, recordWebhookTrigger } = await import('./tools/webhooks.js')
+  app.post('/api/webhooks/:id', express.text({ type: '*/*', limit: '512kb' }), async (req, res) => {
+    const { id } = req.params as { id: string }
+    const hook = findWebhook(id)
+    if (!hook) { res.status(404).json({ error: 'Webhook not found' }); return }
+    if (!hook.enabled) { res.status(403).json({ error: 'Webhook is disabled' }); return }
+
+    // Validate secret if present in the registered hook
+    const incomingSecret = req.headers['x-webhook-secret'] as string | undefined
+    if (incomingSecret && incomingSecret !== hook.secret) {
+      res.status(401).json({ error: 'Invalid webhook secret' }); return
+    }
+
+    // Template substitution: {{body}} and {{event}}
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {})
+    const event = (req.headers['x-event-type'] as string | undefined) ?? ''
+    const task = hook.task
+      .replace(/\{\{body\}\}/g, body.slice(0, 2000))
+      .replace(/\{\{event\}\}/g, event)
+
+    const model = hook.model === 'default' ? defaultModel : hook.model
+
+    res.json({ ok: true, id, name: hook.name, message: 'Webhook received — running agent task' })
+
+    // Run the agent task asynchronously (do not block the HTTP response)
+    recordWebhookTrigger(id)
+    runAgentHeadless(task, {
+      model,
+      temperature: 0.7,
+      systemContent: `You were triggered by webhook "${hook.name}". Complete the requested task.`,
+      ollamaBaseUrl,
+      maxIterations: 20,
+    }).catch((err: unknown) => {
+      console.error(`[webhook] task error for "${hook.name}":`, err instanceof Error ? err.message : String(err))
+    })
+  })
+
+  app.get('/api/webhooks', (_req, res) => {
+    const hooks = loadWebhooks()
+    res.json(hooks.map(h => ({ id: h.id, name: h.name, enabled: h.enabled, triggerCount: h.triggerCount, lastTriggeredAt: h.lastTriggeredAt })))
+  })
+})().catch(console.error)
+
+// ── Tool timing stats ─────────────────────────────────────────────────────────
+app.get('/api/tool-timing', (_req, res) => {
+  res.json({ stats: getToolTimingStats(), recent: getRecentTimingLog(50) })
 })
 
 app.listen(port, async () => {
