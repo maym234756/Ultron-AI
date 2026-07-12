@@ -411,7 +411,8 @@ app.get('/api/health', async (_request, response) => {
 })
 
 // Deep health check — verifies Ollama reachability, database, tool registry, and PWA build.
-app.get('/api/health/deep', async (_request, response) => {
+const healthDeepRateLimit = authRateLimit({ id: 'health-deep', windowMs: 60_000, max: 20 })
+app.get('/api/health/deep', healthDeepRateLimit, async (_request, response) => {
   const checkedAt = Date.now()
   const checks: Array<{ id: string; label: string; ok: boolean; detail: string; latencyMs?: number }> = []
 

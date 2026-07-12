@@ -164,6 +164,8 @@ function extractThinkingBlock(text: string): { thinking: string | null; rest: st
 }
 
 // Attempt to repair and parse a partial (truncated) JSON fragment by closing unclosed braces.
+// Note: this only repairs unclosed object braces — unclosed strings or arrays are not repaired.
+// The caller must verify that the result contains expected tool call properties before using it.
 function tryPartialJson(fragment: string): Record<string, unknown> | null {
   const trimmed = fragment.trim()
   if (!trimmed.startsWith('{')) return null
