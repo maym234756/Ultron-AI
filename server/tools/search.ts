@@ -66,9 +66,14 @@ async function ddgHtmlSearch(query: string, limit: number): Promise<SearchResult
     } else if (href.startsWith('//')) {
       href = `https:${href}`
     }
-    // Strip HTML — single-pass regex removes both complete (<foo>) and incomplete (<script) tags,
-    // preventing multi-character sanitization bypass
-    const stripHtml = (s: string) => s.replace(/<[^>]*>?/g, '').trim()
+    // Strip HTML tags, then remove all residual angle brackets to prevent injection.
+    // Multi-statement form ensures CodeQL can track that no < characters remain.
+    const stripHtml = (s: string): string => {
+      let t = s.replace(/<[^>]*>/g, ' ')  // remove complete tags
+      t = t.replace(/</g, '')             // remove any remaining < (e.g. unclosed tags)
+      t = t.replace(/>/g, '')             // remove any remaining >
+      return t.trim()
+    }
     const title = stripHtml(linkMatch[2])
     const snippetMatch = snippetRe.exec(content)
     const snippet = snippetMatch ? stripHtml(snippetMatch[1]) : ''
