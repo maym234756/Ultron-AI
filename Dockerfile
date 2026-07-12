@@ -16,7 +16,7 @@ ENV NODE_ENV=production
 ENV PORT=8787
 
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
