@@ -42,13 +42,21 @@ function saveContext(ctx: ScreenContext): void {
 function runPS(cmd: string, timeoutMs = 10_000): Promise<string> {
   return new Promise((resolve) => {
     let out = ''
+    let settled = false
+    const finish = (value: string) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
     const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], {
       stdio: 'pipe', windowsHide: true,
     })
-    const timer = setTimeout(() => { proc.kill(); resolve(out) }, timeoutMs)
+    const timer = setTimeout(() => { proc.kill(); finish(out) }, timeoutMs)
     proc.stdout?.on('data', (d: Buffer) => { out += d.toString() })
     proc.stderr?.on('data', () => {/* ignore */})
-    proc.on('close', () => { clearTimeout(timer); resolve(out.trim()) })
+    proc.on('error', () => finish(out.trim()))
+    proc.on('close', () => finish(out.trim()))
   })
 }
 
@@ -178,6 +186,11 @@ export function formatContextForAgent(ctx: ScreenContext): string {
 // ── observer lifecycle ────────────────────────────────────────────────────────
 
 export function startObserver(ollamaUrl: string, intervalSec: number, mode: 'fast' | 'deep'): void {
+  if (process.platform !== 'win32') {
+    console.log('[observer] disabled: screen observer requires Windows desktop APIs')
+    return
+  }
+
   _ollamaUrl = ollamaUrl
   _intervalSec = intervalSec
   _mode = mode
