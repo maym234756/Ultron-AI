@@ -40,13 +40,13 @@ services:
       - key: AUTH_MAIL_FROM
         value: Lumivex AI <no-reply@lumivexai.com>
       - key: MODEL_PROVIDER
-        value: ollama
-      - key: MODEL_NAME
-        value: llama3.2
-      - key: OLLAMA_BASE_URL
+        value: openai-compatible
+      - key: MODEL_API_BASE_URL
+        value: https://api.openai.com/v1
+      - key: MODEL_API_KEY
         sync: false
-      - key: OLLAMA_MODEL
-        value: llama3.2
+      - key: MODEL_NAME
+        value: gpt-4o-mini
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

@@ -103,6 +103,12 @@ $env:MODEL_API_KEY = "replace-me"
 $env:MODEL_NAME = "gpt-4o-mini"
 ```
 
+Recommended split:
+
+- Local development: keep `.env` on `MODEL_PROVIDER=ollama` and run your own Ollama daemon.
+- Deployed backend: set `MODEL_PROVIDER=openai-compatible`, `MODEL_API_BASE_URL`, `MODEL_API_KEY`, and `MODEL_NAME` on the backend host.
+- Vercel frontend: set only `VITE_API_BASE_URL` to the backend URL. Do not put `MODEL_API_KEY` in Vercel.
+
 ## Stripe Billing
 
 Lumivex AI includes a Stripe billing foundation for deployed workspaces. Workspace owners can open Checkout or the Stripe billing portal from the **Workspace** panel, while the backend tracks hosted model token usage in the database for plan allowances and overage decisions.
